@@ -1,26 +1,108 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #f8f8f6;
+  --surface: #ffffff;
+  --ink: #101114;
+  --muted: #686d78;
+  --line: #e4e6ea;
+  --blue: #315cff;
+  --blue-soft: #eef2ff;
+  --green: #16845b;
+  --green-soft: #eaf8f1;
+  --amber: #a76500;
+  --amber-soft: #fff6e5;
+  --red: #c33e4d;
+  --red-soft: #fff0f1;
+  --background: var(--canvas);
+  --foreground: var(--ink);
 }
 
 @theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-instrument);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--canvas);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+::selection {
+  background: var(--blue-soft);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.orb {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(49, 92, 255, 0.35), transparent 42%),
+    radial-gradient(circle at 70% 60%, rgba(22, 132, 91, 0.22), transparent 46%),
+    radial-gradient(circle at 50% 50%, rgba(167, 101, 0, 0.12), transparent 55%);
+  filter: blur(28px);
+}
+
+.serif {
+  font-family: var(--font-instrument), ui-serif, Georgia, serif;
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+.fade-in {
+  animation: fade-in 420ms ease both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
