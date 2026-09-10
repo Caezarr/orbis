@@ -23,7 +23,7 @@ export interface HubMeta {
   pain: string;
 }
 
-// Airbnb hosts vertical (first launch)
+// Airbnb hosts vertical
 const airbnbHostsJobs: VerticalJob[] = [
   {
     hub: "airbnb-hosts",
@@ -62,12 +62,50 @@ const airbnbHostsJobs: VerticalJob[] = [
   },
 ];
 
+// Content creators vertical
+const contentCreatorsJobs: VerticalJob[] = [
+  {
+    hub: "content-creators",
+    job: "content-drafts",
+    missions: "sourced-content,research",
+    tools: "Notion,Google Docs,Instagram,TikTok",
+    motionJobs: "Topic|Draft ready;Hook list|Hooks written;Caption pack|Captions drafted",
+  },
+  {
+    hub: "content-creators",
+    job: "research-briefs",
+    missions: "research,sourced-content",
+    tools: "Notion,Chrome,YouTube",
+    motionJobs: "Topic|Research brief;Competitor scan|Notes ready;Source pack|Citations listed",
+  },
+  {
+    hub: "content-creators",
+    job: "sponsorship-replies",
+    missions: "customer-request,sourced-content",
+    tools: "Gmail,Notion,Instagram",
+    motionJobs: "Brand email|Reply prepared;Rate card ask|Quote drafted;Collab brief|Scope reply ready",
+  },
+  {
+    hub: "content-creators",
+    job: "calendar-prep",
+    missions: "sourced-content,meeting-prep",
+    tools: "Notion,Google Calendar,Later",
+    motionJobs: "Week plan|Calendar draft;Batch day|Shot list ready;Deadlines|Reminder brief prepared",
+  },
+];
+
 const hubMetadata: Record<string, HubMeta> = {
   "airbnb-hosts": {
     hub: "airbnb-hosts",
     label: "Airbnb hosts",
     tagline: "Install the busywork of hosting into Orbis.",
     pain: "Guest messages at midnight. Review replies that need just the right tone. Cleaning handoffs that somehow take an hour. You're running a hospitality business, not managing an inbox.",
+  },
+  "content-creators": {
+    hub: "content-creators",
+    label: "Content creators",
+    tagline: "Install the busywork of content creation into Orbis.",
+    pain: "Research that takes longer than filming. Captions that need eight drafts. Sponsorship emails at 11 PM. You started creating to make things, not to manage an assembly line.",
   },
 };
 
@@ -78,10 +116,17 @@ const jobLabels: Record<string, string> = {
   "listing-copy": "listing copy",
   "cleaning-handoff": "cleaning handoff",
   "pricing-notes": "pricing notes",
+  "content-drafts": "content drafts",
+  "research-briefs": "research briefs",
+  "sponsorship-replies": "sponsorship replies",
+  "calendar-prep": "calendar prep",
 };
 
-// All verticals data (currently only airbnb-hosts)
-export const verticals: VerticalJob[] = [...airbnbHostsJobs];
+// All verticals data (currently airbnb-hosts and content-creators)
+export const verticals: VerticalJob[] = [
+  ...airbnbHostsJobs,
+  ...contentCreatorsJobs,
+];
 
 // Helper functions
 export function getHubs(): string[] {
