@@ -1,9 +1,5 @@
 export type Maturity =
-  | "planned"
-  | "composable"
-  | "ready"
-  | "supervised"
-  | "autonomy_scoped";
+  "planned" | "composable" | "ready" | "supervised" | "autonomy_scoped";
 
 export type MissionState =
   | "draft"
@@ -90,7 +86,6 @@ export type CompanyProfile = {
   completedAt?: string;
 };
 
-
 export type CrewRole = {
   id: string;
   role: string;
@@ -160,6 +155,9 @@ export type CapabilityPackage = {
 };
 
 export type Mission = {
+  flowId?: string;
+  auditId?: string;
+  initialRequest?: string;
   id: string;
   tenantId: string;
   packageSlug: string;
@@ -212,6 +210,8 @@ export type Instruction = {
 };
 
 export type MemoryItem = {
+  missionId?: string;
+  runId?: string;
   id: string;
   tenantId: string;
   kind: MemoryKind;
@@ -291,6 +291,11 @@ export type StepRun = {
 };
 
 export type Run = {
+  engine?: "agent-v1";
+  requestKey?: string;
+  requestHash?: string;
+  error?: string;
+  usage?: { inputTokens: number; outputTokens: number; costKnown: boolean };
   id: string;
   tenantId: string;
   missionId: string;
@@ -405,6 +410,8 @@ export type DecisionCard = {
 };
 
 export type StoreState = {
+  businessAudits?: import("@/lib/product/audit").BusinessAudit[];
+  knowledgeSelections?: import("@/lib/product/knowledge-scopes").KnowledgeSelection[];
   workspace: Workspace;
   memberships: Membership[];
   profile: CompanyProfile | null;

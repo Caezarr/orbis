@@ -107,13 +107,13 @@ export function LandingNav() {
         Orbis
       </Link>
       <nav className={styles.desktopNav} aria-label="Main navigation">
-        <a href="#missions">What you can do</a>
+        <Link href="/catalog">100 business cases</Link>
         <a href="#how-it-works">How it works</a>
-        <a href="#vision">The bigger picture</a>
+        <Link href="/pricing">Pricing</Link>
       </nav>
       <div className={styles.navActions}>
-        <Link href="/discover" className={styles.navCta}>
-          Open prototype <ArrowRight size={15} />
+        <Link href="/audit" className={styles.navCta}>
+          Find my first workflow <ArrowRight size={15} />
         </Link>
         <button
           ref={buttonRef}
@@ -148,7 +148,7 @@ export function LandingNav() {
             The bigger picture
           </a>
           <a href="#questions" onClick={() => setOpen(false)}>
-            Questions & prototype status
+            Questions & capabilities
           </a>
         </nav>
       )}

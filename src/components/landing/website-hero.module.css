@@ -1,0 +1,243 @@
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 640px;
+  padding: 92px 24px 55px;
+  background: linear-gradient(#ffffff05, #ffffffbb 70%, white);
+  color: #182d5b;
+  text-align: center;
+}
+.geometry {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(90deg, #ffffff80 1px, transparent 1px),
+    linear-gradient(#ffffff80 1px, transparent 1px);
+  background-size: 128px 128px;
+  mask-image: linear-gradient(#000, transparent 65%);
+}
+.content {
+  max-width: 1160px;
+  margin: auto;
+}
+.hero .intro {
+  color: #617ca6;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 28px;
+}
+.hero h1 {
+  font-weight: 500;
+  font-size: clamp(36px, 5.3vw, 76px);
+  letter-spacing: -2.8px;
+  line-height: 1.1;
+  text-wrap: balance;
+  margin: 0;
+}
+.hero .description {
+  font-size: 18px;
+  line-height: 1.65;
+  color: #687080;
+  margin: 28px auto 0;
+  max-width: 790px;
+}
+.composer {
+  margin: 48px auto 0;
+  background: #fff;
+  border: 1px solid #dce0e8;
+  border-radius: 20px;
+  max-width: 720px;
+  padding: 16px 16px 13px;
+  box-shadow: 0 10px 45px #28344b08;
+  text-align: left;
+}
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 50px;
+  color: #8590a1;
+}
+.inputRow input,
+.inputRow textarea {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  padding: 10px 0;
+  outline: none;
+  color: #182d5b;
+}
+.inputRow textarea {
+  resize: vertical;
+}
+.send {
+  flex-shrink: 0;
+  width: auto;
+  padding: 0 16px;
+  height: 44px;
+  border: 0;
+  border-radius: 13px;
+  background: #182d5b;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.composer:focus-within {
+  border-color: #829dd9;
+  box-shadow: 0 0 0 3px #edf3ff;
+}
+.composerBottom {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f2f6;
+  font-size: 10px;
+  color: #818894;
+}
+.composerBottom button {
+  background: none;
+  border: 0;
+  color: #305ee8;
+  font-size: 11px !important;
+  padding: 3px;
+}
+.assurances {
+  display: flex;
+  gap: 23px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 24px 0;
+  color: #738096;
+  font-size: 11px;
+}
+.assurances span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.assurances svg {
+  color: #648cb6;
+}
+.links {
+  display: flex;
+  gap: 25px;
+  justify-content: center;
+  font-size: 12px;
+  margin-top: 38px;
+}
+.links a {
+  color: #53627b;
+}
+.links a:hover {
+  text-decoration: underline;
+}
+.hero .error {
+  color: #a24635;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 15px auto;
+  max-width: 650px;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+@media (max-width: 650px) {
+  .hero {
+    padding: 70px 20px 45px;
+    min-height: 0;
+  }
+  .hero h1 {
+    font-size: 39px;
+    letter-spacing: -1.6px;
+  }
+  .hero .description {
+    font-size: 15px;
+    margin-top: 23px;
+  }
+  .desktop {
+    display: none;
+  }
+  .composer {
+    margin-top: 32px;
+    padding: 12px;
+  }
+  .composerBottom {
+    align-items: flex-start;
+  }
+  .composerBottom span {
+    max-width: 170px;
+    line-height: 1.6;
+  }
+  .assurances {
+    gap: 13px;
+    margin-top: 23px;
+    font-size: 10px;
+  }
+  .links {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .inputRow {
+    gap: 10px;
+  }
+  .inputRow input {
+    font-size: 16px;
+  }
+  .hero .intro {
+    font-size: 11px;
+    margin-bottom: 22px;
+  }
+}
+.compact {
+  width: 100%;
+  max-width: 760px;
+  margin: 24px auto;
+}
+.compact .content {
+  padding: 0;
+}
+.compact .composer {
+  margin: 0 auto;
+}
+@media (max-width: 600px) {
+  .inputRow {
+    flex-wrap: wrap;
+  }
+  .inputRow input {
+    width: calc(100% - 40px);
+    flex: 1;
+  }
+  .inputRow .send {
+    width: 100%;
+    margin: 4px 0 8px;
+  }
+  .compact {
+    padding: 0;
+  }
+}

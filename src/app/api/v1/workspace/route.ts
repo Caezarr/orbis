@@ -1,10 +1,16 @@
 import { fail, ok } from "@/lib/api/http";
-import { getStore, mutateStore, resetStore } from "@/lib/store/store";
+import {
+  getStore,
+  mutateStore,
+  resetStore,
+  reconcileStaleRuns,
+} from "@/lib/store/store";
 import { buildProfile } from "@/lib/runtime/profile";
 import { nowIso } from "@/lib/time";
 import { id } from "@/lib/ids";
 
 export async function GET() {
+  reconcileStaleRuns();
   const state = getStore();
   return ok({
     workspace: state.workspace,

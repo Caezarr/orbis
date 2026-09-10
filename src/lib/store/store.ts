@@ -1,9 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+} from "node:fs";
 import path from "node:path";
 import type { StoreState } from "@/lib/domain/types";
 import { buildSeed } from "@/lib/store/seed";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.ORBIS_DATA_DIR || path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "state.json");
 
 let memory: StoreState | null = null;
@@ -52,17 +58,49 @@ function load(): StoreState {
 function persist() {
   if (!memory) return;
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(DATA_FILE, JSON.stringify(memory, null, 2));
+  const temporary = `${DATA_FILE}.${process.pid}.tmp`;
+  writeFileSync(temporary, JSON.stringify(memory, null, 2), { mode: 0o600 });
+  renameSync(temporary, DATA_FILE);
 }
 
 export function getStore(): StoreState {
   return load();
 }
 
+/** Expire interrupted local runs. A durable worker will own this in production. */
+export function reconcileStaleRuns() {
+  const cutoff = Date.now() - 180000;
+  const stale = (run: StoreState["runs"][number]) =>
+    run.engine === "agent-v1" &&
+    run.state === "running" &&
+    Date.parse(run.createdAt) < cutoff;
+  if (!load().runs.some(stale)) return;
+  mutateStore((state) => {
+    for (const run of state.runs.filter(stale)) {
+      run.state = "failed";
+      run.completedAt = new Date().toISOString();
+      run.error =
+        "The local worker was interrupted or exceeded its deadline. Provider billing may still apply. Start a new run.";
+      for (const step of run.steps.filter((s) => s.status === "running")) {
+        step.status = "failed";
+        step.detail = run.error;
+        step.endedAt = run.completedAt;
+      }
+    }
+  });
+}
+
 export function mutateStore<T>(fn: (state: StoreState) => T): T {
-  const state = load();
+  const previous = load();
+  const state = structuredClone(previous);
   const result = fn(state);
-  persist();
+  memory = state;
+  try {
+    persist();
+  } catch (error) {
+    memory = previous;
+    throw error;
+  }
   return result;
 }
 

@@ -10,7 +10,11 @@ export function ShellFrame({ children }: { children: React.ReactNode }) {
     <AppShell
       workspaceName={data?.workspace.name ?? "Workspace"}
       userName={data?.memberships[0]?.name ?? "You"}
-      decisionCount={data?.decisions.length ?? 0}
+      decisionCount={
+        data?.runs.filter(
+          (r) => r.engine === "agent-v1" && r.state === "waiting_input",
+        ).length ?? 0
+      }
     >
       {children}
     </AppShell>

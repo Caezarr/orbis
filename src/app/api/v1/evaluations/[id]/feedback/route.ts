@@ -1,16 +1,23 @@
 import { fail, ok } from "@/lib/api/http";
 import { applyFeedback } from "@/lib/runtime/engine";
+import { z } from "zod";
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const body = (await request.json().catch(() => null)) as {
-    correction?: string;
-    scope?: "this_result" | "this_customer" | "general_rule";
-    accepted?: boolean;
-  } | null;
+  const parsed = z
+    .object({
+      correction: z.string().max(8000).default(""),
+      scope: z
+        .enum(["this_result", "this_customer", "general_rule"])
+        .default("this_result"),
+      accepted: z.boolean().default(false),
+    })
+    .safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return fail("Invalid feedback.");
+  const body = parsed.data;
   try {
     const result = applyFeedback({
       evaluationId: id,

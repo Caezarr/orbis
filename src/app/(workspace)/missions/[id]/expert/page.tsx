@@ -67,7 +67,7 @@ ${crew.roles
           {runs.map((run) => (
             <li key={run.id}>
               <Link href={`/runs/${run.id}`} className="hover:underline">
-                {run.state} · {run.mode} · {run.cost.provider.toFixed(2)}€ · {run.traceId}
+                {run.state} · {run.mode} · {run.engine === "agent-v1" ? "Provider cost unknown" : `${run.cost.provider.toFixed(2)}€ example`} · {run.traceId}
               </Link>
             </li>
           ))}

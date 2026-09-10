@@ -42,4 +42,5 @@ next-env.d.ts
 
 # local product state
 /data/state.json
+/data/state.json.*.tmp
 .gstack/

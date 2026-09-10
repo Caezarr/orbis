@@ -1,150 +1,112 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
-import { postJson } from "@/lib/api/client";
 import type { StoreState } from "@/lib/domain/types";
-import { formatEuro, formatTimeAgo } from "@/lib/time";
-
-export default function TodayPage() {
-  const { data, loading, reload } = useWorkspace<StoreState>();
-  const [cursor, setCursor] = useState(0);
-  const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.key === "j") setCursor((n) => n + 1);
-      if (event.key === "k") setCursor((n) => Math.max(0, n - 1));
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  if (loading || !data) return <p className="text-muted">Loading…</p>;
-  const selected = data.decisions[cursor % Math.max(1, data.decisions.length)];
-  const impact = data.impact;
-
-  async function decide(actionId: string, decision: "approved" | "rejected") {
-    try {
-      await postJson(`/api/v1/actions/${actionId}/decisions`, { decision });
-      setMsg(decision === "approved" ? "Payload approved. Broker still blocks send in test." : "Rejected. Nothing left the company.");
-      await reload();
-    } catch (error) {
-      setMsg(error instanceof Error ? error.message : "Decision failed");
-    }
-  }
-
-  return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted">Exceptions only, {data.memberships[0]?.name}. Everything else already ran.</p>
-          <h1 className="serif mt-1 text-4xl">Today</h1>
-        </div>
-        <p className="text-xs text-muted">j / k move · ⌘K ask</p>
-      </div>
-
-      <div className="mt-8 grid gap-3 md:grid-cols-4">
-        <Metric label="Hours given back" value={`${impact?.hoursSaved ?? 0}h`} hint="this week" />
-        <Metric label="Accepted-result cost" value={formatEuro(impact?.acceptedResultCostEur ?? 0)} hint="inference + fee" />
-        <Metric label="Second capability" value={`${impact?.secondCapabilityMinutes ?? 0} min`} hint="reused company context" />
-        <Metric label="Correction rate" value={`${Math.round((impact?.correctionRate ?? 0) * 100)}%`} hint="going down is the point" />
-      </div>
-
-      {(data.signals ?? []).length > 0 ? (
-        <section className="mt-10">
-          <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-muted">Why these exist</h2>
-          <ul className="mt-3 grid gap-3 md:grid-cols-3">
-            {data.signals.map((signal) => (
-              <li key={signal.id} className="rounded-[14px] border border-line bg-surface p-4">
-                <p className="text-xs text-muted">{signal.evidence}</p>
-                <p className="mt-2 text-sm font-medium">{signal.title}</p>
-                <p className="mt-2 text-sm leading-6 text-muted">{signal.whyNow}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="mt-10">
-        <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-muted">Needs attention · {data.decisions.length}</h2>
-        <div className="mt-3 divide-y divide-line overflow-hidden rounded-[14px] border border-line bg-surface">
-          {data.decisions.map((decision, index) => {
-            const approval = data.approvals.find((item) => item.id === decision.approvalId);
-            const action = data.actions.find((item) => item.id === approval?.actionId);
-            const active = selected?.id === decision.id;
-            return (
-              <div
-                key={decision.id}
-                className={`flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between ${active ? "bg-blue-soft/40" : ""}`}
-              >
-                <div>
-                  <p className="font-medium">{decision.title}</p>
-                  <p className="mt-1 text-sm text-muted">{decision.reason}</p>
-                  {decision.whyNow ? <p className="mt-2 text-sm text-ink">Why now · {decision.whyNow}</p> : null}
-                  <p className="mt-1 text-xs text-muted">
-                    {decision.source} · {formatEuro(decision.estimatedCostEur)} · {formatTimeAgo(decision.createdAt)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/missions/${decision.missionId}/lab`} className="rounded-[8px] border border-line px-3 py-2 text-sm">
-                    Inspect
-                  </Link>
-                  {action ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void decide(action.id, "rejected")}
-                        className="rounded-[8px] border border-line px-3 py-2 text-sm"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void decide(action.id, "approved")}
-                        className="rounded-[8px] bg-ink px-3 py-2 text-sm text-canvas"
-                      >
-                        Approve payload
-                      </button>
-                    </>
-                  ) : (
-                    <Link href={`/missions/${decision.missionId}/lab`} className="rounded-[8px] bg-ink px-3 py-2 text-sm text-canvas">
-                      Review
-                    </Link>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {msg ? <p className="mt-3 text-sm text-muted">{msg}</p> : null}
-      </section>
-
-      <section className="mt-10">
-        <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-muted">Copilot · next moves</h2>
-        <ul className="mt-3 grid gap-3 md:grid-cols-3">
-          {(data.copilot ?? []).map((item) => (
-            <li key={item.id}>
-              <Link href={`/missions/${item.missionId}/lab`} className="block rounded-[14px] border border-line bg-surface p-4">
-                <p className="text-xs text-muted">{item.when}</p>
-                <p className="mt-2 text-sm font-medium">{item.title}</p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+import s from "@/components/product/product.module.css";
+export default function Page() {
+  const { data, loading } = useWorkspace<StoreState>();
+  if (loading || !data) return <p role="status">Ouverture de votre équipe…</p>;
+  const missions = data.missions.filter((m) => m.flowId);
+  const runs = data.runs.filter((r) => r.engine === "agent-v1");
+  const pending = runs.filter(
+    (r) =>
+      r.state === "waiting_input" ||
+      (r.state === "succeeded" &&
+        !data.evaluations.find((e) => e.id === r.evaluationId)?.humanFeedback
+          ?.accepted),
   );
-}
-
-function Metric({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <article className="rounded-[14px] border border-line bg-surface p-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 text-2xl font-medium tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-muted">{hint}</p>
-    </article>
+    <div className={s.page}>
+      <header className={s.head}>
+        <div>
+          <span className={s.eyebrow}>
+            Votre entreprise, avec plus de capacité
+          </span>
+          <h1>
+            Gardez le cap.
+            <br />
+            Déléguez le travail.
+          </h1>
+          <p>
+            {missions.length
+              ? `${missions.length} mission(s) configurée(s). Retrouvez les livrables et les décisions qui vous attendent.`
+              : "Commençons par le travail que vous aimeriez ne plus faire seul."}
+          </p>
+        </div>
+        <Link href="/audit" className={s.primary}>
+          Déléguer un nouveau besoin
+        </Link>
+      </header>
+      {pending.length > 0 && (
+        <section className={s.paper}>
+          <h2>{pending.length} résultat(s) à examiner</h2>
+          <div className={s.list}>
+            {pending.slice(0, 6).map((r) => (
+              <Link
+                key={r.id}
+                className={s.row}
+                href={`/missions/${r.missionId}/lab`}
+              >
+                <h3>{data.missions.find((m) => m.id === r.missionId)?.name}</h3>
+                <p>
+                  {r.state === "waiting_input"
+                    ? "Informations ou corrections nécessaires"
+                    : "Livrable prêt pour votre revue"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+      <div className={s.banner}>
+        <div>
+          <h2>Un besoin précis. Une équipe adaptée.</h2>
+          <p>
+            Audit, plan métier, outils et règles : tout commence avec le
+            résultat que vous attendez.
+          </p>
+        </div>
+        <Link href="/catalog" className={s.secondary}>
+          Explorer les 100 cas
+        </Link>
+      </div>
+      <div className={s.grid}>
+        {missions.map((m) => (
+          <article className={s.card} key={m.id}>
+            <small>
+              {m.state === "configuring"
+                ? "Contexte à compléter"
+                : m.state === "ready"
+                  ? "Résultat à examiner"
+                  : "Mission configurée"}
+            </small>
+            <h2>{m.name}</h2>
+            <p>
+              {
+                data.missionVersions.find((v) => v.id === m.draftVersionId)
+                  ?.outcome
+              }
+            </p>
+            <Link href={`/missions/${m.id}/lab`}>Ouvrir la mission</Link>
+          </article>
+        ))}
+      </div>
+      {!missions.length && (
+        <section className={s.paper}>
+          <h2>Votre équipe n’a pas encore de mission.</h2>
+          <p>
+            Décrivez votre activité pour obtenir des recommandations ou
+            choisissez un cas dans le catalogue. Les chiffres de ce tableau de
+            bord proviennent uniquement des missions et runs enregistrés.
+          </p>
+          <Link
+            href="/audit?audience=integrator"
+            className={`${s.secondary} mt-5`}
+          >
+            Préparer un dossier client
+          </Link>
+        </section>
+      )}
+    </div>
   );
 }

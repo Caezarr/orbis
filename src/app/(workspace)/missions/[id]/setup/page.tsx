@@ -1,12 +1,11 @@
 "use client";
-
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
-import { ProtocolStrip } from "@/components/cards/ProtocolStrip";
-import { getPackage } from "@/lib/capabilities/registry";
-import type { RuntimeMode, StoreState } from "@/lib/domain/types";
+import type { Mission, MissionVersion, StoreState } from "@/lib/domain/types";
+import styles from "@/components/missions/studio.module.css";
 
 export default function MissionSetupPage({
   params,
@@ -14,161 +13,232 @@ export default function MissionSetupPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
-  const { data, reload } = useWorkspace<StoreState>();
-  const mission = data?.missions.find((item) => item.id === id);
-  const version = data?.missionVersions.find((item) => item.id === mission?.draftVersionId);
-  const pkg = mission ? getPackage(mission.packageSlug) : undefined;
-  const [instructions, setInstructions] = useState(version?.instructions ?? "");
-  const [budget, setBudget] = useState(version?.budgetEur ?? 0.5);
-  const [mode, setMode] = useState<RuntimeMode>(version?.operatingMode ?? "test");
-  const [selected, setSelected] = useState<string[]>(version?.knowledgeSourceIds ?? []);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (version) {
-      setInstructions(version.instructions);
-      setBudget(version.budgetEur);
-      setMode(version.operatingMode);
-      setSelected(version.knowledgeSourceIds);
-    }
-  }, [version]);
-
-  if (!data || !mission || !version || !pkg) return <p className="text-muted">Loading…</p>;
-  const missionId = mission.id;
-  const missionName = mission.name;
-
-  async function save() {
-    setSaving(true);
-    await fetch("/api/v1/missions", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        missionId,
-        instructions,
-        budgetEur: budget,
-        operatingMode: mode,
-        knowledgeSourceIds: selected,
-      }),
-    });
-    await reload();
-    setSaving(false);
-  }
-
-  return (
-    <div className="mx-auto max-w-3xl">
-      <p className="text-sm text-muted">
-        <Link href="/missions">Missions</Link> / {missionName}
+  const { data, loading, reload } = useWorkspace<StoreState>();
+  const mission = data?.missions.find((m) => m.id === id);
+  const version = data?.missionVersions.find(
+    (v) => v.id === mission?.draftVersionId,
+  );
+  if (loading) return <p role="status">Opening configuration…</p>;
+  if (!data || !mission || !version)
+    return (
+      <p>
+        Mission unavailable. <Link href="/missions">Back to missions</Link>
       </p>
-      <h1 className="serif mt-2 text-4xl">Configure this mission</h1>
-      <p className="mt-2 text-muted">Six sections. Start the test when blocking requirements are complete. The crew is a protocol, not a canvas.</p>
-
-      <div className="mt-6">
-        <ProtocolStrip slug={pkg.slug} />
-      </div>
-
-      <Section n="1" title="Outcome">
-        <p>{version.outcome}</p>
-      </Section>
-      <Section n="2" title="Knowledge">
-        <ul className="space-y-2">
-          {data.sources.map((source) => (
-            <li key={source.id}>
-              <label className="flex items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(source.id)}
-                  onChange={(event) => {
-                    setSelected((current) =>
-                      event.target.checked ? [...current, source.id] : current.filter((id) => id !== source.id),
-                    );
-                  }}
-                />
-                <span>
-                  <span className="font-medium">{source.name}</span>
-                  <span className="block text-muted">{source.excerpt}</span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </Section>
-      <Section n="3" title="Instructions">
-        <textarea
-          value={instructions}
-          onChange={(event) => setInstructions(event.target.value)}
-          rows={5}
-          className="w-full rounded-[10px] border border-line p-3"
-        />
-      </Section>
-      <Section n="4" title="Tools">
-        <p className="text-sm text-muted">{version.tools.join(" · ")}</p>
-        <p className="mt-2 text-xs text-muted">Writes are denied in test mode by the tool broker.</p>
-      </Section>
-      <Section n="5" title="Operating mode">
-        <div className="flex flex-wrap gap-2">
-          {(["test", "supervised", "scoped_autonomy"] as RuntimeMode[]).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setMode(item)}
-              className={`rounded-full px-3 py-1.5 text-xs ${
-                mode === item ? "bg-ink text-canvas" : "border border-line"
-              }`}
-            >
-              {item.replace("_", " ")}
-            </button>
-          ))}
-        </div>
-      </Section>
-      <Section n="6" title="Budget and approvals">
-        <label className="text-sm">
-          Reservation
-          <input
-            type="number"
-            step="0.01"
-            value={budget}
-            onChange={(event) => setBudget(Number(event.target.value))}
-            className="ml-3 w-24 rounded-[8px] border border-line px-2 py-1"
-          />{" "}
-          EUR
-        </label>
-        <p className="mt-2 text-xs text-muted">Policy: {version.approvalPolicy.replace(/_/g, " ")}</p>
-      </Section>
-
-      <div className="mt-8 flex gap-3">
-        <button
-          type="button"
-          onClick={() => void save()}
-          className="rounded-[10px] border border-line px-4 py-3 text-sm"
-        >
-          {saving ? "Saving…" : "Save draft"}
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            await save();
-            router.push(`/missions/${missionId}/lab`);
-          }}
-          className="rounded-[10px] bg-ink px-4 py-3 text-sm text-canvas"
-        >
-          Start test
-        </button>
-        <Link href={`/missions/${missionId}/expert`} className="px-4 py-3 text-sm text-muted">
-          Expert mode
-        </Link>
-      </div>
-    </div>
+    );
+  return (
+    <Configuration
+      key={version.id}
+      data={data}
+      mission={mission}
+      version={version}
+      reload={reload}
+    />
   );
 }
 
-function Section({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+function Configuration({
+  data,
+  mission,
+  version,
+  reload,
+}: {
+  data: StoreState;
+  mission: Mission;
+  version: MissionVersion;
+  reload: () => Promise<void>;
+}) {
+  const router = useRouter();
+  const [outcome, setOutcome] = useState(version.outcome);
+  const [instructions, setInstructions] = useState(version.instructions);
+  const [selected, setSelected] = useState(
+    version.knowledgeSourceIds.filter((id) =>
+      data.sources.some(
+        (s) =>
+          s.id === id &&
+          s.tenantId === mission.tenantId &&
+          s.status === "ready",
+      ),
+    ),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/v1/missions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionId: mission.id,
+          outcome,
+          instructions,
+          knowledgeSourceIds: selected,
+          operatingMode: "test",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.message || "Could not save configuration");
+      await reload();
+      router.push(`/missions/${mission.id}/lab`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
-    <section className="mt-6 rounded-[14px] border border-line bg-surface p-5">
-      <h2 className="text-sm font-medium">
-        {n}. {title}
-      </h2>
-      <div className="mt-3">{children}</div>
-    </section>
+    <div className={styles.studio} style={{ maxWidth: 850 }}>
+      <div className={styles.breadcrumb}>
+        <Link href={`/missions/${mission.id}/lab`}>
+          <ArrowLeft size={14} /> Mission studio
+        </Link>
+        <span>/</span>
+        <span>Configuration</span>
+      </div>
+      <header className={styles.header}>
+        <div>
+          <span className={styles.eyebrow}>BUILT AROUND YOUR BUSINESS</span>
+          <h1>Set the standard.</h1>
+          <p>
+            Define what good looks like. Choose what the agent knows. Every
+            change calls for a fresh evaluation.
+          </p>
+        </div>
+      </header>
+      <div className={styles.safety}>
+        <ShieldCheck size={17} />
+        <span>Test mode · No external tools · No autonomous commitments</span>
+      </div>
+      {error && (
+        <p role="alert" className={styles.notice}>
+          {error}
+        </p>
+      )}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+        className="space-y-5"
+      >
+        <section className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.number}>01</span>
+            <h2>The outcome</h2>
+          </div>
+          <label className={styles.label}>
+            What must this mission achieve?
+            <textarea
+              required
+              maxLength={2000}
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value)}
+              rows={3}
+            />
+          </label>
+        </section>
+        <section className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.number}>02</span>
+            <h2>The knowledge it can use</h2>
+          </div>
+          <p className={styles.muted}>
+            Only selected, ready sources are sent to your provider. Uploaded
+            text is evidence, never executable instructions.
+          </p>
+          <div className="mt-5 space-y-3">
+            {data.sources
+              .filter((s) => s.tenantId === mission.tenantId)
+              .map((source) => (
+                <label
+                  key={source.id}
+                  className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-xs"
+                >
+                  <input
+                    className="mt-1 accent-blue-600"
+                    type="checkbox"
+                    disabled={source.status !== "ready"}
+                    checked={selected.includes(source.id)}
+                    onChange={(e) =>
+                      setSelected((current) =>
+                        e.target.checked
+                          ? [...current, source.id]
+                          : current.filter((id) => id !== source.id),
+                      )
+                    }
+                  />
+                  <span className="min-w-0">
+                    <strong>{source.name}</strong>
+                    <span className="ml-2 text-slate-400">
+                      {source.status} · {source.version}
+                    </span>
+                    <span className="mt-2 block line-clamp-3 leading-6 text-slate-500">
+                      {source.excerpt}
+                    </span>
+                  </span>
+                </label>
+              ))}
+          </div>
+          <Link href={`/knowledge/scopes?mission=${encodeURIComponent(mission.id)}`} className={`${styles.textLink} mt-4`}>
+            Choisir un dossier SharePoint, Notion ou Drive <ArrowRight size={13} />
+          </Link>
+          <Link href="/knowledge" className={`${styles.textLink} mt-4`}>
+            Add or manage knowledge <ArrowRight size={13} />
+          </Link>
+        </section>
+        <section className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.number}>03</span>
+            <h2>Your operating instructions</h2>
+          </div>
+          <label className={styles.label}>
+            Tone, constraints, acceptance criteria
+            <textarea
+              maxLength={8000}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              rows={6}
+            />
+          </label>
+          <p className={styles.fine}>
+            Approved mission memory is added separately. Customer-specific
+            memory is not enabled without a verified customer identity.
+          </p>
+        </section>
+        <section className={styles.panel}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.number}>04</span>
+            <h2>Execution boundaries</h2>
+          </div>
+          <p className={styles.muted}>
+            Maximum five model calls, 2,400 output tokens per call, one repair
+            pass, 150-second overall timeout, no automatic provider retries.
+            Provider billing applies even to unsuccessful calls. Euro budgets
+            are not yet enforced; configure account-level limits with your
+            provider.
+          </p>
+          <p className={styles.fine}>
+            Continuous scheduling, OAuth connectors and external actions require
+            a production runtime. This workspace only runs on your explicit
+            request.
+          </p>
+        </section>
+        <button
+          type="submit"
+          className={styles.primary}
+          disabled={saving || !selected.length || !outcome.trim()}
+        >
+          {saving ? "Saving your configuration…" : "Save & open mission studio"}
+          <ArrowRight size={16} />
+        </button>
+        {version.immutable && (
+          <p role="alert">
+            Saving creates a fresh draft. The previous version stays unchanged.
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

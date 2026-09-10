@@ -1,0 +1,1216 @@
+.workshop {
+  width: 100%;
+  height: 425px;
+  position: relative;
+  overflow: hidden;
+  color: #567299;
+}
+.workshopTop {
+  position: absolute;
+  top: 23px;
+  left: 25px;
+  right: 25px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #8a9cb7;
+}
+.workshopStage {
+  position: absolute;
+  inset: 60px 0 28px;
+}
+.inputCard {
+  position: absolute;
+  top: 23px;
+  left: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  padding: 14px 16px;
+  border: 1px solid #d8e5f7;
+  border-radius: 9px;
+  box-shadow: 0 12px 28px #335d9510;
+  font-size: 11px;
+  z-index: 5;
+  animation: missionIn 7.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.inputCard > svg:last-child {
+  margin-left: 8px;
+  color: #9bacbf;
+}
+.track {
+  position: absolute;
+  left: 75px;
+  top: 83px;
+  width: 180px;
+  height: 87px;
+  border-left: 1px dashed #b7cbe7;
+  border-bottom: 1px dashed #b7cbe7;
+  border-radius: 0 0 0 25px;
+}
+.trackOut {
+  position: absolute;
+  right: 40px;
+  bottom: 70px;
+  width: 145px;
+  height: 90px;
+  border-right: 1px dashed #b7cbe7;
+  border-bottom: 1px dashed #b7cbe7;
+  border-radius: 0 0 20px;
+}
+.portal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 145px;
+  height: 146px;
+  transform: translate(-50%, -43%);
+  perspective: 800px;
+  z-index: 3;
+}
+.portalFace {
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(
+    138deg,
+    #f2f8ff 0%,
+    #abc9f0 8%,
+    #3e70b4 12%,
+    #98b9e5 18%,
+    #e8f3ff 22%,
+    #eff6ff85 60%,
+    #87aaddbb 95%
+  );
+  border: 1px solid #e5f4ff;
+  box-shadow:
+    inset 3px 3px 0 #ffffffb0,
+    inset -3px -3px 0 #5079b855,
+    0 20px 38px #26487725;
+  transform: rotateY(-17deg) rotateX(8deg);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.portalFace:before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  border: 1px solid #aec8e955;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef7ff88, #b2cbea11);
+  box-shadow: inset 0 0 22px #577fb41a;
+}
+.portalMark {
+  width: 66px;
+  height: 66px;
+  background: linear-gradient(
+    140deg,
+    #f8fbff,
+    #42659b 30%,
+    #a6c8ff 50%,
+    #244c87 70%,
+    #d9eafe
+  );
+  mask: url(/brand/orbis-mark.svg) center/contain no-repeat;
+  z-index: 1;
+}
+.portalBack {
+  position: absolute;
+  inset: -7px -12px 8px 12px;
+  border-radius: 23px;
+  background: linear-gradient(100deg, #6086bf, #b9d6f9 55%, #315689);
+  border: 1px solid #c4dcfb;
+  transform: rotateY(-17deg) rotateX(8deg);
+}
+.portalEdge {
+  position: absolute;
+  bottom: 4px;
+  left: 35px;
+  right: 28px;
+  height: 2px;
+  background: #d7fff0;
+  border-radius: 2px;
+  box-shadow: 0 0 10px #9aecc7;
+}
+.portalFloor {
+  position: absolute;
+  bottom: -18px;
+  left: -40px;
+  right: -40px;
+  height: 18px;
+  background: #7696c333;
+  border-radius: 50%;
+  filter: blur(10px);
+}
+.scan {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  top: 20px;
+  background: #ffffffca;
+  box-shadow: 0 0 18px #dbedff;
+  animation: scan 7.6s ease infinite;
+  opacity: 0;
+}
+.working {
+  position: absolute;
+  top: 234px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 9px;
+  color: #879fbe;
+  animation: working 7.6s ease infinite;
+}
+.working span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #7398cf;
+}
+.outputCard {
+  position: absolute;
+  right: 20px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  background: #fff;
+  border: 1px solid #dce9ed;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px #2c577812;
+  z-index: 6;
+  animation: missionOut 7.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.outputCard > span {
+  background: #e9f5ef;
+  color: #4d9b81;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+}
+.outputCard strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #45668d;
+}
+.outputCard small {
+  display: block;
+  font-size: 9px;
+  color: #93a4ba;
+  margin-top: 5px;
+}
+.workshopBottom {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  color: #8ea2c0;
+}
+.workshopBottom > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #739cdc;
+}
+.workshop[data-active="false"] .inputCard,
+.workshop[data-active="false"] .scan,
+.workshop[data-active="false"] .working,
+.workshop[data-active="false"] .outputCard {
+  animation: none;
+}
+.workshop[data-active="false"] .working,
+.workshop[data-active="false"] .scan {
+  opacity: 0;
+}
+@keyframes missionIn {
+  0% {
+    opacity: 0;
+    transform: translate(-15px, -5px);
+  }
+  8%,
+  22% {
+    opacity: 1;
+    transform: none;
+  }
+  38%,
+  100% {
+    opacity: 0;
+    transform: translate(124px, 108px) scale(0.55);
+  }
+}
+@keyframes missionOut {
+  0%,
+  52% {
+    opacity: 0;
+    transform: translate(-55px, -48px) scale(0.8);
+  }
+  65%,
+  90% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+@keyframes scan {
+  0%,
+  31%,
+  57%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(103px);
+  }
+}
+@keyframes working {
+  0%,
+  30%,
+  57%,
+  100% {
+    opacity: 0;
+  }
+  35%,
+  53% {
+    opacity: 1;
+  }
+}
+.knowledge {
+  width: 90%;
+  padding: 20px 0;
+}
+.weekSelector {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.weekSelector button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 9px 14px;
+  font-size: 10px;
+  color: #92a2ba;
+  cursor: pointer;
+  transition:
+    background 0.3s,
+    color 0.3s;
+}
+.weekSelector button[aria-pressed="true"] {
+  border-color: #cbdcf5;
+  color: #426ba6;
+  background: #eef5ff;
+}
+.knowledgeSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  margin: 12px 0 0;
+}
+.knowledgeNode {
+  animation: nodeArrives 0.6s ease both;
+  animation-delay: var(--delay);
+  transform-origin: center;
+}
+.memoryLegend {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  font-size: 8px;
+  color: #93a3b8;
+}
+.memoryLegend > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.memoryLegend > span:before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #315ee8;
+}
+.memoryLegend > span:nth-child(2):before {
+  background: #88a7d8;
+}
+.memoryLegend > span:nth-child(3):before {
+  background: #78b5ad;
+}
+.memoryExplanation {
+  text-align: center;
+  margin-top: 25px;
+}
+.memoryExplanation strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4d6b95;
+}
+.memoryExplanation p {
+  font-size: 10px;
+  margin: 7px 0;
+  color: #91a1b8;
+  line-height: 1.6;
+}
+.caption {
+  display: block;
+  text-align: center;
+  font-size: 8px;
+  color: #9caabc;
+  margin-top: 15px;
+}
+@keyframes nodeArrives {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.setupScroll {
+  height: 260svh;
+  min-height: 1900px;
+  max-width: 1180px;
+  margin: 75px auto 0;
+  position: relative;
+}
+.setupSticky {
+  position: sticky;
+  top: 110px;
+  min-height: 570px;
+  height: calc(100svh - 145px);
+  max-height: 720px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.setupSticky > header {
+  margin-bottom: 55px;
+}
+.setupSticky h2 {
+  font-size: clamp(32px, 3.8vw, 52px);
+  letter-spacing: -1.8px;
+  line-height: 1.13;
+  font-weight: 450;
+  max-width: 900px;
+  margin: 0 0 20px;
+}
+.setupSticky > header > p {
+  font-size: 16px;
+  color: #7a8ba6;
+}
+.setupBody {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 55px;
+  align-items: center;
+}
+.stageNav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stageNav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  padding: 20px 0;
+  font-size: 15px;
+  color: #9dabbe;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #e3eaf4;
+  text-align: left;
+  cursor: pointer;
+}
+.stageNav small {
+  font-size: 9px;
+}
+.stageNav svg {
+  margin-left: auto;
+}
+.stageNav button[aria-current] {
+  color: #315ee8;
+}
+.stageNav i {
+  height: 1px;
+  background: #315ee8;
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  transform-origin: left;
+  transition: transform 0.5s;
+}
+.stageDeck {
+  position: relative;
+  height: 330px;
+}
+.setupSlide {
+  visibility: hidden;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 35px;
+  align-items: center;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(18px);
+  pointer-events: none;
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+.setupSlide[data-selected="true"] {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.stageCopy h3 {
+  font-size: 34px;
+  line-height: 1.2;
+  letter-spacing: -1.2px;
+  font-weight: 450;
+  margin: 0 0 22px;
+}
+.stageCopy > p {
+  font-size: 14px;
+  color: #798ba7;
+  line-height: 1.7;
+}
+.stageCopy > small {
+  font-size: 10px;
+  color: #93a2b9;
+  line-height: 1.6;
+  display: block;
+  border-top: 1px solid #e5ebf4;
+  padding-top: 18px;
+  margin-top: 22px;
+}
+.stageCopy > a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #315ee8;
+  margin-top: 23px;
+  width: fit-content;
+}
+.stageArt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+}
+.preparedTools {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 30px;
+}
+.preparedTools > div {
+  text-align: center;
+}
+.preparedTools > div:nth-child(even) {
+  transform: translateY(15px);
+}
+.preparedTools small {
+  font-size: 9px;
+  color: #91a2bc;
+}
+.scrollHint {
+  margin-top: 30px;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #9aabc1;
+}
+.scrollHint > span {
+  width: 4px;
+  height: 17px;
+  border: 1px solid #b6c9e6;
+  border-radius: 3px;
+}
+.resultBounds {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.graphResult {
+  position: absolute;
+  left: var(--left);
+  top: var(--top);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 15px;
+  background: #ffffffee;
+  border: 1px solid #d7e6e2;
+  border-radius: 9px;
+  box-shadow: 0 10px 25px #26497b0e;
+  animation: graphNotification 4.6s ease both;
+}
+.graphResult > span {
+  color: #539882;
+}
+.graphResult strong {
+  font-size: 10px;
+  color: #567a79;
+  font-weight: 500;
+  display: block;
+  white-space: nowrap;
+}
+.graphResult small {
+  font-size: 8px;
+  color: #94aab0;
+  display: block;
+  margin-top: 4px;
+}
+.graphResult[data-active="false"] {
+  animation: none;
+}
+@keyframes graphNotification {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  20%,
+  87% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+.glassAction {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 19px;
+  min-height: 50px;
+  border-radius: 10px;
+  border: 1px solid #c0d3f0;
+  background: linear-gradient(145deg, #f8fbffef, #e4edfa 45%, #d4e3f9);
+  color: #30517f;
+  font-size: 12px;
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 4px 10px #2d528c09;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    box-shadow 0.3s,
+    transform 0.3s;
+  will-change: auto;
+}
+.glassAction[data-primary="true"] {
+  background: linear-gradient(140deg, #5282ce, #274e8f 60%, #173969);
+  color: white;
+  border-color: #5b87c9;
+  box-shadow:
+    inset 0 1px 1px #c8e0ff88,
+    0 6px 14px #274e8f16;
+}
+.glassSurface {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  opacity: 0;
+  transition: opacity 0.4s;
+  mix-blend-mode: soft-light;
+}
+.glassAction:is(:hover, :focus-visible) .glassSurface {
+  opacity: 0.6;
+}
+.glassAction:is(:hover, :focus-visible) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 1px #fff9,
+    0 10px 24px #244b861c;
+}
+.glassShine {
+  position: absolute;
+  inset: -100% -25%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    #fff0 40%,
+    #ffffff80 50%,
+    #fff0 60%,
+    transparent 70%
+  );
+  transform: translateX(-90%);
+  transition: transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.glassAction:is(:hover, :focus-visible) .glassShine {
+  transform: translateX(90%);
+}
+.glassAction > svg {
+  position: relative;
+  flex-shrink: 0;
+  transition: transform 0.3s;
+}
+.glassAction:hover > svg {
+  transform: translate(2px, -2px);
+}
+.glassLabel {
+  position: relative;
+}
+.priceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.priceCard {
+  padding: 30px 26px;
+  border: 1px solid #dce6f4;
+  border-radius: 16px;
+  background: #fff;
+}
+.priceCard[data-featured="true"] {
+  background: linear-gradient(145deg, #eff5ff, #fff 65%);
+  border-color: #c2d5f0;
+  box-shadow: 0 12px 40px #36598508;
+}
+.priceCard > small {
+  font-size: 10px;
+  color: #8799b4;
+}
+.priceCard > h3 {
+  font-weight: 500;
+  font-size: 23px;
+  letter-spacing: -0.5px;
+  margin: 22px 0;
+}
+.priceValue {
+  font-size: 44px;
+  font-weight: 450;
+  letter-spacing: -1.7px;
+  white-space: nowrap;
+  min-height: 59px;
+}
+.priceValue > small {
+  font-size: 11px;
+  color: #90a0b7;
+  letter-spacing: 0;
+  margin-left: 8px;
+}
+.priceCard > p {
+  font-size: 12px;
+  color: #8292ab;
+  line-height: 1.6;
+  min-height: 40px;
+  margin: 16px 0;
+}
+.seats,
+.planScope {
+  height: 46px;
+  margin: 20px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #7b91b0;
+  font-size: 11px;
+}
+.seats {
+  border: 1px solid #d6e2f3;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 12px;
+}
+.seats select {
+  font: inherit;
+  color: #406496;
+  border: 0;
+  background: transparent;
+  padding: 8px;
+  cursor: pointer;
+}
+.planScope {
+  font-size: 10px;
+  border-top: 1px solid #e7edf5;
+  border-bottom: 1px solid #e7edf5;
+}
+.priceCard ul {
+  padding: 23px 0 0;
+  list-style: none;
+  border-top: 1px solid #e3ebf6;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.priceCard li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #8395b0;
+}
+.priceCard li svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #809fc9;
+}
+@media (max-width: 1240px) {
+  .setupScroll {
+    margin-left: 35px;
+    margin-right: 35px;
+  }
+  .setupBody {
+    gap: 35px;
+  }
+  .setupSlide {
+    grid-template-columns: 1fr 250px;
+    gap: 20px;
+  }
+  .stageCopy h3 {
+    font-size: 30px;
+  }
+}
+@media (max-width: 960px) {
+  .setupBody {
+    grid-template-columns: 145px 1fr;
+    gap: 25px;
+  }
+  .setupSlide {
+    grid-template-columns: 1fr 210px;
+  }
+  .stageArt > div {
+    max-width: 210px !important;
+  }
+  .stageCopy h3 {
+    font-size: 26px;
+  }
+  .stageCopy > p {
+    font-size: 12px;
+  }
+  .stageNav button {
+    font-size: 12px;
+  }
+  .preparedTools {
+    gap: 15px;
+  }
+  .preparedTools > div > div {
+    width: 85px !important;
+    height: 85px !important;
+  }
+  .priceCard {
+    padding: 24px 17px;
+  }
+  .priceValue {
+    font-size: 36px;
+  }
+  .glassAction {
+    font-size: 11px;
+    padding: 14px 12px;
+  }
+}
+@media (max-width: 650px) {
+  .workshop {
+    height: 360px;
+  }
+  .workshopTop {
+    left: 16px;
+    right: 16px;
+    font-size: 8px;
+  }
+  .workshopStage {
+    top: 45px;
+    bottom: 25px;
+  }
+  .inputCard {
+    font-size: 9px;
+    left: 16px;
+    top: 10px;
+    padding: 11px;
+  }
+  .portal {
+    width: 125px;
+    height: 127px;
+    top: 46%;
+  }
+  .portalMark {
+    width: 58px;
+    height: 58px;
+  }
+  .track {
+    left: 50px;
+    top: 53px;
+    width: 120px;
+    height: 70px;
+  }
+  .trackOut {
+    bottom: 48px;
+    right: 25px;
+    width: 110px;
+  }
+  .working {
+    top: 196px;
+    font-size: 8px;
+  }
+  .outputCard {
+    right: 13px;
+    bottom: 20px;
+    padding: 10px 12px;
+  }
+  .outputCard strong {
+    font-size: 9px;
+  }
+  .outputCard small {
+    font-size: 8px;
+  }
+  .workshopBottom {
+    font-size: 8px;
+    bottom: 13px;
+  }
+  .knowledge {
+    width: 96%;
+    padding: 20px 0;
+  }
+  .weekSelector button {
+    font-size: 9px;
+    padding: 8px 11px;
+  }
+  .memoryExplanation {
+    margin-top: 18px;
+  }
+  .memoryExplanation strong {
+    font-size: 12px;
+  }
+  .memoryExplanation p {
+    font-size: 9px;
+  }
+  .knowledgeSvg {
+    margin-top: 15px;
+  }
+  .setupScroll {
+    margin: 65px 20px 0;
+    min-height: 1800px;
+    height: 250svh;
+  }
+  .setupSticky {
+    top: 88px;
+    min-height: 0;
+    height: calc(100svh - 105px);
+    max-height: none;
+    justify-content: flex-start;
+    padding-top: 10px;
+  }
+  .setupSticky > header {
+    margin-bottom: 17px;
+  }
+  .setupSticky h2 {
+    font-size: 29px;
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+  }
+  .setupSticky > header > p {
+    font-size: 11px;
+    line-height: 1.6;
+    max-width: 320px;
+    margin: 0;
+  }
+  .setupBody {
+    display: block;
+  }
+  .stageNav {
+    flex-direction: row;
+    gap: 15px;
+    margin-bottom: 8px;
+  }
+  .stageNav button {
+    flex: 1;
+    font-size: 10px;
+    gap: 5px;
+    padding: 13px 0;
+  }
+  .stageNav small {
+    font-size: 8px;
+  }
+  .stageNav svg {
+    display: none;
+  }
+  .stageDeck {
+    height: 430px;
+  }
+  .setupSlide {
+    grid-template-columns: 1fr;
+    gap: 0;
+    align-content: start;
+    transform: translateY(8px);
+  }
+  .stageArt {
+    grid-row: 1;
+    min-height: 190px;
+    height: 190px;
+  }
+  .stageArt > div {
+    width: 165px !important;
+    height: 165px !important;
+  }
+  .stageArt > .preparedTools {
+    width: 230px !important;
+    height: 180px !important;
+    max-width: 230px !important;
+    gap: 3px 35px;
+  }
+  .preparedTools > div > div {
+    width: 72px !important;
+    height: 72px !important;
+  }
+  .preparedTools small {
+    font-size: 8px;
+  }
+  .stageCopy h3 {
+    font-size: 25px;
+    letter-spacing: -0.8px;
+    margin: 12px 0;
+  }
+  .stageCopy > p {
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .stageCopy > small {
+    font-size: 9px;
+    margin-top: 13px;
+    padding-top: 12px;
+  }
+  .stageCopy > a {
+    font-size: 10px;
+    margin-top: 13px;
+  }
+  .scrollHint {
+    margin-top: auto;
+    padding-top: 8px;
+    font-size: 8px;
+  }
+  .graphResult {
+    left: clamp(5%, var(--left), 50%);
+    max-width: 190px;
+    padding: 9px 11px;
+    gap: 7px;
+  }
+  .graphResult strong {
+    font-size: 8px;
+  }
+  .graphResult small {
+    font-size: 7px;
+  }
+  .priceGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .priceCard {
+    padding: 26px;
+  }
+  .priceValue {
+    font-size: 42px;
+  }
+  .priceCard li {
+    font-size: 11px;
+  }
+  .glassAction {
+    font-size: 12px;
+    padding: 15px 18px;
+  }
+}
+@media (max-height: 740px) and (min-width: 651px) {
+  .setupSticky {
+    top: 95px;
+    min-height: 0;
+    height: calc(100svh - 110px);
+  }
+  .setupSticky > header {
+    margin-bottom: 20px;
+  }
+  .setupSticky h2 {
+    font-size: 34px;
+  }
+  .setupSticky > header > p {
+    font-size: 13px;
+  }
+  .stageDeck {
+    height: 280px;
+  }
+  .scrollHint {
+    margin-top: 12px;
+  }
+}
+@media (max-height: 750px) and (max-width: 650px) {
+  .setupSticky h2 {
+    font-size: 23px;
+  }
+  .setupSticky > header > p {
+    display: none;
+  }
+  .setupSticky > header {
+    margin-bottom: 7px;
+  }
+  .stageArt {
+    min-height: 140px;
+    height: 140px;
+  }
+  .stageArt > div {
+    width: 125px !important;
+    height: 125px !important;
+  }
+  .stageArt > .preparedTools {
+    height: 135px !important;
+  }
+  .preparedTools > div > div {
+    width: 52px !important;
+    height: 52px !important;
+  }
+  .stageCopy h3 {
+    font-size: 22px;
+  }
+  .stageCopy > p {
+    font-size: 11px;
+  }
+  .stageDeck {
+    height: 350px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workshop *,
+  .knowledgeNode,
+  .graphResult {
+    animation: none !important;
+  }
+  .inputCard,
+  .outputCard,
+  .graphResult {
+    opacity: 1;
+    transform: none;
+  }
+  .scan,
+  .working {
+    opacity: 0;
+  }
+  .setupSlide,
+  .glassAction,
+  .glassShine,
+  .stageNav i {
+    transition: none;
+  }
+  .glassShine {
+    display: none;
+  }
+}
+[data-motion="false"] .knowledgeNode {
+  animation: none;
+  opacity: 1;
+}
+
+/* Natural document flow: no pinned viewport or invisible scroll distance. */
+.setupScroll {
+  height: auto;
+  min-height: 0;
+  margin-top: 90px;
+}
+.setupSticky {
+  position: relative;
+  top: auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  display: block;
+  padding: 0;
+}
+.setupBody {
+  align-items: start;
+}
+.stageNav {
+  position: sticky;
+  top: 150px;
+}
+.stageDeck {
+  height: auto;
+}
+.setupSlide {
+  position: relative;
+  inset: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  min-height: 410px;
+  padding: 55px 0;
+  border-bottom: 1px solid #e3eaf4;
+  transition: none;
+}
+.setupSlide:last-child {
+  border-bottom: 0;
+}
+@media (max-width: 650px) {
+  .setupScroll {
+    height: auto;
+    min-height: 0;
+    margin-top: 65px;
+  }
+  .setupSticky {
+    position: relative;
+    top: auto;
+    height: auto;
+    padding: 0;
+  }
+  .setupSticky > header > p {
+    display: block;
+  }
+  .stageNav {
+    position: sticky;
+    top: 73px;
+    z-index: 5;
+    padding: 5px 0;
+    background: #ffffffed;
+    backdrop-filter: blur(10px);
+  }
+  .stageDeck {
+    height: auto;
+  }
+  .setupSlide {
+    min-height: 0;
+    padding: 25px 0 45px;
+  }
+  .stageCopy h3 {
+    margin-top: 22px;
+  }
+}
