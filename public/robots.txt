@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /onboarding/
-
-# Orbis is still a local/demo slice — no production sitemap URL yet.
