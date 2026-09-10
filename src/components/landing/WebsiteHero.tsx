@@ -2,7 +2,7 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, LoaderCircle, Check } from "lucide-react";
+import { Globe, LoaderCircle } from "lucide-react";
 import { LandingCta } from "./LandingCta";
 import s from "./website-hero.module.css";
 export function WebsiteHero({ compact = false }: { compact?: boolean }) {
@@ -57,24 +57,19 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
   return (
     <section
       className={compact ? s.compact : s.hero}
-      aria-label={compact ? "Launch your first agents" : undefined}
+      aria-label={compact ? "Test a mission on my company" : undefined}
       aria-labelledby={compact ? undefined : "hero-title"}
     >
       {!compact && <div className={s.geometry} aria-hidden />}
       <div className={s.content}>
         {!compact && (
           <>
-            <p className={s.intro}>Your company. Your tools. Your AI team.</p>
+            <p className={s.intro}>MVP: website intake, missions, evaluated runs. OAuth and outside execution: soon.</p>
             <h1 id="hero-title">
-              A bigger business.
-              <br />
-              Not a bigger to-do list.
+              Install work into your company.
             </h1>
             <p className={s.description}>
-              AI agents that understand your business and the work you need
-              done.
-              <br className={s.desktop} /> Start with your website. Choose a
-              mission. Make it yours.
+              You already paste context into ChatGPT. Orbis turns one repeating job into a bounded mission on <em>your</em> company: test the result, check sources and unknowns, activate under supervision.
             </p>
           </>
         )}
@@ -86,7 +81,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           }}
         >
           <label htmlFor={intakeId} className="sr-only">
-            {mode === "site" ? "Your company website" : "Describe your company"}
+            {mode === "site" ? "Your website" : "Describe your company"}
           </label>
           <div className={s.inputRow}>
             {mode === "site" ? (
@@ -127,13 +122,13 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               type="submit"
               disabled={busy || !value.trim()}
               aria-label={
-                busy ? "Reading your website" : "Launch your first agents"
+                busy ? "Reading your website" : "Test a mission on my company"
               }
             >
               {busy ? (
                 <LoaderCircle size={18} className={s.spin} />
               ) : (
-                "Launch your first agents"
+                "Test a mission on my company"
               )}
             </LandingCta>
           </div>
@@ -142,7 +137,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               {busy
                 ? "Reading your public page…"
                 : mode === "site"
-                  ? "Your website is the starting point. You confirm the context."
+                  ? "Website or 4 questions. First deliverable to review. Nothing acts outside without you."
                   : "Your own words are enough to get started."}
             </span>
             <button
@@ -154,7 +149,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
                 setError("");
               }}
             >
-              {mode === "site" ? "No website?" : "Use my website"}
+              {mode === "site" ? "No website? Describe the company" : "Use my website"}
             </button>
           </div>
         </form>
@@ -164,25 +159,9 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           </p>
         )}
         {!compact && (
-          <>
-            <div className={s.assurances}>
-              <span>
-                <Check size={14} /> Choose your missions
-              </span>
-              <span>
-                <Check size={14} /> Control the access
-              </span>
-              <span>
-                <Check size={14} /> Review the work
-              </span>
-            </div>
-            <div className={s.links}>
-              <Link href="/catalog">Explore 100+ business missions</Link>
-              <Link href="/audit?audience=integrator">
-                I help companies build with AI
-              </Link>
-            </div>
-          </>
+          <div className={s.links}>
+            <Link href="/catalog">Browse the catalog</Link>
+          </div>
         )}
       </div>
     </section>

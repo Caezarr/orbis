@@ -343,7 +343,7 @@ export function ScrollSetup({ enabled }: { enabled: boolean }) {
                   <p>{stage.text}</p>
                   <small>{stage.note}</small>
                   <Link href={i === 1 ? "/catalog" : "/audit"}>
-                    {i === 1 ? "Find my missions" : "Launch your first agents"}
+                    "Test a mission on my company"
                     <ArrowUpRight size={15} />
                   </Link>
                 </div>
@@ -432,7 +432,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           price: "€149",
           unit: "/ month",
           copy: "Your first missions, with your own expertise.",
-          cta: "Launch your first agents",
+          cta: "Test a mission on my company",
           href: "/audit",
           features: [
             "One operator",
@@ -446,7 +446,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           price: `€${business}`,
           unit: "/ month",
           copy: "Choose the people who work with your agents.",
-          cta: "Launch your first agents",
+          cta: "Test a mission on my company",
           href: `/audit?seats=${seats}`,
           features: [
             "5 seats included in the proposed base",

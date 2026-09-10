@@ -350,8 +350,8 @@ export function CompanyLanding() {
           <Link className={s.login} href="/today">
             Login
           </Link>
-          <LandingCta href="#start" enabled={enabled}>
-            Launch your first agents
+          <LandingCta href="/audit" enabled={enabled}>
+            Test a mission on my company
           </LandingCta>
           <button
             className={s.menuToggle}
@@ -489,24 +489,28 @@ export function CompanyLanding() {
           </Link>
         </section>
         <section className={`${s.section} ${s.faq}`}>
-          <h2>A few things worth knowing.</h2>
+          <h2>Questions.</h2>
           <div>
             {[
               {
-                q: "Do I need to replace my tools?",
-                a: "No. The goal is to work around your existing services. Choose your preferred tools in your plan. Each connector still needs its own verified access before an agent can use it.",
+                q: "Will it act without asking?",
+                a: "Not by default. Test mode keeps everything in sandbox. External execution requires explicit activation and supervision.",
               },
               {
-                q: "Will an agent act without asking?",
-                a: "Not by default. Start in test mode, inspect the output and choose your boundaries. External execution requires a verified connector and an explicit policy; it is not enabled on this installation.",
+                q: "Can I replace my tools?",
+                a: "No need. Orbis works around your existing stack. Connect what you choose, scope what each mission can access.",
               },
               {
-                q: "What gets remembered?",
-                a: "Approved corrections and instructions, with a defined scope. You can inspect that memory. Selecting a document folder does not make it accessible until permissions and synchronization have been verified.",
+                q: "What works today?",
+                a: "Website intake, guided audits, mission contracts, source selection, and evaluated AI runs with your configured provider. OAuth and scheduled external execution are being built.",
               },
               {
-                q: "What can I use today?",
-                a: "Website intake, guided audits, 100 mission contracts, source selection, and evaluated AI document runs with a configured provider. Self-serve OAuth, scheduled external execution and automatic daily recaps are still being built.",
+                q: "How much does it cost?",
+                a: "Free audit with your first deliverable to review. Paid plans (Solo €149/mo, Business from €359/mo) are indicative — final pricing confirmed before subscription.",
+              },
+              {
+                q: "Is BYOK available?",
+                a: "Soon, for expert users only. The default path uses pre-configured providers.",
               },
             ].map((f) => (
               <details key={f.q}>
@@ -523,13 +527,10 @@ export function CompanyLanding() {
           <div className={s.ctaOrb}>
             <LiquidMark enabled={enabled} size={145} />
           </div>
-          <h2>
-            Your ambition.
-            <br />A little more capacity.
-          </h2>
-          <p>Start with your company. Build the team around it.</p>
+          <h2>Run the audit on your company.</h2>
+          <p>Website or 4 questions. First deliverable. Nothing acts outside without you.</p>
           <WebsiteHero compact />
-          <Link href="/catalog">Or find your first mission</Link>
+          <Link href="/catalog" className={s.catalogLinkMuted}>Browse the catalog</Link>
         </section>
       </main>
       <footer className={s.footer}>

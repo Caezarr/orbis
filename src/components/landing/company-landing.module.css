@@ -1977,3 +1977,11 @@
     margin-bottom: 38px;
   }
 }
+
+.catalogLinkMuted {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: underline;
+}
