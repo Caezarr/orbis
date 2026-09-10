@@ -1,21 +1,68 @@
 # Orbis
 
-New business journey: [audit](http://127.0.0.1:3000/audit), [100-case catalogue](http://127.0.0.1:3000/catalog), saved client plans and tailored mission installation. See [product release boundaries](docs/product/PRODUCT-RELEASE.md) and [pricing proposal](docs/product/PRICING.md). The 100 authored documentary contracts use the four existing engine families; they are not 100 operational external integrations.
+### Your company. Your tools. Your AI team.
 
-Modular AI workflows for company work. A polished landing, a local workspace, and four bounded model-backed workflows: customer-request analysis, meeting preparation, research briefs and content drafts.
+Orbis turns the work around a company into missions that AI agents can understand, prepare, run and improve.
 
-**Local pilot, not a production SaaS.** No authentication, durable workers, tenant-isolated database or operational external connectors yet. Do not expose the workspace publicly or use production customer data. The landing's examples and existing workspace records are illustrative.
+Start with a website or a conversation. Orbis identifies the work worth delegating, suggests a ready-to-use mission, connects the right context and tools, then gives you a result to review.
+
+![Orbis — your company, with a little more capacity](public/brand/orbis-modules.png)
+
+<p align="center">
+  <a href="http://127.0.0.1:3000/">Landing</a> ·
+  <a href="http://127.0.0.1:3000/catalog">Mission catalog</a> ·
+  <a href="http://127.0.0.1:3000/audit">Company audit</a> ·
+  <a href="docs/architecture/CTO-README.md">Architecture</a>
+</p>
+
+## What Orbis does
+
+```text
+Understand your company → Choose the work → Connect context → Test the result → Delegate with memory
+```
+
+The product combines a guided company audit, a catalog of 100 business missions, scoped knowledge, tool access, agent memory, evaluation and a workspace for reviewing the work produced.
+
+## Product surface
+
+| Surface | Purpose |
+| --- | --- |
+| Company intake | Start from a website or describe the business in your own words |
+| Mission catalog | Browse 100 pre-designed missions across 10 departments |
+| Mission setup | Define outcomes, instructions, sources, tools and approval rules |
+| Knowledge scopes | Select the exact workspace, site, folder or source an agent may use |
+| Agent runtime | Generate structured work, attach sources and evaluate the result |
+| Memory | Turn approved feedback into reusable mission context |
+| Workspace | Review runs, corrections, evidence, unknowns and decisions |
+| Partner mode | Prepare repeatable setups for integrators and their clients |
+
+Examples include customer replies, quote preparation, research briefs, meeting preparation, content drafts, lead qualification and internal operations.
+
+## Design principles
+
+- **Simple at the surface.** A company starts with a conversation, not an automation canvas.
+- **Specific underneath.** Each mission has a defined input, output, context, steps and acceptance criteria.
+- **Scoped by default.** Agents only receive the knowledge and tools selected for the mission.
+- **Reviewable work.** Results expose sources, claims, unknowns and proposed next actions.
+- **Improvement with permission.** Feedback becomes memory when approved.
+- **Bring your tools.** Orbis is designed to work around the systems a company already uses.
 
 ## Run locally
 
-```sh
+Requirements: Node.js 20+ and pnpm.
+
+```bash
 pnpm install
 pnpm dev --hostname 127.0.0.1
 ```
 
-Open [the workspace](http://127.0.0.1:3000/missions/mission_request/lab). The UI remains explorable without a model key, but a real run is disabled until configured.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
-In an ignored `.env.local`, set:
+Useful routes: `/` landing, `/audit` company audit, `/catalog` mission catalog, `/pricing` pricing, `/today` workspace.
+
+### Optional model configuration
+
+The interface and product flows are explorable without a provider key. To run model-backed missions, create an ignored `.env.local` file:
 
 ```dotenv
 ORBIS_AI_PROVIDER=openai
@@ -23,37 +70,48 @@ ORBIS_AI_MODEL=your-supported-model-id
 OPENAI_API_KEY=your-private-api-key
 ```
 
-For Anthropic, use `ORBIS_AI_PROVIDER=anthropic`, an appropriate model ID and `ANTHROPIC_API_KEY`. Choose a model supporting structured outputs. Restart after changing server configuration. Never commit actual keys. There is no default model, automatic fallback or managed billing.
+Anthropic is also supported with `ORBIS_AI_PROVIDER=anthropic`, a supported model ID and `ANTHROPIC_API_KEY`. Never commit credentials. Provider usage and costs remain under the configured provider account.
 
-**Data boundary:** clicking Run sends the request, selected source text, mission instructions and approved scoped memory to that provider. Provider charges apply, including potentially unsuccessful requests. Configure limits on the provider account. Orbis does not enforce a euro budget yet.
+## Verify the project
 
-## The working loop
-
-1. Open a mission → Configure: outcome, ready sources, operating instructions.
-2. Write a request or edit an example → Run this mission.
-3. Follow real framing, generation, review and optional repair steps.
-4. Inspect the deliverable, exact source quotes, checks, unknowns and token usage.
-5. Propose a correction as a mission rule → approve the rule → run again.
-6. Mark a passing, current result reviewed. This records feedback; it does not send anything.
-
-The workflow stops after five calls, one repair pass or a 150-second deadline. Source quote integrity is checked in code. Coverage, claim support and commitments are assessed by an AI reviewer and still require human judgment.
-
-## Verification
-
-```sh
+```bash
 pnpm test
 pnpm exec tsc --noEmit
 pnpm exec next build --webpack
 ```
 
-The test suite uses mocked provider responses, never paid calls. A production build does not prove live-provider compatibility or output quality. See [runtime architecture and pilot gates](docs/product/agent-runtime.md).
+The test suite uses mocked provider responses and does not make paid model calls.
 
-## Reused building blocks
+## Architecture
 
-Next.js / React / TypeScript / Tailwind; Vercel AI SDK with official OpenAI and Anthropic adapters; Zod for structured contracts; React Markdown for deliverables; Vitest for runtime tests. The workflow itself is deliberately small and bounded, not a new agent framework.
+The codebase is built from small, inspectable contracts rather than a new agent framework.
 
-## Still missing before enterprise use
+```text
+Next.js app
+├── Product surfaces      audit · catalog · missions · knowledge · plans
+├── Runtime               bounded generation · review · repair · evaluation
+├── Domain contracts      missions · sources · memory · connections · pricing
+├── Local store            deterministic development state and fixtures
+└── Visual system          Orbis landing · liquid glass · shader illustrations
+```
 
-OIDC and server-derived tenant authorization; PostgreSQL with isolation; encrypted per-tenant credentials; durable jobs and idempotency; calibrated regression datasets; provider-price metering and reservations; retrieval and ingestion permissions; actual OAuth connectors; payload-bound human approvals connected to real execution; observability and retention/deletion controls.
+Read the technical documentation:
 
-The current atomic JSON store is a local convenience, **not horizontally scalable storage**. Existing dashboard ROI, profiles and connector states include fixture data, not measured business outcomes.
+- [Architecture overview](docs/architecture/CTO-README.md)
+- [Runtime](docs/architecture/CTO-02-runtime.md)
+- [Data contracts](docs/architecture/CTO-03-contracts.md)
+- [Security](docs/architecture/CTO-04-security.md)
+- [Evaluation](docs/architecture/CTO-06-evaluation.md)
+- [Integrations and knowledge](docs/product/INTEGRATIONS-AND-KNOWLEDGE.md)
+- [Product release](docs/product/PRODUCT-RELEASE.md)
+- [Landing motion system](docs/design/LANDING-MOTION.md)
+
+## Current product status
+
+Orbis is an active product build with a functional local workspace, guided onboarding, mission catalog, scoped product flows and model-backed runtime contracts.
+
+The next production milestones are authenticated multi-tenant storage, encrypted credentials, durable jobs, live OAuth connections, provider metering, observability and enterprise retention controls. The current local store is for development and evaluation; it is not the production data layer.
+
+## License and notices
+
+This repository is private product code. Third-party notices for the visual libraries and assets are available in [`public/third-party-notices.txt`](public/third-party-notices.txt).
