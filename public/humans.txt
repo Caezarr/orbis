@@ -1,0 +1,8 @@
+/* TEAM */
+Creator: Gabriel Rance (Caezarr)
+GitHub: https://github.com/Caezarr/orbis
+
+/* SITE */
+Standards: Next.js, TypeScript, Tailwind
+Purpose: Agent OS vertical-slice MVP — capability discovery, supervised activation
+Language: EN
