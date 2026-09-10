@@ -6,7 +6,6 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import {
   ArrowUpRight,
   Check,
@@ -342,10 +341,12 @@ export function ScrollSetup({ enabled }: { enabled: boolean }) {
                   <h3>{stage.title}</h3>
                   <p>{stage.text}</p>
                   <small>{stage.note}</small>
-                  <Link href={i === 1 ? "/catalog" : "/audit"}>
+                  <LandingCta
+                    href={i === 1 ? "/catalog" : "/audit"}
+                    enabled={enabled}
+                  >
                     {i === 1 ? "Find my missions" : "Launch your first agents"}
-                    <ArrowUpRight size={15} />
-                  </Link>
+                  </LandingCta>
                 </div>
                 <div className={v.stageArt}>
                   {i === 1 ? (
