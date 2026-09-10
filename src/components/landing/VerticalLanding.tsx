@@ -1,5 +1,5 @@
 "use client";
-import { useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useState, useSyncExternalStore, useEffect, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useReducedMotion } from "motion/react";
@@ -17,7 +17,7 @@ import { LandingCta } from "./LandingCta";
 import type { VerticalJob } from "@/data/verticals/wave1";
 import { parseMotionJobs, parseTools, getJobLabel } from "@/data/verticals/wave1";
 import type { UtmParams } from "@/lib/visual/utm";
-import { buildUrlWithUtm } from "@/lib/visual/utm";
+import { buildUrlWithUtm, persistUtms } from "@/lib/visual/utm";
 import s from "./company-landing.module.css";
 
 function Mark({ small = false }: { small?: boolean }) {
@@ -70,6 +70,13 @@ export function VerticalLanding({
   const currentJob = isJobPage && job ? jobs.find((j) => j.job === job) : null;
   const jobLabel = job ? getJobLabel(job) : "";
 
+  // Persist UTMs on mount
+  useEffect(() => {
+    if (Object.keys(utm).length > 0) {
+      persistUtms(utm);
+    }
+  }, [utm]);
+
   // Build audit CTA URL with UTM params
   const auditParams: Record<string, string> = {
     vertical: hub,
@@ -77,7 +84,14 @@ export function VerticalLanding({
   if (job) {
     auditParams.job = job;
   }
-  const auditUrl = buildUrlWithUtm("/audit", utm, auditParams);
+  
+  // Build utm_content from hub-job or hub
+  const utmWithContent = { ...utm };
+  if (!utmWithContent.utm_content) {
+    utmWithContent.utm_content = job ? `${hub}-${job}` : hub;
+  }
+  
+  const auditUrl = buildUrlWithUtm("/audit", utmWithContent, auditParams);
 
   // Motion jobs for the current job (if job page)
   const motionSteps = currentJob ? parseMotionJobs(currentJob.motionJobs) : [];
@@ -91,7 +105,7 @@ export function VerticalLanding({
   const toolsList = Array.from(allTools).slice(0, 6);
 
   return (
-    <div className={s.root} data-motion={enabled}>
+    <div className={s.root} data-motion={enabled} data-view-vertical={`${hub}${job ? `-${job}` : ''}`}>
       <a href="#main" className={s.skip}>
         Skip to content
       </a>
@@ -109,7 +123,7 @@ export function VerticalLanding({
           <Link className={s.login} href="/today">
             Login
           </Link>
-          <LandingCta href={auditUrl} enabled={enabled}>
+          <LandingCta href={auditUrl} enabled={enabled} data-cta-audit="nav">
             Test a mission on my company
           </LandingCta>
           <button
@@ -150,7 +164,7 @@ export function VerticalLanding({
               </h1>
               <p>{pain}</p>
               <div style={{ marginTop: "30px" }}>
-                <LandingCta href={auditUrl} enabled={enabled}>
+                <LandingCta href={auditUrl} enabled={enabled} data-cta-audit="hero">
                   Test a mission on my company
                 </LandingCta>
               </div>
