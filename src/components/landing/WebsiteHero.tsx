@@ -11,16 +11,34 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  function websiteUrl(input: string) {
+    const raw = input.trim();
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const parsed = new URL(candidate);
+      if (!parsed.hostname.includes(".") || parsed.hostname.startsWith("."))
+        return null;
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  }
   async function submit() {
     if (!value.trim() || busy) return;
     setBusy(true);
     setError("");
     try {
       if (mode === "site") {
+        const website = websiteUrl(value);
+        if (!website) {
+          setError("Enter a valid website address, like your-company.com.");
+          setBusy(false);
+          return;
+        }
         const r = await fetch("/api/v1/company-site", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ website: value }),
+          body: JSON.stringify({ website }),
         });
         const site = await r.json();
         if (!r.ok) throw new Error(site.message);
@@ -77,7 +95,10 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
                   id={intakeId}
                   disabled={busy}
                   value={value}
-                  onChange={(e) => setValue(e.target.value)}
+                  onChange={(e) => {
+                    setValue(e.target.value);
+                    setError("");
+                  }}
                   maxLength={2000}
                   placeholder="your-company.com"
                   autoComplete="url"
@@ -89,7 +110,10 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
                 id={intakeId}
                 disabled={busy}
                 value={value}
-                onChange={(e) => setValue(e.target.value)}
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  setError("");
+                }}
                 maxLength={4000}
                 placeholder="We help… and we would like to delegate…"
                 rows={3}
@@ -97,9 +121,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
             )}
             <button
               className={s.send}
-              disabled={
-                busy || value.trim().length < (mode === "site" ? 4 : 20)
-              }
+              disabled={busy || !value.trim()}
               aria-label={
                 busy ? "Reading your website" : "Launch your first agents"
               }
@@ -136,7 +158,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           </div>
         </form>
         {error && (
-          <p className={s.error} role="alert">
+          <p className={s.error} role="alert" aria-live="polite">
             {error}
           </p>
         )}
