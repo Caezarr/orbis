@@ -2,7 +2,8 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowUp, Globe, LoaderCircle, Check } from "lucide-react";
+import { Globe, LoaderCircle, Check } from "lucide-react";
+import { LandingCta } from "./LandingCta";
 import s from "./website-hero.module.css";
 export function WebsiteHero({ compact = false }: { compact?: boolean }) {
   const intakeId = useId();
@@ -119,22 +120,20 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
                 rows={3}
               />
             )}
-            <button
+            <LandingCta
               className={s.send}
+              type="submit"
               disabled={busy || !value.trim()}
               aria-label={
                 busy ? "Reading your website" : "Launch your first agents"
               }
             >
               {busy ? (
-                <LoaderCircle size={20} className={s.spin} />
+                <LoaderCircle size={18} className={s.spin} />
               ) : (
-                <>
-                  <span>Launch your first agents</span>
-                  <ArrowUp size={18} />
-                </>
+                "Launch your first agents"
               )}
-            </button>
+            </LandingCta>
           </div>
           <div className={s.composerBottom}>
             <span>

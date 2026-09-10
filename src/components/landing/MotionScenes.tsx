@@ -15,7 +15,8 @@ import {
   Search,
   ChevronRight,
 } from "lucide-react";
-import { GlassLens, LiquidMark, useVisibleMotion } from "./Optics";
+import { LiquidMark, useVisibleMotion } from "./Optics";
+import { LandingCta } from "./LandingCta";
 import { businessMonthly } from "@/lib/product/pricing";
 import v from "./motion-scenes.module.css";
 
@@ -419,37 +420,6 @@ export function GraphResult({ enabled }: { enabled: boolean }) {
   );
 }
 
-export function GlassAction({
-  href,
-  children,
-  enabled,
-  primary = false,
-}: {
-  href: string;
-  children: ReactNode;
-  enabled: boolean;
-  primary?: boolean;
-}) {
-  const [engaged, setEngaged] = useState(false);
-  return (
-    <Link
-      href={href}
-      className={v.glassAction}
-      data-primary={primary}
-      onPointerEnter={() => setEngaged(true)}
-      onPointerLeave={() => setEngaged(false)}
-      onFocus={() => setEngaged(true)}
-      onBlur={() => setEngaged(false)}
-    >
-      <span className={v.glassSurface}>
-        <GlassLens enabled={enabled && engaged} />
-      </span>
-      <span className={v.glassShine} />
-      <span className={v.glassLabel}>{children}</span>
-      <ArrowUpRight size={16} />
-    </Link>
-  );
-}
 export function LandingPricing({ enabled }: { enabled: boolean }) {
   const [seats, setSeats] = useState(5);
   const business = businessMonthly(seats);
@@ -536,9 +506,9 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
                 : "A setup shaped around your clients"}
             </div>
           )}
-          <GlassAction href={plan.href} enabled={enabled} primary={i === 1}>
+          <LandingCta href={plan.href} enabled={enabled}>
             {plan.cta}
-          </GlassAction>
+          </LandingCta>
           <ul>
             {plan.features.map((f) => (
               <li key={f}>

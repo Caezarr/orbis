@@ -25,8 +25,8 @@ import {
   ScrollSetup,
   GraphResult,
   LandingPricing,
-  GlassAction,
 } from "./MotionScenes";
+import { LandingCta } from "./LandingCta";
 import s from "./company-landing.module.css";
 
 function Mark({ small = false }: { small?: boolean }) {
@@ -350,9 +350,9 @@ export function CompanyLanding() {
           <Link className={s.login} href="/today">
             Login
           </Link>
-          <GlassAction href="#start" enabled={enabled} primary>
+          <LandingCta href="#start" enabled={enabled}>
             Launch your first agents
-          </GlassAction>
+          </LandingCta>
           <button
             className={s.menuToggle}
             aria-label="Toggle navigation"
