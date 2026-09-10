@@ -342,8 +342,8 @@ export function ScrollSetup({ enabled }: { enabled: boolean }) {
                   <h3>{stage.title}</h3>
                   <p>{stage.text}</p>
                   <small>{stage.note}</small>
-                  <Link href={i === 1 ? "/catalog" : "/audit"}>
-                    "Test a mission on my company"
+                  <Link href="/audit">
+                    Test a mission on my company
                     <ArrowUpRight size={15} />
                   </Link>
                 </div>
@@ -460,7 +460,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           price: "Let’s talk.",
           unit: "",
           copy: "Design the right setup for the companies you help.",
-          cta: "Discuss my setup",
+          cta: "Test a mission on my company",
           href: "/audit?audience=integrator",
           features: [
             "Client deployment plans",
