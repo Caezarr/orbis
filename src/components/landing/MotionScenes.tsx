@@ -510,6 +510,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
             href={plan.href}
             enabled={enabled}
             variant={i === 1 ? "primary" : "light"}
+            data-cta="audit"
           >
             {plan.cta}
           </LandingCta>

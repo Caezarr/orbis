@@ -241,3 +241,19 @@
     padding: 0;
   }
 }
+
+.disqualify {
+  margin-top: 25px;
+  font-size: 11px;
+  color: #748098;
+  text-align: center;
+  line-height: 1.6;
+}
+.mutedLink {
+  color: #748098 !important;
+  font-size: 12px;
+  text-decoration: underline;
+}
+.mutedLink:hover {
+  color: #53627b !important;
+}

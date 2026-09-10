@@ -44,10 +44,16 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
         const site = await r.json();
         if (!r.ok) throw new Error(site.message);
         sessionStorage.setItem("orbis:site-intake", JSON.stringify(site));
-        router.push(`/audit?website=${encodeURIComponent(site.website)}`);
+        const params = new URLSearchParams(window.location.search);
+        const campaign = params.get("utm_campaign");
+        const auditUrl = `/audit?website=${encodeURIComponent(site.website)}${campaign ? `&utm_campaign=${campaign}` : ""}`;
+        router.push(auditUrl);
       } else {
         sessionStorage.setItem("orbis:text-intake", value);
-        router.push("/audit?from=description");
+        const params = new URLSearchParams(window.location.search);
+        const campaign = params.get("utm_campaign");
+        const auditUrl = `/audit?from=description${campaign ? `&utm_campaign=${campaign}` : ""}`;
+        router.push(auditUrl);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lecture impossible.");
@@ -124,6 +130,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               aria-label={
                 busy ? "Reading your website" : "Test a mission on my company"
               }
+              data-cta="audit"
             >
               {busy ? (
                 <LoaderCircle size={18} className={s.spin} />
@@ -159,9 +166,14 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           </p>
         )}
         {!compact && (
-          <div className={s.links}>
-            <Link href="/catalog">Browse the catalog</Link>
-          </div>
+          <>
+            <p className={s.disqualify}>
+              For founders and ops in growing teams. Not a hobby toy. Not an enterprise RFP kit.
+            </p>
+            <div className={s.links}>
+              <Link href="/catalog" className={s.mutedLink}>Browse the catalog</Link>
+            </div>
+          </>
         )}
       </div>
     </section>

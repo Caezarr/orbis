@@ -15,6 +15,7 @@ type Props = {
   disabled?: boolean;
   onClick?: () => void;
   variant?: "primary" | "light";
+  "data-cta"?: string;
 };
 
 export function LandingCta({
@@ -26,6 +27,7 @@ export function LandingCta({
   disabled = false,
   onClick,
   variant = "primary",
+  "data-cta": dataCta,
 }: Props) {
   const body = (
     <>
@@ -46,6 +48,7 @@ export function LandingCta({
         className={classNames}
         data-primary="true"
         data-variant={variant}
+        data-cta={dataCta}
       >
         {body}
       </Link>
@@ -58,6 +61,7 @@ export function LandingCta({
       className={classNames}
       data-primary="true"
       data-variant={variant}
+      data-cta={dataCta}
       disabled={disabled}
       onClick={onClick}
     >

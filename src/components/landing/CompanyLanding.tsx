@@ -350,7 +350,7 @@ export function CompanyLanding() {
           <Link className={s.login} href="/today">
             Login
           </Link>
-          <LandingCta href="/audit" enabled={enabled}>
+          <LandingCta href="/audit" enabled={enabled} data-cta="audit">
             Test a mission on my company
           </LandingCta>
           <button
@@ -506,11 +506,11 @@ export function CompanyLanding() {
               },
               {
                 q: "How much does it cost?",
-                a: "Free audit with your first deliverable to review. Paid plans (Solo €149/mo, Business from €359/mo) are indicative — final pricing confirmed before subscription.",
+                a: "Free audit with your first deliverable to review. Paid plans (Solo €149/mo, Business €399/mo proposed) are indicative — final pricing confirmed before subscription.",
               },
               {
                 q: "Is BYOK available?",
-                a: "Soon, for expert users only. The default path uses pre-configured providers.",
+                a: "Yes, in expert settings. Not required to start the audit.",
               },
             ].map((f) => (
               <details key={f.q}>
