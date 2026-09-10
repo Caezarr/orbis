@@ -9,10 +9,10 @@ Start with a website or a conversation. Orbis identifies the work worth delegati
 ![Orbis — your company, with a little more capacity](public/brand/orbis-modules.png)
 
 <p align="center">
-  <a href="http://127.0.0.1:3000/">Landing</a> ·
-  <a href="http://127.0.0.1:3000/catalog">Mission catalog</a> ·
-  <a href="http://127.0.0.1:3000/audit">Company audit</a> ·
-  <a href="docs/architecture/CTO-README.md">Architecture</a>
+  <a href="docs/strategy/PRODUCT-README.md">Product</a> ·
+  <a href="docs/architecture/CTO-README.md">Architecture</a> ·
+  <a href="docs/product/INTEGRATIONS-AND-KNOWLEDGE.md">Integrations</a> ·
+  <a href="docs/design/LANDING-MOTION.md">Design system</a>
 </p>
 
 ## What Orbis does
@@ -56,7 +56,7 @@ pnpm install
 pnpm dev --hostname 127.0.0.1
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
+Open `http://127.0.0.1:3000` in your browser.
 
 Useful routes: `/` landing, `/audit` company audit, `/catalog` mission catalog, `/pricing` pricing, `/today` workspace.
 
