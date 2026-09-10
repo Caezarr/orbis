@@ -14,6 +14,7 @@ import {
   Search,
   ChevronRight,
 } from "lucide-react";
+import Link from "next/link";
 import { LiquidMark, useVisibleMotion } from "./Optics";
 import { LandingCta } from "./LandingCta";
 import { businessMonthly } from "@/lib/product/pricing";
@@ -341,12 +342,10 @@ export function ScrollSetup({ enabled }: { enabled: boolean }) {
                   <h3>{stage.title}</h3>
                   <p>{stage.text}</p>
                   <small>{stage.note}</small>
-                  <LandingCta
-                    href={i === 1 ? "/catalog" : "/audit"}
-                    enabled={enabled}
-                  >
+                  <Link href={i === 1 ? "/catalog" : "/audit"}>
                     {i === 1 ? "Find my missions" : "Launch your first agents"}
-                  </LandingCta>
+                    <ArrowUpRight size={15} />
+                  </Link>
                 </div>
                 <div className={v.stageArt}>
                   {i === 1 ? (
