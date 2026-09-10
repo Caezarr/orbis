@@ -72,6 +72,12 @@
   outline: none;
   color: #182d5b;
 }
+.inputRow input:focus-visible,
+.inputRow textarea:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+}
 .inputRow textarea {
   resize: vertical;
 }
