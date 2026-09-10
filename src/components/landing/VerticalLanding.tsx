@@ -37,6 +37,14 @@ interface VerticalLandingProps {
   hubLabel: string;
   tagline: string;
   pain: string;
+  h2?: string;
+  badge?: string;
+  icp?: string;
+  micro?: string;
+  finalH2?: string;
+  valueStack?: string[];
+  costLines?: string[];
+  workshopJobs?: Array<{ input: string; output: string; detail: string }>;
   job?: string;
   jobs: VerticalJob[];
   siblingJobs?: VerticalJob[];
@@ -51,6 +59,14 @@ export function VerticalLanding({
   hubLabel,
   tagline,
   pain,
+  h2,
+  badge,
+  icp,
+  micro,
+  finalH2,
+  valueStack = [],
+  costLines = [],
+  workshopJobs = [],
   job,
   jobs,
   siblingJobs = [],
@@ -117,7 +133,7 @@ export function VerticalLanding({
         <nav className={s.desktopNav} aria-label="Main navigation">
           <Link href="/for">Verticals</Link>
           <Link href="/catalog">100+ missions</Link>
-          <a href="#pricing">Pricing</a>
+          <Link href="/pricing">Pricing</Link>
         </nav>
         <div className={s.navActions}>
           <Link className={s.login} href="/today">
@@ -142,7 +158,7 @@ export function VerticalLanding({
           {[
             { href: "/for", text: "Verticals" },
             { href: "/catalog", text: "100+ missions" },
-            { href: "#pricing", text: "Pricing" },
+            { href: "/pricing", text: "Pricing" },
           ].map((l) => (
             <Link key={l.href} href={l.href} onClick={() => setMenu(false)}>
               {l.text}
@@ -157,17 +173,32 @@ export function VerticalLanding({
           <Atmosphere enabled={enabled} />
           <section className={`${s.section}`} style={{ paddingTop: "70px", paddingBottom: "60px" }}>
             <div className={s.sectionHeading} style={{ marginBottom: "50px" }}>
+              {badge && (
+                <p style={{ fontSize: "12px", color: "#65748d", marginBottom: "14px" }}>
+                  {badge}
+                </p>
+              )}
               <h1>
                 {isJobPage
                   ? `Install ${jobLabel} into your company.`
                   : tagline}
               </h1>
-              <p>{pain}</p>
+              <p>{h2 || pain}</p>
+              {icp && (
+                <p style={{ fontSize: "13px", color: "#748098", marginTop: "12px" }}>
+                  {icp}
+                </p>
+              )}
               <div style={{ marginTop: "30px" }}>
                 <LandingCta href={auditUrl} enabled={enabled} data-cta-audit="hero">
                   Test a mission on my company
                 </LandingCta>
               </div>
+              {micro && (
+                <p style={{ fontSize: "12px", color: "#8394b1", marginTop: "14px" }}>
+                  {micro}
+                </p>
+              )}
             </div>
           </section>
         </div>
@@ -187,7 +218,7 @@ export function VerticalLanding({
             </p>
           </div>
           <div className={s.chapterVisual}>
-            <TaskWorkshop enabled={enabled} />
+            <TaskWorkshop enabled={enabled} jobs={workshopJobs.length ? workshopJobs : undefined} />
           </div>
 
           {/* Motion steps for job pages */}
@@ -265,7 +296,7 @@ export function VerticalLanding({
                     {parseMotionJobs(j.motionJobs)[0]?.action || "Mission ready to deploy"}
                   </p>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#315ee8" }}>
-                    Learn more <ArrowRight size={14} />
+                    Test a mission <ArrowRight size={14} />
                   </div>
                 </Link>
               ))}
@@ -367,7 +398,33 @@ export function VerticalLanding({
           </section>
         )}
 
-        {/* Pricing */}
+        {valueStack.length > 0 && (
+          <section className={s.section}>
+            <div className={s.sectionHeading}>
+              <h2>What this pack replaces on a bad week.</h2>
+            </div>
+            <ul style={{ maxWidth: "720px", margin: "0 auto", paddingLeft: "20px", color: "#576781", lineHeight: 1.7 }}>
+              {valueStack.map((item) => (
+                <li key={item} style={{ marginBottom: "10px" }}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {costLines.length > 0 && (
+          <section className={s.section}>
+            <div className={s.sectionHeading}>
+              <h2>What you pay today for the same capacity.</h2>
+            </div>
+            <ul style={{ maxWidth: "720px", margin: "0 auto", paddingLeft: "20px", color: "#576781", lineHeight: 1.7 }}>
+              {costLines.map((item) => (
+                <li key={item} style={{ marginBottom: "10px" }}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Pricing — muted only, unique CTA stays audit */}
         <section className={s.section} id="pricing">
           <div className={s.sectionHeading}>
             <h2>Transparent pricing.</h2>
@@ -382,9 +439,9 @@ export function VerticalLanding({
             </small>
           </div>
           <div style={{ textAlign: "center", marginTop: "40px" }}>
-            <LandingCta href="/pricing" enabled={enabled}>
+            <Link href="/pricing" style={{ fontSize: "13px", color: "#65748d", textDecoration: "underline" }}>
               See pricing details
-            </LandingCta>
+            </Link>
           </div>
         </section>
 
@@ -394,19 +451,20 @@ export function VerticalLanding({
             <LiquidMark enabled={enabled} size={145} />
           </div>
           <h2>
-            Your {isJobPage ? jobLabel : "busywork"}.
-            <br />
-            Orbis's job.
+            {finalH2 ||
+              (isJobPage
+                ? `Run the audit on your ${hubLabel} company.`
+                : `Run the audit on your ${hubLabel} company.`)}
           </h2>
           <p>
             {isJobPage
               ? `Test ${jobLabel} on your company. See what Orbis can do.`
               : `Test your first mission. See what Orbis can do.`}
           </p>
-          <LandingCta href={auditUrl} enabled={enabled}>
+          <LandingCta href={auditUrl} enabled={enabled} data-cta-audit="final">
             Test a mission on my company
           </LandingCta>
-          <Link href="/catalog">Or explore the full catalog</Link>
+          <Link href="/catalog">Browse the catalog</Link>
         </section>
 
         {/* Maillage */}
@@ -442,9 +500,9 @@ export function VerticalLanding({
             Orbis
           </Link>
           <p>
-            A bigger business.
+            Your company. Your tools.
             <br />
-            Not a bigger team.
+            Your AI team.
           </p>
         </div>
         <div>

@@ -32,7 +32,13 @@ function useCycle(active: boolean, length: number, duration: number) {
   }, [active, length, duration]);
   return index;
 }
-const jobs = [
+export type WorkshopJobSkin = {
+  input: string;
+  output: string;
+  detail: string;
+};
+
+const defaultWorkshopJobs = [
   {
     input: "Reply to a customer",
     output: "Customer reply prepared",
@@ -52,10 +58,26 @@ const jobs = [
     Icon: Search,
   },
 ];
-export function TaskWorkshop({ enabled }: { enabled: boolean }) {
+
+const workshopIcons = [Mail, FileText, Search];
+
+export function TaskWorkshop({
+  enabled,
+  jobs: jobsProp,
+}: {
+  enabled: boolean;
+  jobs?: WorkshopJobSkin[];
+}) {
+  const skins =
+    jobsProp && jobsProp.length > 0
+      ? jobsProp.map((j, i) => ({
+          ...j,
+          Icon: workshopIcons[i % workshopIcons.length],
+        }))
+      : defaultWorkshopJobs;
   const { ref, active } = useVisibleMotion(enabled);
-  const index = useCycle(active, jobs.length, 7600);
-  const job = jobs[index];
+  const index = useCycle(active, skins.length, 7600);
+  const job = skins[index];
   return (
     <div
       ref={ref}
@@ -65,7 +87,7 @@ export function TaskWorkshop({ enabled }: { enabled: boolean }) {
     >
       <div className={v.workshopTop}>
         <span>One mission, end to end</span>
-        <span>0{index + 1} / 03</span>
+        <span>0{index + 1} / 0{skins.length}</span>
       </div>
       <div className={v.workshopStage} key={index}>
         <div className={v.inputCard}>
