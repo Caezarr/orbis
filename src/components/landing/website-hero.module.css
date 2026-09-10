@@ -78,6 +78,11 @@
   outline-offset: 0;
   box-shadow: none;
 }
+.intakeInput:focus-visible {
+  outline: 0 !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+}
 .inputRow textarea {
   resize: vertical;
 }

@@ -93,6 +93,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               <>
                 <Globe size={21} />
                 <input
+                  className={s.intakeInput}
                   id={intakeId}
                   disabled={busy}
                   value={value}
@@ -108,6 +109,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               </>
             ) : (
               <textarea
+                className={s.intakeInput}
                 id={intakeId}
                 disabled={busy}
                 value={value}
