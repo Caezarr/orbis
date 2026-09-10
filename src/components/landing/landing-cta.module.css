@@ -82,6 +82,20 @@
 .label {
   position: relative;
 }
+.cta[data-variant="light"] {
+  border-color: #c0d3f0;
+  background: linear-gradient(145deg, #ffffff, #edf4fd 62%, #dce9f8);
+  color: #30517f;
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 6px 14px #274e8f12;
+}
+.cta[data-variant="light"]:hover,
+.cta[data-variant="light"]:focus-visible {
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 10px 24px #244b8620;
+}
 @media (prefers-reduced-motion: reduce) {
   .cta,
   .shine,

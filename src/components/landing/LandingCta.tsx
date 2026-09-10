@@ -14,6 +14,7 @@ type Props = {
   type?: ButtonHTMLAttributes<HTMLButtonElement>["type"];
   disabled?: boolean;
   onClick?: () => void;
+  variant?: "primary" | "light";
 };
 
 export function LandingCta({
@@ -24,6 +25,7 @@ export function LandingCta({
   type = "button",
   disabled = false,
   onClick,
+  variant = "primary",
 }: Props) {
   const body = (
     <>
@@ -39,7 +41,12 @@ export function LandingCta({
 
   if (href) {
     return (
-      <Link href={href} className={classNames} data-primary="true">
+      <Link
+        href={href}
+        className={classNames}
+        data-primary="true"
+        data-variant={variant}
+      >
         {body}
       </Link>
     );
@@ -50,6 +57,7 @@ export function LandingCta({
       type={type}
       className={classNames}
       data-primary="true"
+      data-variant={variant}
       disabled={disabled}
       onClick={onClick}
     >

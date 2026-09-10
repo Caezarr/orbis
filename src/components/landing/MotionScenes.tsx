@@ -507,7 +507,11 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
                 : "A setup shaped around your clients"}
             </div>
           )}
-          <LandingCta href={plan.href} enabled={enabled}>
+          <LandingCta
+            href={plan.href}
+            enabled={enabled}
+            variant={i === 1 ? "primary" : "light"}
+          >
             {plan.cta}
           </LandingCta>
           <ul>
