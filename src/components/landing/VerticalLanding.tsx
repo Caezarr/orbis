@@ -14,7 +14,7 @@ import { WebsiteHero } from "./WebsiteHero";
 import { Atmosphere, LiquidMark, useVisibleMotion } from "./Optics";
 import { TaskWorkshop } from "./MotionScenes";
 import { LandingCta } from "./LandingCta";
-import type { VerticalJob } from "@/data/verticals/wave1";
+import type { VerticalJob, FaqItem } from "@/data/verticals/wave1";
 import { parseMotionJobs, parseTools, getJobLabel } from "@/data/verticals/wave1";
 import type { UtmParams } from "@/lib/visual/utm";
 import { buildUrlWithUtm, persistUtms } from "@/lib/visual/utm";
@@ -44,6 +44,7 @@ interface VerticalLandingProps {
   finalH2?: string;
   valueStack?: string[];
   costLines?: string[];
+  faq?: FaqItem[];
   workshopJobs?: Array<{ input: string; output: string; detail: string }>;
   job?: string;
   jobs: VerticalJob[];
@@ -66,6 +67,7 @@ export function VerticalLanding({
   finalH2,
   valueStack = [],
   costLines = [],
+  faq = [],
   workshopJobs = [],
   job,
   jobs,
@@ -424,6 +426,22 @@ export function VerticalLanding({
           </section>
         )}
 
+        {faq.length > 0 && (
+          <section className={s.section}>
+            <div className={s.sectionHeading}>
+              <h2>FAQ</h2>
+            </div>
+            <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+              {faq.map((item) => (
+                <div key={item.q} style={{ marginBottom: "22px" }}>
+                  <h3 style={{ fontSize: "16px", fontWeight: 500, margin: "0 0 8px", color: "#182d5b" }}>{item.q}</h3>
+                  <p style={{ fontSize: "14px", color: "#576781", margin: 0, lineHeight: 1.6 }}>{item.a}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Pricing — muted only, unique CTA stays audit */}
         <section className={s.section} id="pricing">
           <div className={s.sectionHeading}>
@@ -502,7 +520,7 @@ export function VerticalLanding({
           <p>
             Your company. Your tools.
             <br />
-            Your AI team.
+            Work you supervise.
           </p>
         </div>
         <div>
