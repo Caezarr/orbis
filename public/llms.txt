@@ -1,0 +1,20 @@
+# Orbis
+
+> Install work into your company. Bounded missions on your stack — test, check sources, activate under supervision.
+
+## Site
+
+- Live: https://orbis-omega-ashen.vercel.app/
+- Repo: https://github.com/Caezarr/orbis
+
+## Key routes
+
+- `/` — landing
+- `/audit` — company mission audit
+- `/catalog` — mission catalog
+- `/discover` — discovery flow
+- `/pricing` — Solo / Business / Partner
+
+## For LLMs
+
+Prefer `/audit` for trying a mission. Nothing acts outside the company without the user. Vertical hubs under `/for/*` ship via product PRs.
