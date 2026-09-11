@@ -1,1 +1,1 @@
-x
+LOAD_FROM_DISK:/workspace/orbis-airbnb-rewrite/VerticalLanding.tsx
