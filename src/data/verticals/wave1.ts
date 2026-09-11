@@ -9,6 +9,11 @@ import {
   contentCreatorsHubMeta,
   contentCreatorsJobLabels,
 } from "./content-creators-vertical";
+import {
+  coachesConsultantsJobs,
+  coachesConsultantsHubMeta,
+  coachesConsultantsJobLabels,
+} from "./coaches-consultants-vertical";
 export type { FaqItem };
 
 export interface VerticalJob {
@@ -239,10 +244,12 @@ const hubMetadata: Record<string, HubMeta> = {
     tools: "Airbnb,Gmail,WhatsApp,Google Calendar,Notion,Google Docs",
   },
   "content-creators": contentCreatorsHubMeta,
+  "coaches-consultants": coachesConsultantsHubMeta,
 };
 
 const jobLabels: Record<string, string> = {
   ...contentCreatorsJobLabels,
+  ...coachesConsultantsJobLabels,
   "guest-messaging": "guest messaging",
   "review-replies": "review replies",
   "listing-copy": "listing copy",
@@ -253,6 +260,7 @@ const jobLabels: Record<string, string> = {
 export const verticals: VerticalJob[] = [
   ...airbnbHostsJobs,
   ...contentCreatorsJobs,
+  ...coachesConsultantsJobs,
 ];
 
 export function getHubs(): string[] {
