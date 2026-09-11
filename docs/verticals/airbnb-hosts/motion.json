@@ -1,0 +1,32 @@
+{
+  "hub": "airbnb-hosts",
+  "scenes": {
+    "TaskWorkshop": {
+      "jobs": [
+        {
+          "input": "Reply to a guest",
+          "output": "Guest reply prepared",
+          "detail": "Tone + house rules from your listing"
+        },
+        {
+          "input": "Answer a review",
+          "output": "Review reply drafted",
+          "detail": "Sources: stay notes + listing"
+        },
+        {
+          "input": "Update listing copy",
+          "output": "Listing blurb ready",
+          "detail": "You approve before it goes live"
+        }
+      ]
+    },
+    "ToolGraph": {
+      "tools": ["Airbnb", "Gmail", "WhatsApp", "Google Calendar", "Notion", "Google Docs"],
+      "note": "Labels only; each connector still needs verified access."
+    },
+    "Focus": {
+      "selected": ["Guest messaging", "Review replies"],
+      "stays_with_you": ["strategy ownership", "on-site / in-person judgment", "final send and publish"]
+    }
+  }
+}
