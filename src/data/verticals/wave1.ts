@@ -4,6 +4,7 @@
  */
 
 import { airbnbHubFaq, airbnbJobFaq, type FaqItem } from "./airbnb-faq";
+export type { FaqItem };
 
 export interface VerticalJob {
   hub: string;
