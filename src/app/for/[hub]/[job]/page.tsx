@@ -8,6 +8,7 @@ import {
   getJobLabel,
   getAllJobs,
   parseMotionJobs,
+  parseTools,
 } from "@/data/verticals/wave1";
 import { extractUtmParams } from "@/lib/visual/utm";
 
@@ -46,8 +47,7 @@ export default async function JobPage({ params, searchParams }: PageProps) {
   }
   const utm = extractUtmParams(searchParamsObj);
 
-  const source = hubMeta.motionJobs || jobData.motionJobs;
-  const workshopJobs = parseMotionJobs(source).map((s) => ({
+  const workshopJobs = parseMotionJobs(jobData.motionJobs).map((s) => ({
     input: s.action,
     output: s.result,
     detail: s.detail || "",
@@ -69,6 +69,7 @@ export default async function JobPage({ params, searchParams }: PageProps) {
       costLines={jobData.costLines}
       faq={jobData.faq}
       workshopJobs={workshopJobs}
+      tools={parseTools(jobData.tools)}
       job={job}
       jobs={siblingJobs}
       siblingJobs={siblingJobs}

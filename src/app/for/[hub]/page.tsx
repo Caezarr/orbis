@@ -6,6 +6,7 @@ import {
   getHubMeta,
   getJobsByHub,
   parseMotionJobs,
+  parseTools,
 } from "@/data/verticals/wave1";
 import { extractUtmParams } from "@/lib/visual/utm";
 
@@ -62,6 +63,7 @@ export default async function HubPage({ params, searchParams }: PageProps) {
       costLines={hubMeta.costLines}
       faq={hubMeta.faq}
       workshopJobs={workshopJobs}
+      tools={parseTools(hubMeta.tools)}
       jobs={jobs}
       utm={utm}
     />
