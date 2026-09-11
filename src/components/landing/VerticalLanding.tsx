@@ -514,8 +514,8 @@ export function VerticalLanding({
         <div>
           <span>Build with Orbis</span>
           <Link href="/audit?audience=integrator">For integrators</Link>
-          <Link href="/today">Your workspace</Link>
           <Link href="/connections">Tools & access</Link>
+          <Link href="/today">Your workspace</Link>
         </div>
         <div className={s.footerBottom}>
           <span>© {new Date().getFullYear()} Orbis</span>
