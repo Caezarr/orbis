@@ -307,9 +307,9 @@ export default function ForIndexPage() {
             Orbis
           </Link>
           <p style={{ fontSize: "13px", color: "#8997ae", marginTop: "18px" }}>
-            A bigger business.
+            Your company. Your tools.
             <br />
-            Not a bigger team.
+            Work you supervise.
           </p>
         </div>
         <div
