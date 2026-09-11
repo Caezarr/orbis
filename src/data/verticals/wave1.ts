@@ -3,6 +3,8 @@
  * Golden copy from docs/verticals/airbnb-hosts (CRO). MotionJobs for TaskWorkshop (CTO).
  */
 
+import { airbnbHubFaq, airbnbJobFaq, type FaqItem } from "./airbnb-faq";
+
 export interface VerticalJob {
   hub: string;
   job: string;
@@ -19,6 +21,7 @@ export interface VerticalJob {
   costLines: string[];
   finalTitle: string;
   maturity: "Ready" | "Composable" | "Planned";
+  faq: FaqItem[];
   before?: string;
   after?: string;
   guardrail?: string;
@@ -37,6 +40,7 @@ export interface HubMeta {
   valueStack: string[];
   costLines: string[];
   finalTitle: string;
+  faq: FaqItem[];
   motionJobs: string;
   tools: string;
 }
@@ -73,6 +77,7 @@ const airbnbHostsJobs: VerticalJob[] = [
       "Scope: named guest-messaging missions — not your full P&L.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbJobFaq["guest-messaging"],
     maturity: "Ready",
     before: "inbox + ChatGPT paste",
     after: "reply draft + sources",
@@ -101,6 +106,7 @@ const airbnbHostsJobs: VerticalJob[] = [
       "Scope: named review-reply missions — not your full P&L.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbJobFaq["review-replies"],
     maturity: "Ready",
     before: "stale 3-star sitting unanswered",
     after: "draft tied to stay notes",
@@ -129,6 +135,7 @@ const airbnbHostsJobs: VerticalJob[] = [
       "Scope: named listing-copy missions — not dynamic pricing strategy.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbJobFaq["listing-copy"],
     maturity: "Ready",
     before: "rewrite from scratch each season",
     after: "blurb from your listing + house rules",
@@ -157,6 +164,7 @@ const airbnbHostsJobs: VerticalJob[] = [
       "Scope: named cleaning-handoff missions — not on-site staffing.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbJobFaq["cleaning-handoff"],
     maturity: "Ready",
     before: "voice notes in three apps",
     after: "one checklist brief",
@@ -185,6 +193,7 @@ const airbnbHostsJobs: VerticalJob[] = [
       "Scope: research-flavored pricing notes — not your full P&L or dynamic pricing strategy.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbJobFaq["pricing-notes"],
     maturity: "Composable",
     before: "scattered comps in tabs",
     after: "short note with sources",
@@ -217,6 +226,7 @@ const hubMetadata: Record<string, HubMeta> = {
       "Example math (label as example): 45 min/day on guest+review copy × 25 days × €60 founder hour ≈ €1,125 / mo of attention — not a promise Orbis returns that cash.",
     ],
     finalTitle: "Run the audit on your Airbnb hosting company.",
+    faq: airbnbHubFaq,
     motionJobs:
       "Reply to a guest|Guest reply prepared|Tone + house rules from your listing;Answer a review|Review reply drafted|Sources: stay notes + listing;Update listing copy|Listing blurb ready|You approve before it goes live",
     tools: "Airbnb,Gmail,WhatsApp,Google Calendar,Notion,Google Docs",
