@@ -1,97 +1,158 @@
 "use client";
-
 import { useState } from "react";
+import Link from "next/link";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import type { StoreState } from "@/lib/domain/types";
-
+import s from "@/components/product/workspace.module.css";
 export default function KnowledgePage() {
   const { data, reload, loading } = useWorkspace<StoreState>();
-  const [name, setName] = useState("Offer catalog excerpt");
-  const [excerpt, setExcerpt] = useState("");
-
-  if (loading || !data) return <p className="text-muted">Loading…</p>;
-
-  async function add() {
-    await fetch("/api/v1/sources", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, excerpt }),
-    });
-    setExcerpt("");
-    await reload();
+  const [tab, setTab] = useState("Sources"),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  async function add(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fields = new FormData(form);
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await fetch("/api/v1/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: String(fields.get("name")).trim(),
+          excerpt: String(fields.get("excerpt")).trim(),
+        }),
+      });
+      if (!r.ok)
+        throw new Error(
+          "Could not save this source. Check that both fields contain text.",
+        );
+      await reload();
+      form.reset();
+      setNotice("Source added. You can select it in your mission.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
   }
-
+  if (loading || !data) return <p role="status">Loading knowledge…</p>;
   return (
-    <div className="mx-auto max-w-4xl">
-      <h1 className="serif text-4xl">Knowledge</h1>
-      <p className="mt-2 text-muted">Sources, instructions and memory — with provenance. Conflicts stay visible.</p>
-
-      <section className="mt-8">
-        <h2 className="text-sm font-medium">Sources</h2>
-        <ul className="mt-3 divide-y divide-line overflow-hidden rounded-[14px] border border-line bg-surface">
-          {data.sources.map((source) => (
-            <li key={source.id} className="px-5 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-medium">{source.name}</p>
-                <span className="text-xs text-muted">{source.status} · {source.kind}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted">{source.excerpt}</p>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-4 rounded-[14px] border border-line bg-surface p-4">
-          <p className="text-sm font-medium">Upload a document excerpt</p>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="mt-3 w-full rounded-[8px] border border-line px-3 py-2 text-sm"
-          />
-          <textarea
-            value={excerpt}
-            onChange={(event) => setExcerpt(event.target.value)}
-            rows={4}
-            placeholder="Paste the approved text. Files stay quarantined in production; this MVP stores an excerpt with ACL later."
-            className="mt-2 w-full rounded-[8px] border border-line p-3 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => void add()}
-            disabled={!excerpt.trim()}
-            className="mt-3 rounded-[8px] bg-ink px-4 py-2 text-sm text-canvas disabled:opacity-40"
-          >
-            Add source
-          </button>
+    <div className={s.page}>
+      <header className={s.head}>
+        <div>
+          <h1>Knowledge</h1>
+          <p>The context your agents need to do good work.</p>
         </div>
-      </section>
-
-      <section className="mt-10 grid gap-4 md:grid-cols-2">
-        <article className="rounded-[14px] border border-line bg-surface p-5">
-          <h2 className="text-sm font-medium">Instructions</h2>
-          <ul className="mt-3 space-y-3 text-sm">
-            {data.instructions.map((item) => (
-              <li key={item.id}>
-                <p className="font-medium">{item.title}</p>
-                <p className="text-muted">{item.body}</p>
-                <p className="mt-1 text-xs text-muted">{item.scope} · {item.provenance}</p>
-              </li>
-            ))}
-          </ul>
-        </article>
-        <article className="rounded-[14px] border border-line bg-surface p-5">
-          <h2 className="text-sm font-medium">Memory</h2>
-          <ul className="mt-3 space-y-3 text-sm">
-            {data.memory.map((item) => (
-              <li key={item.id}>
-                <p className="font-medium">{item.title}</p>
-                <p className="text-muted">{item.body}</p>
-                <p className="mt-1 text-xs text-muted">
-                  {item.kind} · {item.scope} · {item.status}
+        <Link href="/knowledge/scopes" className={s.secondary}>
+          Choose folders & access ↗
+        </Link>
+      </header>
+      <nav className={s.tabs} aria-label="Knowledge sections">
+        {["Sources", "Instructions", "Memory"].map((t) => (
+          <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>
+            {t}
+          </button>
+        ))}
+      </nav>
+      {tab === "Sources" && (
+        <>
+          <section className={s.section}>
+            <h2>Your sources</h2>
+            {data.sources.length ? (
+              data.sources.map((item) => (
+                <details className={s.source} key={item.id}>
+                  <summary>
+                    <strong>{item.name}</strong>
+                    <span className={s.badge}>{item.status}</span>
+                  </summary>
+                  <p>{item.excerpt}</p>
+                </details>
+              ))
+            ) : (
+              <p>
+                Add a price list, a policy, or the context you use every day.
+              </p>
+            )}
+          </section>
+          <form className={s.section} onSubmit={add}>
+            <h2>Add a text source</h2>
+            <label>
+              Source name
+              <input
+                name="name"
+                placeholder="For example, customer support policy"
+                required
+                maxLength={200}
+              />
+            </label>
+            <label className="mt-4">
+              Approved content
+              <textarea
+                name="excerpt"
+                rows={5}
+                required
+                maxLength={20000}
+                placeholder="Paste the information your agents should use."
+              />
+            </label>
+            {error && (
+              <p role="alert" className={s.error}>
+                {error}
+              </p>
+            )}
+            {notice && <p role="status">{notice}</p>}
+            <button className={s.primary + " mt-4"} disabled={busy}>
+              {busy ? "Saving…" : "Add source"}
+            </button>
+          </form>
+        </>
+      )}
+      {tab === "Instructions" && (
+        <section className={s.section}>
+          <h2>How your agents should work</h2>
+          <p>Instructions are defined in each mission’s setup.</p>
+          {data.instructions.map((item) => (
+            <div className={s.row} key={item.id}>
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.body}</p>
+                <p>
+                  {item.scope} · {item.provenance}
                 </p>
-              </li>
-            ))}
-          </ul>
-        </article>
-      </section>
+              </div>
+            </div>
+          ))}
+          <Link href="/today" className={s.secondary}>
+            Open your missions
+          </Link>
+        </section>
+      )}
+      {tab === "Memory" && (
+        <section className={s.section}>
+          <h2>What your agents remember</h2>
+          <p>Review the context, its source and its status.</p>
+          {data.memory.length ? (
+            data.memory.map((item) => (
+              <div className={s.row} key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.body}</p>
+                  <p>
+                    {item.kind} · {item.scope}
+                  </p>
+                </div>
+                <span className={s.badge}>{item.status}</span>
+              </div>
+            ))
+          ) : (
+            <p>No memory recorded yet.</p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

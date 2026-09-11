@@ -6,10 +6,16 @@ import {
   renameSync,
 } from "node:fs";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import type { StoreState } from "@/lib/domain/types";
 import { buildSeed } from "@/lib/store/seed";
 
-const DATA_DIR = process.env.ORBIS_DATA_DIR || path.join(process.cwd(), "data");
+// Serverless filesystems are read-only outside the temp dir, so writes there
+// go to /tmp (ephemeral per instance; state falls back to the seed on cold start).
+const DEFAULT_DATA_DIR = process.env.VERCEL
+  ? path.join(tmpdir(), "orbis")
+  : path.join(process.cwd(), "data");
+const DATA_DIR = process.env.ORBIS_DATA_DIR || DEFAULT_DATA_DIR;
 const DATA_FILE = path.join(DATA_DIR, "state.json");
 
 let memory: StoreState | null = null;

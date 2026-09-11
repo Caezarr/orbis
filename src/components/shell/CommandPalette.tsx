@@ -1,138 +1,156 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
-import { postJson } from "@/lib/api/client";
-import { getCrew } from "@/lib/capabilities/crews";
-import type { Mission, StoreState } from "@/lib/domain/types";
-import type { IntentResolution } from "@/lib/runtime/resolver";
-
+import type { StoreState } from "@/lib/domain/types";
+const pages = [
+  ["/chat", "New conversation"],
+  ["/today", "Today"],
+  ["/catalog", "Marketplace"],
+  ["/connections", "Integrations"],
+  ["/knowledge", "Knowledge"],
+  ["/analytics", "Analytics"],
+  ["/settings", "Settings"],
+];
 export function CommandPalette() {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [hint, setHint] = useState("");
+  const [open, setOpen] = useState(false),
+    [q, setQ] = useState(""),
+    [cursor, setCursor] = useState(0);
   const router = useRouter();
   const { data } = useWorkspace<StoreState>();
-
-  const [cursor, setCursor] = useState(0);
-
+  const panel = useRef<HTMLDivElement>(null);
+  const previous = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen((value) => !value);
+    function toggle() {
+      previous.current = document.activeElement as HTMLElement;
+      setOpen((v) => !v);
+      setQ("");
+      setCursor(0);
+    }
+    function key(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        toggle();
       }
-      if (event.key === "Escape") setOpen(false);
     }
-    function onOpen() {
-      setOpen(true);
-    }
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("orbis:palette", onOpen);
+    window.addEventListener("keydown", key);
+    window.addEventListener("orbis:palette", toggle);
     return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("orbis:palette", onOpen);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("orbis:palette", toggle);
     };
   }, []);
-
-  const results = useMemo(() => {
-    if (!data) return [];
-    const query = q.toLowerCase();
-    const caps = data.packages
-      .filter((pkg) => `${pkg.name} ${pkg.outcome}`.toLowerCase().includes(query) || !query)
-      .slice(0, 4)
-      .map((pkg) => ({
-        id: pkg.slug,
-        label: pkg.name,
-        meta: getCrew(pkg.slug).whyNow,
-        href: `/discover/${pkg.slug}`,
-      }));
-    const missions = data.missions.slice(0, 3).map((mission) => ({
-      id: mission.id,
-      label: mission.name,
-      meta: mission.state,
-      href: `/missions/${mission.id}/lab`,
-    }));
-    return [
-      { id: "today", label: "Today · decisions only", meta: "Inbox", href: "/today" },
-      { id: "company", label: "Company blueprint", meta: "How work is installed", href: "/company" },
-      ...missions,
-      ...caps,
-    ].filter((item) => !query || `${item.label} ${item.meta}`.toLowerCase().includes(query));
-  }, [data, q]);
-
-  async function ask() {
-    if (q.trim().length < 8) return;
-    const resolution = await postJson<IntentResolution>("/api/v1/intent-resolutions", { text: q });
-    if (resolution.kind === "existing") {
-      const created = await postJson<{ mission: Mission }>("/api/v1/missions", { slug: resolution.slug });
-      setOpen(false);
-      router.push(`/missions/${created.mission.id}/setup`);
-      return;
-    }
-    if (resolution.kind === "composition") {
-      setHint(resolution.reason);
-      return;
-    }
-    setHint(resolution.interim);
+  const results = [
+    ...pages.map(([href, label]) => ({ href, label, meta: "Page" })),
+    ...(data?.missions ?? [])
+      .filter((m) => m.flowId)
+      .map((m) => ({
+        href: "/missions/" + m.id + "/lab",
+        label: m.name,
+        meta: "Mission",
+      })),
+  ]
+    .filter((item) =>
+      (item.label + " " + item.meta).toLowerCase().includes(q.toLowerCase()),
+    )
+    .slice(0, 12);
+  function close() {
+    setOpen(false);
+    previous.current?.focus();
   }
-
+  function go(href: string) {
+    close();
+    router.push(href);
+  }
   if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-ink/30 p-4" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-50 bg-ink/25 p-4" onClick={close}>
       <div
-        className="mx-auto mt-[12vh] max-w-xl overflow-hidden rounded-[14px] border border-line bg-surface shadow-[0_24px_80px_rgba(16,17,20,0.18)]"
-        onClick={(event) => event.stopPropagation()}
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search workspace"
+        className="mx-auto mt-[10vh] max-w-xl overflow-hidden rounded-2xl border border-line bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            close();
+          }
+          if (e.key === "Tab") {
+            const elements =
+              panel.current?.querySelectorAll<HTMLElement>("input,button");
+            if (!elements?.length) return;
+            const first = elements[0],
+              last = elements[elements.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }}
       >
-        <input
-          autoFocus
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              setCursor((n) => Math.min(results.length - 1, n + 1));
-            }
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              setCursor((n) => Math.max(0, n - 1));
-            }
-            if (event.key === "Enter") {
-              event.preventDefault();
-              if (q.trim().length >= 8) void ask();
-              else if (results[cursor]) {
-                setOpen(false);
-                router.push(results[cursor].href);
+        <div className="flex border-b border-line">
+          <input
+            autoFocus
+            aria-label="Search pages and missions"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setCursor(0);
+            }}
+            placeholder="Search pages and missions…"
+            className="h-16 min-w-0 flex-1 px-5 outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setCursor((n) =>
+                  Math.min(Math.max(results.length - 1, 0), n + 1),
+                );
               }
-            }
-          }}
-          placeholder="Ask for work, or jump…  ⌘K"
-          className="h-14 w-full border-b border-line px-4 text-base outline-none"
-        />
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setCursor((n) => Math.max(0, n - 1));
+              }
+              if (e.key === "Enter" && results[cursor]) {
+                e.preventDefault();
+                go(results[cursor].href);
+              }
+            }}
+          />
+          <button
+            onClick={close}
+            className="px-4 text-sm text-muted"
+            aria-label="Close search"
+          >
+            Esc
+          </button>
+        </div>
         <ul className="max-h-80 overflow-auto p-2">
           {results.map((item, index) => (
-            <li key={item.id}>
+            <li key={item.href}>
               <button
-                type="button"
-                className={`flex w-full flex-col rounded-[8px] px-3 py-2 text-left ${index === cursor ? "bg-canvas" : "hover:bg-canvas"}`}
+                className={
+                  "flex min-h-12 w-full items-center justify-between gap-4 rounded-lg px-4 text-left " +
+                  (index === cursor ? "bg-blue-50" : "hover:bg-blue-50")
+                }
                 onMouseEnter={() => setCursor(index)}
-                onClick={() => {
-                  setOpen(false);
-                  router.push(item.href);
-                }}
+                onClick={() => go(item.href)}
               >
-                <span className="text-sm font-medium">{item.label}</span>
-                <span className="text-xs text-muted">{item.meta}</span>
+                <span>{item.label}</span>
+                <small className="text-muted">{item.meta}</small>
               </button>
             </li>
           ))}
         </ul>
-        {hint ? <p className="border-t border-line px-4 py-3 text-sm text-muted">{hint}</p> : null}
-        <p className="border-t border-line px-4 py-2 text-xs text-muted">
-          Enter resolves a free-form need. Arrow keys jump. Esc closes.
-        </p>
+        {!results.length && (
+          <p className="px-5 pb-5 text-muted">
+            No match. Try a page name or one of your missions.
+          </p>
+        )}
       </div>
     </div>
   );

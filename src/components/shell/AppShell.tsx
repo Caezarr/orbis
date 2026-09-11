@@ -1,27 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2,
   Compass,
   FolderOpen,
   KeyRound,
-  LayoutGrid,
   Settings,
   Sun,
+  MessageSquare,
+  BarChart3,
 } from "lucide-react";
-import { Logo } from "@/components/ui/Logo";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { cn } from "@/lib/cn";
 
 const NAV = [
-  { href: "/today", label: "Mon équipe", icon: Sun },
-  { href: "/audit", label: "Auditer un besoin", icon: Building2 },
-  { href: "/catalog", label: "Catalogue", icon: Compass },
-  { href: "/plans", label: "Dossiers & plans", icon: LayoutGrid },
-  { href: "/knowledge", label: "Connaissances", icon: FolderOpen },
-  { href: "/connections", label: "Outils & accès", icon: KeyRound },
+  { href: "/chat", label: "Ask Orbi", icon: MessageSquare },
+  { href: "/today", label: "Today", icon: Sun },
+  { href: "/catalog", label: "Marketplace", icon: Compass },
+  { href: "/connections", label: "Integrations", icon: KeyRound },
+  { href: "/knowledge", label: "Knowledge", icon: FolderOpen },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function AppShell({
@@ -36,13 +36,22 @@ export function AppShell({
   decisionCount?: number;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   return (
-    <div className="min-h-screen bg-[#f6f8fc]">
+    <div className="orbis-workspace min-h-screen bg-white">
       <CommandPalette />
       <header className="flex h-16 items-center justify-between border-b border-[#dce4f0] bg-white px-5">
         <div className="flex items-center gap-6">
-          <Link href="/today" aria-label="Orbis home">
-            <Logo />
+          <Link href="/chat" aria-label="Orbis home">
+            <span className="flex items-center gap-2 text-xl font-medium tracking-tight">
+              <Image
+                src="/brand/orbis-mark.svg"
+                alt=""
+                width={28}
+                height={28}
+              />
+              Orbis
+            </span>
           </Link>
           <Link
             href="/company"
@@ -56,7 +65,7 @@ export function AppShell({
           onClick={() => window.dispatchEvent(new Event("orbis:palette"))}
           className="hidden h-9 items-center gap-3 rounded-[8px] border border-line bg-surface px-3 text-sm text-muted md:flex"
         >
-          Ask or jump
+          Search workspace
           <kbd className="rounded bg-canvas px-1.5 py-0.5 text-[10px]">⌘K</kbd>
         </button>
         <div className="flex items-center gap-3 text-sm text-muted">
@@ -75,32 +84,48 @@ export function AppShell({
       </header>
       <nav
         aria-label="Mobile workspace navigation"
-        className="flex gap-2 overflow-x-auto border-b border-[#dce4f0] bg-white px-4 py-3 md:hidden"
+        className="border-b border-[#dce4f0] bg-white px-4 py-3 md:hidden"
       >
-        {[...NAV, { href: "/settings", label: "Settings", icon: Settings }].map(
-          (item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={pathname.startsWith(item.href) ? "page" : undefined}
-              className={`shrink-0 rounded-lg px-3 py-2 text-xs ${pathname.startsWith(item.href) ? "bg-blue-50 text-blue-700" : "text-slate-500"}`}
-            >
-              {item.label}
-            </Link>
-          ),
-        )}
+        <label className="flex items-center gap-4 text-sm text-muted">
+          Go to
+          <select
+            aria-label="Workspace page"
+            value={
+              pathname.startsWith("/workflows/")
+                ? "/catalog"
+                : ([...NAV, { href: "/settings" }].find((item) =>
+                    pathname.startsWith(item.href),
+                  )?.href ?? "")
+            }
+            onChange={(e) => router.push(e.target.value)}
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-base text-ink"
+          >
+            <option value="" disabled>
+              Workspace
+            </option>
+            {[...NAV, { href: "/settings", label: "Settings" }].map((item) => (
+              <option key={item.href} value={item.href}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </nav>
       <div className="flex min-h-[calc(100vh-64px)]">
-        <aside className="hidden w-[190px] shrink-0 border-r border-[#dce4f0] bg-white md:block">
+        <aside className="hidden w-[230px] shrink-0 border-r border-[#e2e9f3] bg-[#f8faff] md:block">
           <nav className="flex flex-col gap-1 p-3">
             {NAV.map((item) => {
               const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+                pathname === item.href ||
+                pathname.startsWith(`${item.href}/`) ||
+                (item.href === "/catalog" &&
+                  pathname.startsWith("/workflows/"));
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-[8px] px-3 py-2 text-sm",
                     active

@@ -1,18 +1,19 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import s from "@/components/product/product.module.css";
+import { ConnectionPanel } from "@/components/product/ConnectionPanel";
+import s from "@/components/product/workspace.module.css";
 export default function Page() {
   const [runtime, setRuntime] = useState<{
-    configured: boolean;
-    provider: string;
-    model: string;
-  } | null>(null);
-  const [error, setError] = useState("");
+      configured: boolean;
+      provider: string;
+      model: string;
+    } | null>(null),
+    [error, setError] = useState("");
   useEffect(() => {
     fetch("/api/v1/runtime")
       .then(async (r) => {
-        if (!r.ok) throw new Error("Impossible de vérifier le fournisseur.");
+        if (!r.ok) throw new Error("Could not check your AI provider.");
         return r.json();
       })
       .then(setRuntime)
@@ -22,66 +23,42 @@ export default function Page() {
     <div className={s.page}>
       <header className={s.head}>
         <div>
-          <span className={s.eyebrow}>Outils & accès</span>
-          <h1>Vos outils gardent leur place.</h1>
-          <p>
-            Vos comptes, des services fournis par Orbis, ou les deux. Chaque
-            mission conserve ses préférences séparément des accès réellement
-            disponibles.
-          </p>
+          <h1>Integrations</h1>
+          <p>Your tools. The right access for each mission.</p>
         </div>
         <Link href="/plans" className={s.primary}>
-          Choisir mes outils par mission
+          Manage mission tools
         </Link>
       </header>
-      {error && (
-        <p role="alert" className={s.error}>
-          {error}
-        </p>
-      )}
-      <div className={s.split}>
-        <section className={s.paper}>
-          <h2>Votre fournisseur IA</h2>
+      <ConnectionPanel />
+      <section className={s.section}>
+        <h2>AI provider</h2>
+        {error ? (
+          <p role="alert" className={s.error}>
+            {error}
+          </p>
+        ) : (
           <p>
             {runtime
               ? runtime.configured
-                ? `${runtime.provider} / ${runtime.model} — configuration serveur détectée, appel à valider`
-                : "Aucun fournisseur configuré"
-              : "Vérification…"}
+                ? runtime.provider +
+                  " · " +
+                  runtime.model +
+                  " · Server configuration found"
+                : "No AI provider configured"
+              : "Checking provider…"}
           </p>
-          <p className={s.note}>
-            La clé reste côté serveur. Les sources sélectionnées et les
-            instructions sont envoyées au fournisseur lors d’un run. La présence
-            d’une clé ne confirme ni sa validité ni son quota.
+        )}
+        <details className="mt-5">
+          <summary className="cursor-pointer">Administrator setup</summary>
+          <p className="mt-3">
+            Set ORBIS_AI_PROVIDER, ORBIS_AI_MODEL and OPENAI_API_KEY or
+            ANTHROPIC_API_KEY on the server, then restart. Credentials never
+            belong in knowledge sources. A configured key still needs a
+            successful execution to verify access.
           </p>
-          <details>
-            <summary className="cursor-pointer">
-              Instructions pour l’administrateur
-            </summary>
-            <p className="mt-4">
-              Configurer ORBIS_AI_PROVIDER, ORBIS_AI_MODEL et OPENAI_API_KEY ou
-              ANTHROPIC_API_KEY dans l’environnement serveur, puis redémarrer.
-              Ne saisissez jamais une clé dans un document de connaissance.
-            </p>
-          </details>
-        </section>
-        <section className={s.paper}>
-          <h2>Outils métier et fourniture gérée</h2>
-          <p>
-            CRM, enrichissement, comptabilité, RH et publication : les
-            dépendances sont définies dans chaque plan. Les adaptateurs OAuth et
-            les offres gérées ne sont pas encore activés sur cette installation.
-          </p>
-          <p className={s.note}>
-            Aucun outil n’est présenté comme connecté sur la seule base d’une
-            sélection. L’accès, le périmètre autorisé et les coûts doivent être
-            validés avant toute action.
-          </p>
-          <Link href="/plans" className={s.secondary}>
-            Retrouver mes plans
-          </Link>
-        </section>
-      </div>
+        </details>
+      </section>
     </div>
   );
 }

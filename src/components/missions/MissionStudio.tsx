@@ -42,10 +42,12 @@ export function MissionStudio({
   data,
   mission,
   reload,
+  initialRunId = "",
 }: {
   data: StoreState;
   mission: Mission;
   reload: () => Promise<void>;
+  initialRunId?: string;
 }) {
   const version = data.missionVersions.find(
     (v) => v.id === mission.draftVersionId,
@@ -59,7 +61,7 @@ export function MissionStudio({
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialRunId);
   const [tab, setTab] = useState<"deliverable" | "evidence" | "history">(
     "deliverable",
   );

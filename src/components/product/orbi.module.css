@@ -1,0 +1,25 @@
+.still,
+.working {
+  display: inline-block;
+  flex-shrink: 0;
+}
+.still img,
+.working img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  margin: 0;
+}
+.working {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    transform: translateY(-4px) rotate(-2deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .working {
+    animation: none;
+  }
+}

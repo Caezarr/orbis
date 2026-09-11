@@ -29,9 +29,11 @@ export function LandingCta({
 }: Props) {
   const body = (
     <>
-      <span className={c.surface}>
-        <GlassLens enabled={enabled && !disabled} />
-      </span>
+      {variant === "light" && (
+        <span className={c.surface} aria-hidden="true">
+          <GlassLens enabled={enabled && !disabled} />
+        </span>
+      )}
       <span className={c.shine} />
       <span className={c.label}>{children}</span>
       <ArrowUpRight size={16} />

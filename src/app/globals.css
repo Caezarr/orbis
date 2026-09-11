@@ -76,6 +76,10 @@ body {
   font-family: var(--font-instrument), ui-serif, Georgia, serif;
 }
 
+.orbis-workspace { --canvas:#f8faff; --ink:#182d5b; --muted:#647b9d; --line:#e2e9f3; --blue:#315ee8; --blue-soft:#edf4ff; color:var(--ink); }
+.orbis-workspace .serif { font-family:var(--font-geist-sans),sans-serif; letter-spacing:-1px; }
+.orbis-workspace nav a { min-height:44px; }
+
 .pulse-dot {
   animation: pulse-dot 1.8s ease-in-out infinite;
 }

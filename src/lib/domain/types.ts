@@ -410,6 +410,8 @@ export type DecisionCard = {
 };
 
 export type StoreState = {
+  workflowBriefs?: {workflowId:string;tenantId:string;answers:Record<string,string>;updatedAt:string}[];
+  teamGroups?: {id:string; name:string; memberIds:string[]}[];
   businessAudits?: import("@/lib/product/audit").BusinessAudit[];
   knowledgeSelections?: import("@/lib/product/knowledge-scopes").KnowledgeSelection[];
   workspace: Workspace;

@@ -7,10 +7,13 @@ import type { StoreState } from "@/lib/domain/types";
 
 export default function LabPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ run?: string }>;
 }) {
   const { id } = use(params);
+  const { run } = use(searchParams);
   const { data, loading, reload } = useWorkspace<StoreState>();
   if (loading) return <p role="status">Opening your mission…</p>;
   const mission = data?.missions.find((m) => m.id === id);
@@ -21,6 +24,6 @@ export default function LabPage({
       </div>
     );
   return (
-    <MissionStudio key={id} data={data} mission={mission} reload={reload} />
+    <MissionStudio key={`${id}:${run ?? ""}`} initialRunId={run} data={data} mission={mission} reload={reload} />
   );
 }

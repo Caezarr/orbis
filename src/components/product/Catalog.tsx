@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Search } from "lucide-react";
 import { flows, departments, capabilityLabels } from "@/lib/product/catalog";
+import { businessWorkflows } from "@/lib/workflows/blueprints";
 import s from "./product.module.css";
 export function Catalog() {
   const [q, setQ] = useState("");
@@ -21,33 +22,34 @@ export function Catalog() {
     <div className={s.page}>
       <header className={s.head}>
         <div>
-          <span className={s.eyebrow}>Le travail que vous pouvez déléguer</span>
-          <h1>
-            Votre prochaine équipe
-            <br />
-            commence par un besoin.
-          </h1>
+          <h1>Marketplace</h1>
           <p>
             100 cas métier préconçus. Choisissez un résultat, adaptez les règles
             à votre entreprise et préparez un premier livrable à valider.
           </p>
         </div>
-        <Link href="/audit" className={s.primary}>
-          Trouver mes cas prioritaires <ArrowRight size={16} />
+        <Link href="/chat" className={s.primary}>
+          Describe what you need <ArrowRight size={16} />
         </Link>
       </header>
-      <div className={s.banner}>
-        <div>
-          <h2>Vous connaissez votre métier. Partons de là.</h2>
-          <p>
-            Un audit guidé pour définir vos priorités, vos outils et ce qu’un
-            bon résultat signifie pour vous.
-          </p>
+      <section className="mb-10">
+        <h2 className="mb-4 text-xl font-medium">
+          Business systems, not isolated tasks
+        </h2>
+        <div className={s.grid}>
+          {businessWorkflows.map((w) => (
+            <article key={w.id} className={s.card}>
+              <small>{w.audience}</small>
+              <h2>{w.name}</h2>
+              <p>{w.outcome}</p>
+              <Link href={`/workflows/${w.id}`}>
+                Explore the workflow <ArrowRight className="inline" size={16} />
+              </Link>
+            </article>
+          ))}
         </div>
-        <Link className={s.secondary} href="/audit?audience=integrator">
-          J’accompagne des clients
-        </Link>
-      </div>
+      </section>
+      <h2 className="mb-4 text-xl font-medium">Mission library</h2>
       <div className={s.filters}>
         <label className="sr-only" htmlFor="catalog-search">
           Rechercher un cas
@@ -89,9 +91,7 @@ export function Catalog() {
         </select>
       </div>
       <p className={s.count} role="status">
-        {items.length} cas · livrables documentaires disponibles avec un
-        fournisseur IA configuré. Connexions et actions externes à qualifier
-        séparément.
+        {items.length} missions
       </p>
       <div className={s.grid}>
         {items.slice(0, limit).map((f) => (

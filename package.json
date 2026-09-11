@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.50",
     "@ai-sdk/openai": "^4.0.62",
+    "@composio/core": "^0.18.1",
     "@paper-design/shaders": "0.0.80",
     "@paper-design/shaders-react": "^0.0.80",
     "@react-three/fiber": "^9.7.0",

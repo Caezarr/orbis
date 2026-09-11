@@ -15,6 +15,8 @@ export async function GET() {
   return ok({
     workspace: state.workspace,
     memberships: state.memberships,
+    teamGroups: state.teamGroups ?? [],
+    workflowBriefs: state.workflowBriefs ?? [],
     profile: state.profile,
     packages: state.packages,
     missions: state.missions,
