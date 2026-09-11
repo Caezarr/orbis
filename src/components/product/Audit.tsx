@@ -11,12 +11,20 @@ export function Audit({
   website,
   fromDescription,
   seats,
+  vertical,
+  job,
+  verticalLabel,
+  jobLabel,
 }: {
   flowId?: string;
   audience?: string;
   website?: string;
   fromDescription?: boolean;
   seats?: number;
+  vertical?: string;
+  job?: string;
+  verticalLabel?: string;
+  jobLabel?: string;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -37,6 +45,22 @@ export function Audit({
   });
   const update = <K extends keyof AuditInput>(key: K, value: AuditInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+  useEffect(() => {
+    if (!verticalLabel) return;
+    setForm((f) => ({
+      ...f,
+      volume:
+        f.volume ||
+        (jobLabel
+          ? `Priority mission: ${jobLabel} for our ${verticalLabel} operations.`
+          : `Priority: install busywork missions for ${verticalLabel}.`),
+      success:
+        f.success ||
+        (jobLabel
+          ? `A reviewed ${jobLabel} deliverable with sources and unknowns, ready for my approval.`
+          : `A first mission tested on our company context, ready for supervised activation.`),
+    }));
+  }, [verticalLabel, jobLabel]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -104,8 +128,25 @@ export function Audit({
     <div className={s.page}>
       <header className={s.head}>
         <div>
-          <span className={s.eyebrow}>Audit guidé · environ cinq minutes</span>
-          <h1>Parlons de votre entreprise.</h1>
+          <span className={s.eyebrow}>
+            {verticalLabel
+              ? jobLabel
+                ? `${verticalLabel} · ${jobLabel}`
+                : verticalLabel
+              : "Audit guidé · environ cinq minutes"}
+          </span>
+          <h1>
+            {verticalLabel
+              ? `Audit ${verticalLabel}${jobLabel ? ` — ${jobLabel}` : ""}.`
+              : "Parlons de votre entreprise."}
+          </h1>
+          {vertical && (
+            <p>
+              Contexte vertical prérempli depuis la page{" "}
+              <code>{job ? `/for/${vertical}/${job}` : `/for/${vertical}`}</code>
+              . Confirmez l’entreprise puis testez la mission.
+            </p>
+          )}
           {seats && (
             <p>
               Configuration Business : {seats} sièges. Ce choix sera conservé
