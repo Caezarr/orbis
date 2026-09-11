@@ -1,1 +1,4 @@
-LOAD_FROM_DISK:/workspace/orbis-airbnb-rewrite/VerticalLanding.tsx
+"use client";
+export function VerticalLanding() {
+  return null;
+}
