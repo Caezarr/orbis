@@ -155,7 +155,7 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
           })}
         </div>
       </section>
-      <MissionFlow kind={selected} />
+      <MissionFlow kind={selected as "customers" | "rental" | "creator"} />
       <section className={c.plan} aria-labelledby="connection-plan">
         <div className={c.planHead}>
           <div>
