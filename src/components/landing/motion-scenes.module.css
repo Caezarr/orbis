@@ -696,6 +696,46 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
+
+.billingToggle {
+  grid-column: 1 / -1;
+  justify-self: center;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(101, 137, 190, .24);
+  border-radius: 999px;
+  background: rgba(238, 245, 255, .72);
+  box-shadow: 0 8px 24px rgba(52, 91, 146, .08);
+}
+
+.billingToggle button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #6f88ad;
+  cursor: pointer;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 10px 16px;
+}
+
+.billingToggle button:hover,
+.billingToggle button:focus-visible { color: #234b86; }
+
+.billingToggle .activeBilling {
+  background: #3e73c8;
+  color: white;
+  box-shadow: 0 4px 12px rgba(43, 91, 166, .22);
+}
+
+.billingToggle span {
+  color: #d8edff;
+  font-size: .67rem;
+  margin-left: 5px;
+  letter-spacing: .04em;
+}
 .priceCard {
   padding: 30px 26px;
   border: 1px solid #dce6f4;

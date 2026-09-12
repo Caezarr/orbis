@@ -427,9 +427,11 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
   const multiplier = annual ? 10 : 1;
   return (
     <div className={v.priceGrid}>
-      <div className={v.planScope}>
-        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Annual — 2 months free</button>
-        <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Monthly</button>
+      <div className={v.billingToggle} role="group" aria-label="Billing period">
+        <button className={annual ? v.activeBilling : ""} type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>
+          Annual <span>2 months OFF</span>
+        </button>
+        <button className={!annual ? v.activeBilling : ""} type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Monthly</button>
       </div>
       {[
         {

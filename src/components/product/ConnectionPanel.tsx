@@ -11,12 +11,13 @@ import {
   Clapperboard,
   MessagesSquare,
 } from "lucide-react";
-import { integrations, type IntegrationSlug } from "@/lib/integrations/catalog";
+import { integrations, integrationCategories, type IntegrationSlug } from "@/lib/integrations/catalog";
 import {
   solutions,
   solutionReadiness,
   requirementStatus,
   toolDetails,
+  administratorSetup,
   type ConnectionState,
 } from "@/lib/integrations/solutions";
 import s from "./workspace.module.css";
@@ -25,15 +26,16 @@ import { ToolLogo } from "./ToolLogo";
 import { MissionFlow } from "./MissionFlow";
 
 const labels: Record<ConnectionState, string> = {
-  connected: "Connected · verified",
+  connected: "Account active",
   needs_auth: "Reconnect account",
   not_connected: "Not connected",
-  not_configured: "Setup required",
+  not_configured: "Discoverable · setup required",
   unverified: "Not yet checked",
   error: "Could not verify",
 };
 const icons = [Building2, Clapperboard, MessagesSquare];
-export function ConnectionPanel() {
+// The host must derive this flag from its server-side authorization context.
+export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
   const [configured, setConfigured] = useState<string[]>([]);
   const [statuses, setStatuses] = useState<
     Partial<Record<IntegrationSlug, ConnectionState>>
@@ -42,6 +44,7 @@ export function ConnectionPanel() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState("customers");
+  const [availability, setAvailability] = useState("all");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All tools");
   const [checked, setChecked] = useState("");
@@ -73,8 +76,12 @@ export function ConnectionPanel() {
       );
       setChecked(body.checkedAt);
     } catch (e) {
-      if (!signal?.aborted)
+      if (!signal?.aborted) {
+        setStatuses({});
+        setConfigured([]);
+        setChecked("");
         setError(e instanceof Error ? e.message : "Please try again.");
+      }
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -109,6 +116,7 @@ export function ConnectionPanel() {
     const detail = toolDetails[item.slug];
     return (
       (category === "All tools" || category === detail.category) &&
+      (availability === "all" || (availability === "configured" ? configured.includes(item.slug) : statuses[item.slug] === "connected")) &&
       `${item.name} ${item.purpose} ${detail.unlocks.join(" ")}`
         .toLowerCase()
         .includes(query.toLowerCase().trim())
@@ -147,7 +155,7 @@ export function ConnectionPanel() {
           })}
         </div>
       </section>
-      <MissionFlow kind={selected as "rental" | "creator" | "customers"} />
+      <MissionFlow kind={selected} />
       <section className={c.plan} aria-labelledby="connection-plan">
         <div className={c.planHead}>
           <div>
@@ -183,6 +191,7 @@ export function ConnectionPanel() {
                       onClick={() => {
                         setQuery("");
                         setCategory("All tools");
+                        setAvailability("all");
                         setDetails(slug);
                       }}
                     >
@@ -212,7 +221,7 @@ export function ConnectionPanel() {
       <div className={c.libraryHead}>
         <div>
           <h2>Your tools, working together.</h2>
-          <p>Connect an account. Choose its scope. Stay in control.</p>
+          <p>{integrations.length} tools to discover. Availability depends on your workspace configuration.</p>
         </div>
         <button
           className={s.secondary}
@@ -241,7 +250,7 @@ export function ConnectionPanel() {
         />
       </div>
       <div className={s.tabs} aria-label="Integration categories">
-        {["All tools", "Communication", "Knowledge", "Planning"].map((name) => (
+        {["All tools", ...integrationCategories].map((name) => (
           <button
             key={name}
             aria-pressed={category === name}
@@ -251,6 +260,15 @@ export function ConnectionPanel() {
           </button>
         ))}
       </div>
+      <label className={c.availability}>
+        Show
+        <select aria-label="Integration availability" value={availability} onChange={(e) => setAvailability(e.target.value)}>
+          <option value="all">All discoverable tools</option>
+          <option value="configured">Configured in this workspace</option>
+          <option value="connected">Active accounts</option>
+        </select>
+        <span role="status">{filtered.length} tools</span>
+      </label>
       <div className={s.grid}>
         {filtered.map((item) => {
           const state = statuses[item.slug] ?? "unverified",
@@ -318,16 +336,15 @@ export function ConnectionPanel() {
                   <ShieldCheck size={19} />
                   <div>
                     <p>{detail.boundary}</p>
+                    <p>Permissions shown here are informational. {state === "connected" ? "Composio reports an active account; granted scopes and action permissions have not been verified." : "Account access and granted scopes have not been verified."}</p>
                     {detail.category === "Knowledge" && (
                       <Link href="/knowledge/scopes">
                         Choose knowledge scope →
                       </Link>
                     )}
-                    {!loading && !configured.includes(item.slug) && (
+                    {isAdmin && !loading && !configured.includes(item.slug) && (
                       <p>
-                        An administrator needs to configure this connector on
-                        the server before you can sign in. No account is
-                        connected yet.
+                        {administratorSetup(item.slug)}
                       </p>
                     )}
                     <p>
@@ -350,6 +367,7 @@ export function ConnectionPanel() {
             onClick={() => {
               setQuery("");
               setCategory("All tools");
+              setAvailability("all");
             }}
           >
             Reset filters
