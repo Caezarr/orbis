@@ -126,7 +126,7 @@ export function ConnectionPanel() {
         </div>
         <div className={c.solutions}>
           {solutions.map((item, index) => {
-            const Icon = icons[index];
+            const Icon = icons[index % icons.length];
             return (
               <button
                 key={item.id}

@@ -1,4 +1,4 @@
-import type { IntegrationSlug } from "./catalog";
+import { integrations, type IntegrationSlug } from "./catalog";
 
 export type ConnectionState =
   | "connected"
@@ -22,7 +22,7 @@ export const solutions: {
   specialist?: string;
 }[] = [
   {
-    id: "rental",
+    id: "rental-operations",
     name: "Run my rental operations",
     outcome:
       "Guest requests, arrivals and turnovers. One operating brief for every property.",
@@ -49,7 +49,7 @@ export const solutions: {
     ],
   },
   {
-    id: "creator",
+    id: "creator-studio",
     name: "Build my content studio",
     outcome:
       "Your voice, your source material, a clear review process. From an idea to a production brief.",
@@ -86,7 +86,7 @@ export const solutions: {
       {
         label: "Customer inbox",
         description: "Choose the inbox where requests actually arrive.",
-        alternatives: ["gmail", "outlook"],
+        alternatives: ["gmail", "outlook", "zendesk", "intercom", "freshdesk"],
       },
       {
         label: "Approved knowledge",
@@ -102,6 +102,22 @@ export const solutions: {
       },
     ],
   },
+  ...([
+    ["ecommerce-operations", "Run my store operations", "Review orders, fulfillment and customer exceptions.", "Store orders", ["shopify", "woocommerce"]],
+    ["sales-operations", "Keep my sales pipeline moving", "Prepare account context and the next follow-up.", "Sales pipeline", ["hubspot", "salesforce", "pipedrive", "close"]],
+    ["recruiting-operations", "Coordinate my hiring", "Review candidates and prepare interview handoffs.", "Candidate pipeline", ["greenhouse", "lever", "ashby", "workable"]],
+    ["agency-operations", "Coordinate my client delivery", "Track project commitments and prepare client updates.", "Client projects", ["asana", "clickup", "monday", "trello"]],
+    ["finance-operations", "Prepare my finance operations", "Review invoices and flag reconciliation exceptions.", "Accounting records", ["quickbooks", "xero", "pennylane", "sage"]],
+    ["professional-services", "Prepare my client engagements", "Bring proposals, agreements and delivery context together.", "Client agreements", ["docusign", "pandadoc"]],
+    ["field-services", "Coordinate my field team", "Prepare visit context and identify dispatch exceptions.", "Service jobs", ["jobber", "servicetitan"]],
+  ] satisfies [string, string, string, string, IntegrationSlug[]][]).map(([id, name, outcome, label, alternatives]) => ({
+    id, name, outcome, href: `/chat?vertical=${id}`,
+    requirements: [
+      { label, description: "Connect the system that holds your operational records.", alternatives },
+      { label: "Approved knowledge", description: "Policies and instructions for this mission.", alternatives: ["googledrive", "notion"] as IntegrationSlug[] },
+      { label: "Team handoffs", description: "A channel for review and exceptions.", alternatives: ["slack", "gmail", "outlook"] as IntegrationSlug[], optional: true },
+    ],
+  })),
 ];
 
 export function requirementStatus(
@@ -129,10 +145,10 @@ export function solutionReadiness(
   };
 }
 
-export const toolDetails: Record<
+const specificDetails: Partial<Record<
   IntegrationSlug,
   { category: string; unlocks: string[]; boundary: string }
-> = {
+>> = {
   gmail: {
     category: "Communication",
     unlocks: [
@@ -186,3 +202,15 @@ export const toolDetails: Record<
       "Share only the relevant pages with the integration, then define the mission’s knowledge scope.",
   },
 };
+
+export const toolDetails = Object.fromEntries(integrations.map((tool) => [tool.slug, {
+  category: tool.category,
+  unlocks: [tool.purpose],
+  boundary: "These are potential uses, not verified OAuth scopes. Review provider consent and define mission access separately. Account access does not authorize sending, publishing or spending.",
+  ...specificDetails[tool.slug],
+}])) as Record<IntegrationSlug, { category: string; unlocks: string[]; boundary: string }>;
+
+// Render only after the host supplies a server-authorized administrator role.
+export function administratorSetup(slug: IntegrationSlug) {
+  return `Verify that the provider offers this toolkit in your Composio project. Set COMPOSIO_TOOLKIT_${slug.toUpperCase()} to its exact toolkit slug and COMPOSIO_AUTH_CONFIG_${slug.toUpperCase()} to an enabled auth configuration for that toolkit. Set COMPOSIO_API_KEY on the server, review least-privilege permissions and allow the /connections callback. Then sign in and refresh to verify the account. If the toolkit is unavailable, leave this entry discoverable only; use the specialist setup where available. Never paste provider secrets into chat.`;
+}
