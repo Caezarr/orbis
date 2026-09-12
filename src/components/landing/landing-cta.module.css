@@ -20,9 +20,19 @@
   isolation: isolate;
   cursor: pointer;
   transition:
-    transform 0.3s,
-    box-shadow 0.3s,
-    filter 0.3s;
+    transform 220ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 220ms cubic-bezier(.2,.8,.2,1),
+    filter 220ms ease;
+}
+.cta::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 9px;
+  pointer-events: none;
+  background: radial-gradient(circle at 18% 0%, #ffffff45, transparent 38%);
+  opacity: .75;
+  transition: opacity 220ms ease;
 }
 .cta[data-variant="primary"] {
   background-color: #274e8f;
@@ -31,14 +41,21 @@
 }
 .cta:hover,
 .cta:focus-visible {
-  transform: translateY(-2px);
+  transform: translateY(-3px) scale(1.012);
   filter: saturate(1.08);
   box-shadow:
     inset 0 1px 1px #ffffff99,
     0 10px 24px #244b8628;
 }
+.cta:focus-visible {
+  outline: 3px solid #8fb1ff;
+  outline-offset: 4px;
+}
+.cta:hover::after,
+.cta:focus-visible::after { opacity: 1; }
 .cta:active {
-  transform: translateY(0);
+  transform: translateY(-1px) scale(.988);
+  transition-duration: 80ms;
 }
 .cta:disabled {
   opacity: 0.55;
@@ -79,7 +96,7 @@
 .cta > svg {
   position: relative;
   flex-shrink: 0;
-  transition: transform 0.3s;
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1);
 }
 .cta:hover > svg {
   transform: translate(2px, -2px);
@@ -104,7 +121,8 @@
 @media (prefers-reduced-motion: reduce) {
   .cta,
   .shine,
-  .cta > svg {
+  .cta > svg,
+  .cta::after {
     transition: none;
   }
   .shine {
