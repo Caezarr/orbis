@@ -8,6 +8,8 @@ export function Pricing() {
   const [runs, setRuns] = useState(500);
   const [cost, setCost] = useState(0.1);
   const [managed, setManaged] = useState(false);
+  const [annual, setAnnual] = useState(true);
+  const multiplier = annual ? 10 : 1;
   const bill = estimateBill(149, runs, cost, managed);
   const euro = (n: number) =>
     n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
@@ -31,6 +33,10 @@ export function Pricing() {
           Cadrer mon besoin
         </Link>
       </header>
+      <div role="group" aria-label="Période de facturation">
+        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Annuel — 2 mois offerts</button>
+        <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Mensuel</button>
+      </div>
       <div className={s.grid}>
         {plans.map((p) => (
           <section key={p.name} className={s.card}>
@@ -39,8 +45,8 @@ export function Pricing() {
             <p className={s.price}>
               {p.name === "Partner"
                 ? "Sur discussion"
-                : `${p.name === "Business" ? businessMonthly(seats) : p.monthly} €`}{" "}
-              <small>{p.name !== "Partner" && "HT / mois envisagés"}</small>
+                : `${(p.name === "Business" ? businessMonthly(seats) : p.monthly)! * multiplier} €`}{" "}
+              <small>{p.name !== "Partner" && `HT / ${annual ? "an" : "mois"} envisagés`}</small>
             </p>
             {p.name === "Business" && (
               <label>

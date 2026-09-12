@@ -422,15 +422,21 @@ export function GraphResult({ enabled }: { enabled: boolean }) {
 
 export function LandingPricing({ enabled }: { enabled: boolean }) {
   const [seats, setSeats] = useState(5);
+  const [annual, setAnnual] = useState(true);
   const business = businessMonthly(seats);
+  const multiplier = annual ? 10 : 1;
   return (
     <div className={v.priceGrid}>
+      <div className={v.planScope}>
+        <button type="button" aria-pressed={annual} onClick={() => setAnnual(true)}>Annual — 2 months free</button>
+        <button type="button" aria-pressed={!annual} onClick={() => setAnnual(false)}>Monthly</button>
+      </div>
       {[
         {
           name: "Solo",
           audience: "One person. More capacity.",
-          price: "€149",
-          unit: "/ month",
+          price: `€${149 * multiplier}`,
+          unit: annual ? "/ year" : "/ month",
           copy: "Your first missions, with your own expertise.",
           cta: "Launch your first agents",
           href: "/audit",
@@ -443,8 +449,8 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
         {
           name: "Business",
           audience: "Your team, working as one.",
-          price: `€${business}`,
-          unit: "/ month",
+          price: `€${business * multiplier}`,
+          unit: annual ? "/ year" : "/ month",
           copy: "Choose the people who work with your agents.",
           cta: "Launch your first agents",
           href: `/audit?seats=${seats}`,
