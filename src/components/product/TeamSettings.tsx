@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { BillingSettings } from "./BillingSettings";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import type { StoreState } from "@/lib/domain/types";
 import s from "./workspace.module.css";
@@ -57,7 +58,7 @@ export function TeamSettings() {
         <a href="/api/v1/export" download="orbis-export.json" className={s.secondary}>Export workspace</a>
       </header>
       <nav className={s.tabs} aria-label="Settings sections">
-        {["People", "Groups", "Roles", "Usage"].map((t) => (
+        {["People", "Groups", "Roles", "Usage", "Billing"].map((t) => (
           <button
             key={t}
             aria-pressed={tab === t}
@@ -71,6 +72,7 @@ export function TeamSettings() {
           </button>
         ))}
       </nav>
+      {tab === "Billing" && <BillingSettings />}
       {error && (
         <p role="alert" className={s.error}>
           {error}

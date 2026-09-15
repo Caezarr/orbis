@@ -1,7 +1,9 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { ok } from "@/lib/api/http";
 import { getStore } from "@/lib/store/store";
 
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const usage = getStore().usage;
   const totals = usage.reduce(
     (acc, entry) => {
@@ -12,4 +14,5 @@ export async function GET() {
     { provider: 0, platform: 0, connector: 0, human_review: 0, all: 0 } as Record<string, number>,
   );
   return ok({ items: usage, totals });
+  });
 }

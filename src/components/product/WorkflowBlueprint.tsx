@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { BusinessWorkflow } from "@/lib/workflows/blueprints";
 import s from "./workspace.module.css";
+import flowStyles from "./mission-flow.module.css";
 import { RentalPreview } from "./RentalPreview";
 import { MissionFlow } from "./MissionFlow";
 import { Orbi } from "./Orbi";
@@ -39,7 +40,9 @@ export function WorkflowBlueprint({
       });
       const result = await response.json();
       if (!response.ok)
-        throw new Error(result.message || "Could not save your brief.");
+        throw new Error(
+          result.message || result.error || "Could not save your brief.",
+        );
       await reload();
       setNotice(
         "Implementation brief saved. Next: connect accounts, verify scopes and run a supervised end-to-end trial. Nothing has been scheduled or sent.",
@@ -58,8 +61,11 @@ export function WorkflowBlueprint({
       <header className={s.head + " mt-6"}>
         <div>
           <h1>{b.name}</h1>
-          <p>{b.outcome}</p>
+          <p>{b.outcome === b.name ? b.audience : b.outcome}</p>
         </div>
+        <button className={s.primary} onClick={() => setTab("Your setup")}>
+          Prepare this workflow ↗
+        </button>
       </header>
       <nav className={s.tabs} aria-label="Workflow sections">
         {["How it works", "Your setup", "Quality & control"].map((t) => (
@@ -70,9 +76,38 @@ export function WorkflowBlueprint({
       </nav>
       {tab === "How it works" && (
         <>
-          <MissionFlow
-            kind={b.id === "rental-operations" ? "rental" : "creator"}
-          />
+          <MissionFlow kind={b.id} />
+          <section className={s.section}>
+            <h2>Choose the result you need</h2>
+            <p>
+              Each task defines a bounded result. Prepare your implementation
+              brief below; saving a brief does not start work or incur charges.
+            </p>
+            <div className={flowStyles.taskGrid}>
+              {b.tasks?.map((task) => (
+                <article className={flowStyles.taskCard} key={task.id}>
+                  <span className={flowStyles.unit}>
+                    Per {task.unit ?? "task"}
+                  </span>
+                  <h3>{task.name}</h3>
+                  <p>{task.outcome}</p>
+                  <dl>
+                    <dt>Bring</dt>
+                    <dd>{task.input}</dd>
+                    <dt>Scope</dt>
+                    <dd>{task.limit ?? "Confirm in setup"}</dd>
+                    <dt>Decision gate</dt>
+                    <dd>{task.policy ?? task.acceptance}</dd>
+                  </dl>
+                  <details>
+                    <summary>Acceptance & tool choices</summary>
+                    <p>{task.acceptance}</p>
+                    <p>{task.tools?.join(" · ")}</p>
+                  </details>
+                </article>
+              ))}
+            </div>
+          </section>
           <section className={s.section}>
             <h2>Starts when it matters</h2>
             <div className="flex flex-wrap gap-3">
@@ -83,27 +118,32 @@ export function WorkflowBlueprint({
               ))}
             </div>
           </section>
-          {b.stages.map((stage, i) => (
-            <details className={s.section} key={stage.id}>
-              <summary className="cursor-pointer text-lg">
-                <span className="mr-3 text-blue-500">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                {stage.name}
-              </summary>
-              <p>{stage.work}</p>
-              <div className={s.grid + " mt-5"}>
-                <div>
-                  <strong className="text-sm">Ready when</strong>
-                  <p>{stage.gate}</p>
+          <details className={s.section}>
+            <summary className="cursor-pointer text-lg">
+              Detailed operating steps
+            </summary>
+            {b.stages.map((stage, i) => (
+              <details className={s.section} key={stage.id}>
+                <summary className="cursor-pointer text-lg">
+                  <span className="mr-3 text-blue-500">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {stage.name}
+                </summary>
+                <p>{stage.work}</p>
+                <div className={s.grid + " mt-5"}>
+                  <div>
+                    <strong className="text-sm">Ready when</strong>
+                    <p>{stage.gate}</p>
+                  </div>
+                  <div>
+                    <strong className="text-sm">What you get</strong>
+                    <p>{stage.output}</p>
+                  </div>
                 </div>
-                <div>
-                  <strong className="text-sm">What you get</strong>
-                  <p>{stage.output}</p>
-                </div>
-              </div>
-            </details>
-          ))}
+              </details>
+            ))}
+          </details>
           <button
             className={s.primary}
             onClick={() => {

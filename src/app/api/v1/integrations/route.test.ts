@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ status: vi.fn() }));
 vi.mock("@/lib/store/store", () => ({
   getStore: () => ({ workspace: { id: "workspace-a", tenantId: "tenant-a" } }),
@@ -21,7 +21,13 @@ function request(origin = "http://localhost:3002") {
     body: JSON.stringify({ userId: "attacker", tenantId: "other" }),
   });
 }
-beforeEach(() => mock.status.mockReset());
+beforeEach(() => {
+  mock.status.mockReset();
+  vi.stubEnv("ORBIS_OFFLINE", "true");
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("VERCEL", "");
+});
+afterEach(() => vi.unstubAllEnvs());
 describe("integration verification", () => {
   it("rejects cross-origin requests before calling the provider", async () => {
     expect((await POST(request("https://other.example"))).status).toBe(403);

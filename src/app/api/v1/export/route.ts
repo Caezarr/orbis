@@ -1,7 +1,9 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { ok } from "@/lib/api/http";
 import { getStore } from "@/lib/store/store";
 
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const state = getStore();
   const payload = {
     exportedAt: new Date().toISOString(),
@@ -19,4 +21,5 @@ export async function GET() {
     notice: "Secrets and provider tokens are never exported. Secret references only.",
   };
   return ok(payload);
+  });
 }

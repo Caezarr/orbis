@@ -1,3 +1,5 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
+import { isOfflineMode } from "@/lib/platform/context";
 import { z } from "zod";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { isLocalMutation } from "@/lib/api/local-request";
@@ -16,11 +18,14 @@ const schema = z.discriminatedUnion("action", [
     memberIds: z.array(z.string()).max(100),
   }),
 ]);
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const state = getStore();
   return ok({ members: state.memberships, groups: state.teamGroups ?? [] });
+  });
 }
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request))
     return fail("This installation accepts local changes only.", 403);
   const result = schema.safeParse(await request.json().catch(() => null));
@@ -28,6 +33,8 @@ export async function POST(request: Request) {
     return fail("Check the name, email and selected members.");
   const body = result.data,
     state = getStore();
+  if (body.action === "member" && !isOfflineMode())
+    return fail("Use the authenticated membership service to invite a member.", 501);
   if (
     body.action === "member" &&
     state.memberships.some(
@@ -60,4 +67,5 @@ export async function POST(request: Request) {
     }
   });
   return ok({ saved: true }, 201);
+  }, { requireRole: "admin" });
 }

@@ -1,13 +1,17 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/time";
 
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   return ok({ items: getStore().sources });
+  });
 }
 
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const body = (await request.json().catch(() => null)) as {
     name?: string;
     excerpt?: string;
@@ -38,4 +42,5 @@ export async function POST(request: Request) {
     return item;
   });
   return ok(source, 201);
+  });
 }

@@ -6,15 +6,12 @@ import {
   renameSync,
 } from "node:fs";
 import path from "node:path";
-import { tmpdir } from "node:os";
 import type { StoreState } from "@/lib/domain/types";
 import { buildSeed } from "@/lib/store/seed";
+import { isOfflineMode, workspaceContext } from "@/lib/platform/context";
 
-// Serverless filesystems are read-only outside the temp dir, so writes there
-// go to /tmp (ephemeral per instance; state falls back to the seed on cold start).
-const DEFAULT_DATA_DIR = process.env.VERCEL
-  ? path.join(tmpdir(), "orbis")
-  : path.join(process.cwd(), "data");
+// Explicit local offline mode only. Hosted instances never use this file.
+const DEFAULT_DATA_DIR = path.join(process.cwd(), "data");
 const DATA_DIR = process.env.ORBIS_DATA_DIR || DEFAULT_DATA_DIR;
 const DATA_FILE = path.join(DATA_DIR, "state.json");
 
@@ -39,6 +36,7 @@ function hydrateById<T extends { id: string }>(
 }
 
 function load(): StoreState {
+  if (!isOfflineMode()) throw new Error("Authenticated workspace context required; offline store disabled");
   if (memory) return memory;
   if (existsSync(DATA_FILE)) {
     const loaded = JSON.parse(readFileSync(DATA_FILE, "utf8")) as StoreState;
@@ -70,11 +68,15 @@ function persist() {
 }
 
 export function getStore(): StoreState {
+  const context = workspaceContext();
+  if (context?.closed) throw new Error("Workspace request has ended");
+  if (context) return context.state;
   return load();
 }
 
 /** Expire interrupted local runs. A durable worker will own this in production. */
 export function reconcileStaleRuns() {
+  if (!isOfflineMode()) return;
   const cutoff = Date.now() - 180000;
   const stale = (run: StoreState["runs"][number]) =>
     run.engine === "agent-v1" &&
@@ -97,6 +99,16 @@ export function reconcileStaleRuns() {
 }
 
 export function mutateStore<T>(fn: (state: StoreState) => T): T {
+  const context = workspaceContext();
+  if (context) {
+    if (context.closed || context.readOnly) throw new Error("Workspace context is not writable");
+    const state = structuredClone(context.state);
+    const result = fn(state);
+    if (result && typeof (result as { then?: unknown }).then === "function") throw new Error("mutateStore callback must be synchronous");
+    context.state = state;
+    context.dirty = true;
+    return result;
+  }
   const previous = load();
   const state = structuredClone(previous);
   const result = fn(state);
@@ -111,6 +123,7 @@ export function mutateStore<T>(fn: (state: StoreState) => T): T {
 }
 
 export function resetStore() {
+  if (!isOfflineMode()) throw new Error("Reset is available only in explicit offline mode");
   memory = buildSeed();
   persist();
   return memory;

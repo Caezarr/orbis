@@ -1,7 +1,9 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { ok } from "@/lib/api/http";
 import { PACKAGES } from "@/lib/capabilities/registry";
 
 export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").toLowerCase();
   const maturity = searchParams.get("maturity");
@@ -18,4 +20,5 @@ export async function GET(request: Request) {
     return true;
   });
   return ok({ items });
+  });
 }

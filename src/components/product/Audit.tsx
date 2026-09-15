@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { departments, findFlow } from "@/lib/product/catalog";
 import type { AuditInput } from "@/lib/product/audit";
+import type { CompanyAnalysis } from "@/lib/runtime/company-analysis";
 import s from "./product.module.css";
 export function Audit({
   flowId,
@@ -23,6 +24,18 @@ export function Audit({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [intakeNotice, setIntakeNotice] = useState("");
+  const [analysis, setAnalysis] = useState<CompanyAnalysis | null>(null);
+  async function prepareProfile() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/v1/company-analysis", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({website:form.website || website,description:form.description})});
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error ?? "Could not prepare your profile.");
+      setAnalysis(result);
+    } catch(e) { setError(e instanceof Error ? e.message : "Could not prepare your profile."); }
+    finally { setBusy(false); }
+  }
   const [form, setForm] = useState<AuditInput>({
     seats,
     company: "",
@@ -38,12 +51,32 @@ export function Audit({
   const update = <K extends keyof AuditInput>(key: K, value: AuditInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
   useEffect(() => {
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
       try {
         if (website) {
-          const site = JSON.parse(
+          let site = JSON.parse(
             sessionStorage.getItem("orbis:site-intake") ?? "null",
           );
+          if (site?.website !== website) {
+            setForm((f) => ({ ...f, website }));
+            setIntakeNotice("Reading your website after sign-in…");
+            const response = await fetch("/api/v1/company-site", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ website }), signal: controller.signal,
+            });
+            if (response.status === 401) {
+              window.location.assign(`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+              return;
+            }
+            site = await response.json();
+            if (!response.ok) throw new Error("Website reading unavailable");
+            site = { ...site, website };
+            sessionStorage.setItem("orbis:site-intake", JSON.stringify(site));
+            sessionStorage.removeItem("orbis:pending-website");
+          }
+          if (cancelled) return;
           if (site?.website === website) {
             setForm((f) => ({
               ...f,
@@ -65,12 +98,13 @@ export function Audit({
             setForm((f) => ({ ...f, description: text.slice(0, 4000) }));
         }
       } catch {
+        if (cancelled) return;
         setIntakeNotice(
           "Le contexte n’a pas pu être restauré. Décrivez votre activité pour continuer.",
         );
       }
     }, 0);
-    return () => clearTimeout(timer);
+    return () => { cancelled = true; clearTimeout(timer); controller.abort(); };
   }, [website, fromDescription]);
   const valid = [
     form.company.trim().length >= 2 && form.description.trim().length >= 20,
@@ -160,6 +194,17 @@ export function Audit({
           >
             {step === 0 && (
               <>
+                <button type="button" className={s.secondary} disabled={busy || (!website && !form.website && form.description.trim().length < 20)} onClick={() => { void prepareProfile(); }}>
+                  {busy ? "Orbi prépare votre profil…" : "Préparer mon profil avec Orbi"}
+                </button>
+                {analysis && <section className={s.note} aria-label="Profil proposé">
+                  <strong>{analysis.name}</strong><p>{analysis.summary}</p>
+                  <details><summary>Ce que disent vos sources</summary>{analysis.facts.map((fact,i)=><blockquote key={i}>{fact.quote}</blockquote>)}
+                    {analysis.sourceUrl && <a href={analysis.sourceUrl} target="_blank" rel="noreferrer">Voir le site source</a>}
+                  </details>
+                  {analysis.questions.map(question=><p key={question}>{question}</p>)}
+                  <button type="button" className={s.secondary} onClick={()=>{setForm(f=>({...f,company:analysis.name,description:analysis.summary}));setAnalysis(null);}}>Utiliser ce profil et le compléter</button>
+                </section>}
                 <label>
                   Vous accompagnez
                   <select

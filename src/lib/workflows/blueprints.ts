@@ -1,4 +1,20 @@
+import { verticalRegistry } from "./vertical-registry";
+export type WorkflowTask = {
+  id: string;
+  name: string;
+  outcome: string;
+  acceptance: string;
+  estimatedMinutes?: number;
+  unit?: string;
+  input: string;
+  output?: string;
+  limit?: string;
+  policy?: string;
+  tools?: string[];
+};
 export type BusinessWorkflow = {
+  vertical?: string;
+  tasks?: WorkflowTask[];
   id: string;
   name: string;
   audience: string;
@@ -22,7 +38,7 @@ export type BusinessWorkflow = {
   metrics: string[];
   memory: string[];
 };
-export const businessWorkflows: BusinessWorkflow[] = [
+const originalWorkflows: BusinessWorkflow[] = [
   {
     id: "rental-operations",
     name: "Your rental operations team",
@@ -284,3 +300,27 @@ export const businessWorkflows: BusinessWorkflow[] = [
     ],
   },
 ];
+export const businessWorkflows: BusinessWorkflow[] = [
+  ...originalWorkflows.map((workflow) => {
+    const vertical = verticalRegistry.find((v) => v.id === workflow.id);
+    return {
+      ...workflow,
+      vertical: vertical?.vertical,
+      tasks: vertical?.tasks,
+    };
+  }),
+  ...verticalRegistry.filter(
+    (v) => !originalWorkflows.some((w) => w.id === v.id),
+  ),
+];
+
+export function resolveBusinessWorkflow(id: string) {
+  const aliases: Record<string, string> = {
+    rental: "rental-operations",
+    creator: "creator-studio",
+    customers: "customer-support",
+  };
+  return businessWorkflows.find(
+    (workflow) => workflow.id === (aliases[id] ?? id),
+  );
+}

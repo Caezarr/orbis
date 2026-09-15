@@ -1,16 +1,103 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import type { StoreState, Run } from "@/lib/domain/types";
-import { dailyWork, needsAttention } from "@/lib/product/work-overview";
+import {
+  dailyWork,
+  dailyOperations,
+  needsAttention,
+  type OperationalTask,
+} from "@/lib/product/work-overview";
 import s from "./workspace.module.css";
+import { DailyRecap } from "./DailyRecap";
+import { ContributionActivity } from "./ContributionActivity";
+import type { ContributionEvent } from "@/lib/product/contributions";
+import { Orbi } from "./Orbi";
 
 export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
-  const { data, loading } = useWorkspace<StoreState>();
+  const { data, loading } = useWorkspace<
+    StoreState & { contributionEvents?: ContributionEvent[] }
+  >();
   const [filter, setFilter] = useState("attention");
+  const [now, setNow] = useState(() => new Date());
+  const [timeZone, setTimeZone] = useState("UTC");
+  const [tasks, setTasks] = useState<OperationalTask[]>([]);
+  const [operationEvents, setOperationEvents] = useState<ContributionEvent[]>(
+    [],
+  );
+  const [operationsError, setOperationsError] = useState("");
+  const [operationsLoading, setOperationsLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const response = await fetch("/api/v1/operations", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Operations unavailable");
+        const payload = await response.json();
+        if (!Array.isArray(payload.tasks))
+          throw new Error("Invalid operations response");
+        if (active) {
+          setTasks(payload.tasks);
+          setOperationEvents(
+            Array.isArray(payload.contributionEvents)
+              ? payload.contributionEvents
+              : [],
+          );
+          setOperationsError("");
+        }
+      } catch {
+        if (active)
+          setOperationsError(
+            "Could not refresh operational tasks. Displayed tasks may be out of date.",
+          );
+      } finally {
+        pending = false;
+        if (active) setOperationsLoading(false);
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 15_000);
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [retry]);
+  useEffect(() => {
+    const tick = () => {
+      setNow(new Date());
+      setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    };
+    const initial = setTimeout(tick, 0);
+    const timer = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(timer);
+    };
+  }, []);
   if (loading || !data) return <p role="status">Loading your work…</p>;
-  const work = dailyWork(data);
+  const work = dailyWork(data, now, timeZone);
+  const contributionEvents = [
+    ...(data.contributionEvents ?? []),
+    ...operationEvents,
+  ];
+  const operations = dailyOperations(tasks, now, timeZone);
+  const shownTasks = analytics
+    ? operations.tasks
+    : filter === "attention"
+      ? operations.attention
+      : filter === "done"
+        ? operations.done
+        : operations.remaining;
   const runs = work.runs;
   const attention = (r: Run) => needsAttention(r, data.evaluations);
   const completed = runs.filter((r) => r.state === "succeeded");
@@ -51,6 +138,34 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
           New conversation
         </Link>
       </header>
+      {operationsLoading && <p role="status">Loading operational tasks…</p>}
+      {operationsError && (
+        <p role="alert">
+          {operationsError}{" "}
+          <button
+            className={s.secondary}
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            Retry
+          </button>
+        </p>
+      )}
+      <DailyRecap
+        data={data}
+        tasks={tasks}
+        events={contributionEvents}
+        now={now}
+        timeZone={timeZone}
+      />
+      {analytics && (
+        <ContributionActivity
+          events={contributionEvents}
+          tenantId={data.workspace.tenantId}
+          teams={data.teamGroups}
+          now={now}
+          timeZone={timeZone}
+        />
+      )}
       {analytics ? (
         <>
           <div className={s.stats}>
@@ -98,7 +213,7 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
           {[
             ["attention", "Needs you"],
             ["done", "Done today"],
-            ["remaining", "In progress"],
+            ["remaining", "Upcoming"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -108,16 +223,16 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
               {label}{" "}
               <span className="ml-2">
                 {id === "attention"
-                  ? work.attention.length
+                  ? work.attention.length + operations.attention.length
                   : id === "done"
-                    ? work.done.length
-                    : work.remaining.length}
+                    ? work.done.length + operations.done.length
+                    : work.remaining.length + operations.remaining.length}
               </span>
             </button>
           ))}
         </nav>
       )}
-      {shown.length ? (
+      {shown.length || shownTasks.length ? (
         <section className={s.section}>
           <h2>
             {analytics
@@ -128,6 +243,27 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
                   ? "Completed today"
                   : "Work in progress"}
           </h2>
+          {shownTasks.map((task) => (
+            <div className={s.row} key={`task-${task.id}`}>
+              <div>
+                <strong>{task.title}</strong>
+                <p>
+                  {task.status.replaceAll("_", " ")} ·{" "}
+                  {new Date(task.createdAt).toLocaleString("en-GB", {
+                    timeZone,
+                  })}
+                </p>
+                {task.output && <p>{task.output.title}</p>}
+                {task.error && <p>{task.error}</p>}
+              </div>
+              <Link href={`/tasks/${encodeURIComponent(task.id)}`}>
+                {["needs_review", "failed"].includes(task.status)
+                  ? "Review task"
+                  : "Open task"}{" "}
+                ↗
+              </Link>
+            </div>
+          ))}
           {shown.slice().map((r) => (
             <div className={s.row} key={r.id}>
               <div>
@@ -137,7 +273,7 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
                 </strong>
                 <p>
                   {labels[r.state] ?? r.state} ·{" "}
-                  {new Date(r.createdAt).toLocaleString()}
+                  {new Date(r.createdAt).toLocaleString("en-GB", { timeZone })}
                 </p>
                 {r.error && <p>{r.error}</p>}
                 {data.approvals
@@ -156,6 +292,10 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
         </section>
       ) : (
         <div className={s.empty}>
+          <Orbi
+            mood={runs.length && filter === "attention" ? "done" : "welcome"}
+            size={80}
+          />
           <h2>
             {analytics
               ? "Your results start here."
@@ -163,7 +303,7 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
                 ? "Nothing needs your attention."
                 : filter === "done"
                   ? "No completed tasks today yet."
-                  : "No tasks in progress."}
+                  : "No upcoming tasks recorded."}
           </h2>
           <p>Start a conversation or choose a mission from the marketplace.</p>
           <Link className={s.secondary} href="/chat">

@@ -1,9 +1,11 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { mutateStore } from "@/lib/store/store";
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
   if (!body || !["approved", "rejected"].includes(body.status))
@@ -27,4 +29,5 @@ export async function PATCH(
       error instanceof Error ? error.message : "Could not update rule",
     );
   }
+  });
 }

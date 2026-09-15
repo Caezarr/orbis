@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { decideAction } from "@/lib/runtime/engine";
 
@@ -5,6 +6,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   const { id } = await context.params;
   const body = (await request.json().catch(() => null)) as {
     decision?: "approved" | "rejected";
@@ -15,4 +17,5 @@ export async function POST(
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Decision failed");
   }
+  });
 }

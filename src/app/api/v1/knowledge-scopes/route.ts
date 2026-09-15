@@ -1,9 +1,11 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { ok, fail } from "@/lib/api/http";
 import { isLocalMutation } from "@/lib/api/local-request";
 import { scopeSchema } from "@/lib/product/knowledge-scopes";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { id } from "@/lib/ids";
 export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const state = getStore();
   const missionId = new URL(request.url).searchParams.get("mission");
   return ok({
@@ -12,8 +14,10 @@ export async function GET(request: Request) {
         s.tenantId === state.workspace.tenantId && s.missionId === missionId,
     ),
   });
+  });
 }
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request)) return fail("Accès local requis.", 403);
   const input = scopeSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return fail(input.error.issues[0].message, 400);
@@ -49,4 +53,5 @@ export async function POST(request: Request) {
     return item;
   });
   return ok(selection, 201);
+  });
 }

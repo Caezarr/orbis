@@ -19,5 +19,5 @@ export function workspaceContext() { return workspaceStorage.getStore(); }
 /** Local demo is an explicit offline mode, never a production fallback. */
 export function isOfflineMode() {
   return process.env.NODE_ENV !== "production" && !process.env.VERCEL &&
-    process.env.ORBIS_OFFLINE === "true" && !process.env.DATABASE_URL;
+    (process.env.ORBIS_OFFLINE === "true" || process.env.ORBIS_OFFLINE_MODE === "true") && !process.env.DATABASE_URL;
 }

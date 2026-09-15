@@ -5,7 +5,7 @@ let client: Stripe | undefined;
 export function stripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_NOT_CONFIGURED");
-  client ??= new Stripe(key, { apiVersion: "2026-07-29.dahlia" });
+  client ??= new Stripe(key, { apiVersion: "2026-07-29.dahlia", maxNetworkRetries: 2, timeout: 15_000 });
   return client;
 }
 
@@ -21,7 +21,12 @@ export function requiredPrice(value: string | undefined, name: string) {
 }
 
 export function appUrl() {
-  return process.env.ORBIS_APP_URL ?? "http://localhost:3000";
+  const value = process.env.ORBIS_APP_URL;
+  if (!value) throw new Error("ORBIS_APP_URL_NOT_CONFIGURED");
+  const url = new URL(value);
+  if (url.username || url.password || (url.protocol !== "https:" &&
+    !(process.env.NODE_ENV !== "production" && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)))) throw new Error("INVALID_APP_URL");
+  return url.origin;
 }
 
 export function planPrice(plan: "Solo" | "Business") {

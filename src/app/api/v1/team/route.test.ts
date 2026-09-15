@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildSeed } from "@/lib/store/seed";
 import type { StoreState } from "@/lib/domain/types";
 const state = vi.hoisted(() => ({ current: null as StoreState | null }));
@@ -15,8 +15,12 @@ function request(body: unknown, origin = "http://localhost:3002") {
   });
 }
 beforeEach(() => {
+  vi.stubEnv("ORBIS_OFFLINE_MODE", "true");
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("VERCEL", "");
   state.current = buildSeed();
 });
+afterEach(() => vi.unstubAllEnvs());
 describe("workspace directory", () => {
   it("rejects cross-origin writes", async () => {
     expect(
@@ -78,6 +82,6 @@ describe("workspace directory", () => {
         )
       ).status,
     ).toBe(201);
-    expect((await (await GET()).json()).groups).toHaveLength(1);
+    expect((await (await GET(new Request("http://localhost:3002/api/v1/team"))).json()).groups).toHaveLength(1);
   });
 });

@@ -1,79 +1,65 @@
-import { ArrowRight, ShieldCheck, Check } from "lucide-react";
-import { Orbi } from "./Orbi";
-import { ToolLogo } from "./ToolLogo";
+import { ArrowRight, ShieldCheck } from "lucide-react";
+import { resolveBusinessWorkflow } from "@/lib/workflows/blueprints";
 import s from "./mission-flow.module.css";
 
-const flows = {
-  rental: {
-    tools: [
-      { id: "notion", name: "Property guides" },
-      { id: "slack", name: "Your team" },
-    ],
-    source: "Hostaway reservations",
-    steps: ["Prepare arrivals", "Coordinate cleaning", "Draft guest replies"],
-    review: "You approve exceptions",
-  },
-  creator: {
-    tools: [
-      { id: "googledrive", name: "Your best content" },
-      { id: "notion", name: "Your brand & ideas" },
-    ],
-    source: "Your creator brief",
-    steps: [
-      "Find original angles",
-      "Prepare scripts",
-      "Build production briefs",
-    ],
-    review: "You approve scripts & budget",
-  },
-  customers: {
-    tools: [
-      { id: "gmail", name: "Customer requests" },
-      { id: "notion", name: "Approved knowledge" },
-    ],
-    source: "A customer needs help",
-    steps: [
-      "Understand the request",
-      "Prepare a sourced answer",
-      "Flag sensitive decisions",
-    ],
-    review: "You review before sending",
-  },
-};
-export function MissionFlow({ kind }: { kind: keyof typeof flows }) {
-  const flow = flows[kind];
+/** Legacy kind aliases remain supported by connection pages. */
+export function MissionFlow({ kind }: { kind: string }) {
+  const workflow = resolveBusinessWorkflow(kind);
+  if (!workflow)
+    return (
+      <p className={s.review}>No blueprint is available for this workflow.</p>
+    );
   return (
-    <figure className={s.flow} aria-label="Mission flow">
+    <figure
+      className={s.flow}
+      aria-label={`${workflow.vertical ?? workflow.name} mission blueprint`}
+    >
       <figcaption>
-        {flow.source} <span>→ your mission plan</span>
+        {workflow.vertical ?? workflow.name}{" "}
+        <span> / Blueprint · not execution status</span>
       </figcaption>
       <div className={s.track}>
         <div className={s.inputs}>
-          {flow.tools.map((tool) => (
-            <div className={s.tool} key={tool.id}>
-              <ToolLogo tool={tool.id} />
-              <span>{tool.name}</span>
-            </div>
-          ))}
-          <small>Tools shown are examples; choose yours below.</small>
-        </div>
-        <ArrowRight className={s.arrow} aria-hidden="true" />
-        <div className={s.orbi}>
-          <Orbi mood="team" size={122} />
-          <strong>Orbi</strong>
-          <span>Context → clear next steps</span>
+          <strong>01 / Bring the context</strong>
+          {workflow.integrations
+            .filter((tool) => tool.required)
+            .map((tool) => (
+              <div className={s.tool} key={tool.name}>
+                <strong>{tool.name}</strong>
+                <span>{tool.role}</span>
+              </div>
+            ))}
+          <small>
+            Tool choices depend on available connections and verified
+            permissions.
+          </small>
         </div>
         <ArrowRight className={s.arrow} aria-hidden="true" />
         <div className={s.outputs}>
-          {flow.steps.map((step) => (
-            <div key={step}>
-              <Check size={16} />
-              {step}
+          <strong>02 / Choose a bounded task</strong>
+          {(workflow.tasks ?? []).map((task) => (
+            <div key={task.id}>
+              <strong>{task.name}</strong>
+              <span>{task.unit ? `1 ${task.unit}` : "1 task"}</span>
             </div>
           ))}
+        </div>
+        <ArrowRight className={s.arrow} aria-hidden="true" />
+        <div className={s.outputs}>
+          <strong>03 / Review the result</strong>
+          <div>
+            <strong>Evidence + acceptance check</strong>
+            <span>Missing context returns to you.</span>
+          </div>
+          <div>
+            <strong>Approved action → receipt</strong>
+            <span>
+              External effects depend on your policy and connected tools.
+            </span>
+          </div>
           <span className={s.review}>
-            <ShieldCheck size={17} />
-            {flow.review}
+            <ShieldCheck size={18} aria-hidden="true" />
+            No completion without verified evidence.
           </span>
         </div>
       </div>

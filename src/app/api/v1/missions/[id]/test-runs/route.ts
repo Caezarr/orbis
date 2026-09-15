@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { runTest } from "@/lib/runtime/agent-engine";
 import { z } from "zod";
@@ -10,6 +11,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request))
     return fail(
       "Live runs are restricted to the local workspace. Production authentication is not configured.",
@@ -41,4 +43,5 @@ export async function POST(
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Test run failed");
   }
+  });
 }

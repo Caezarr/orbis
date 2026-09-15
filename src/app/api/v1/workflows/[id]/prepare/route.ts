@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { z } from "zod";
 import { businessWorkflows } from "@/lib/workflows/blueprints";
 import { mutateStore } from "@/lib/store/store";
@@ -7,6 +8,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request))
     return fail(
       "Authenticated workspace access is required. This installation is local-only.",
@@ -49,5 +51,6 @@ export async function POST(
     workflowId: id,
     status: "brief_saved",
     active: false,
+  });
   });
 }

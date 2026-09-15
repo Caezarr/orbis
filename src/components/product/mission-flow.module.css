@@ -34,7 +34,8 @@
   border: 1px solid #e0e9f6;
   border-radius: 12px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 10px;
   padding: 14px;
   font-size: 13px;
@@ -62,7 +63,8 @@
 }
 .outputs > div {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 9px;
   background: white;
   border: 1px solid #e2eaf5;
@@ -82,6 +84,129 @@
   font-size: 11px;
   margin-top: 4px;
 }
+.track > * {
+  min-width: 0;
+}
+.tool span,
+.outputs > div > span {
+  color: #526781;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.taskGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+.taskCard {
+  border: 1px solid #dce7f7;
+  border-radius: 14px;
+  padding: 22px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.taskCard h3 {
+  font-size: 18px;
+  line-height: 1.4;
+  margin: 14px 0 10px;
+}
+.taskCard p,
+.taskCard dd {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #526781;
+}
+.taskCard dt {
+  margin-top: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.taskCard dd {
+  margin: 4px 0 0;
+}
+.taskCard details {
+  border-top: 1px solid #e0e9f6;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.taskCard summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.unit {
+  display: inline-block;
+  background: #eef2ff;
+  color: #3154a3;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.catalogFilters {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin: 24px 0 16px;
+}
+.catalogFilters label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.catalogFilters input,
+.catalogFilters select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dce2eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: white;
+}
+.catalogTasks {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+  border-top: 1px solid #e0e9f6;
+}
+.catalogTasks li {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #e0e9f6;
+  font-size: 13px;
+}
+.catalogTasks small {
+  text-align: right;
+  color: #526781;
+}
+.pricingNote {
+  margin: 24px 0;
+  max-width: 800px;
+  color: #526781;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.catalogFilters :focus-visible,
+.taskCard summary:focus-visible {
+  outline: 2px solid #315cff;
+  outline-offset: 4px;
+}
+@media (max-width: 1050px) {
+  .taskGrid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .catalogFilters {
+    grid-template-columns: 1fr;
+  }
+  .flow {
+    padding: 16px;
+  }
+}
 @media (max-width: 850px) {
   .track {
     grid-template-columns: 1fr;
@@ -92,7 +217,7 @@
     justify-self: center;
   }
   .inputs {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
   .inputs small {
     grid-column: 1 / -1;

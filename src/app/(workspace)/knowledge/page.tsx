@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
+import { KnowledgeSearch } from "@/components/product/KnowledgeSearch";
 import type { StoreState } from "@/lib/domain/types";
 import s from "@/components/product/workspace.module.css";
 export default function KnowledgePage() {
@@ -60,6 +61,7 @@ export default function KnowledgePage() {
       </nav>
       {tab === "Sources" && (
         <>
+          <KnowledgeSearch state={data} />
           <section className={s.section}>
             <h2>Your sources</h2>
             {data.sources.length ? (

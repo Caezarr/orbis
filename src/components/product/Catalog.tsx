@@ -5,11 +5,33 @@ import { ArrowRight, Search } from "lucide-react";
 import { flows, departments, capabilityLabels } from "@/lib/product/catalog";
 import { businessWorkflows } from "@/lib/workflows/blueprints";
 import s from "./product.module.css";
+import v from "./mission-flow.module.css";
 export function Catalog() {
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(12);
   const [department, setDepartment] = useState("");
   const [industry, setIndustry] = useState("");
+  const [vertical, setVertical] = useState("");
+  const [workflowQuery, setWorkflowQuery] = useState("");
+  const workflows = businessWorkflows.filter(
+    (w) =>
+      (!vertical || w.id === vertical) &&
+      [
+        w.name,
+        w.vertical,
+        w.audience,
+        w.outcome,
+        ...(w.tasks?.flatMap((task) => [
+          task.name,
+          task.outcome,
+          task.input,
+          ...(task.tools ?? []),
+        ]) ?? []),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(workflowQuery.trim().toLowerCase()),
+  );
   const items = flows.filter(
     (f) =>
       (!department || f.department === department) &&
@@ -24,8 +46,8 @@ export function Catalog() {
         <div>
           <h1>Marketplace</h1>
           <p>
-            100 cas métier préconçus. Choisissez un résultat, adaptez les règles
-            à votre entreprise et préparez un premier livrable à valider.
+            {businessWorkflows.length} business verticals. Choose a result,
+            define a task budget and connect the tools your team already uses.
           </p>
         </div>
         <Link href="/chat" className={s.primary}>
@@ -34,20 +56,80 @@ export function Catalog() {
       </header>
       <section className="mb-10">
         <h2 className="mb-4 text-xl font-medium">
-          Business systems, not isolated tasks
+          What would you like taken care of?
         </h2>
+        <div className={v.catalogFilters}>
+          <label>
+            Find an outcome
+            <input
+              value={workflowQuery}
+              onChange={(e) => setWorkflowQuery(e.target.value)}
+              placeholder="Try invoice, interview, Shopify…"
+            />
+          </label>
+          <label>
+            Business vertical
+            <select
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+            >
+              <option value="">All verticals</option>
+              {businessWorkflows.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.vertical ?? w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className={s.count} role="status">
+          {workflows.length} verticals ·{" "}
+          {workflows.reduce((sum, w) => sum + (w.tasks?.length ?? 0), 0)} scoped
+          tasks
+        </p>
         <div className={s.grid}>
-          {businessWorkflows.map((w) => (
+          {workflows.map((w) => (
             <article key={w.id} className={s.card}>
-              <small>{w.audience}</small>
+              <small>
+                {w.vertical} / {w.tasks?.length ?? 0} task types
+              </small>
               <h2>{w.name}</h2>
-              <p>{w.outcome}</p>
+              <p>{w.outcome === w.name ? w.audience : w.outcome}</p>
+              <ul className={v.catalogTasks}>
+                {w.tasks?.map((task) => (
+                  <li key={task.id}>
+                    <span>{task.name}</span>
+                    <small>Per {task.unit ?? "task"}</small>
+                  </li>
+                ))}
+              </ul>
               <Link href={`/workflows/${w.id}`}>
                 Explore the workflow <ArrowRight className="inline" size={16} />
               </Link>
             </article>
           ))}
         </div>
+        {!workflows.length && (
+          <div className={s.empty}>
+            <h3>No matching workflow</h3>
+            <p>Try a different outcome or vertical.</p>
+            <button
+              className={s.secondary}
+              onClick={() => {
+                setVertical("");
+                setWorkflowQuery("");
+              }}
+            >
+              Reset workflow filters
+            </button>
+          </div>
+        )}
+        <p className={v.pricingNote}>
+          Each task has a bounded deliverable and acceptance criteria. Pricing
+          and usage caps are confirmed during setup. Blueprints describe
+          intended work; they do not indicate live connections or running
+          missions.
+        </p>
       </section>
       <h2 className="mb-4 text-xl font-medium">Mission library</h2>
       <div className={s.filters}>

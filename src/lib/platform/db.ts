@@ -13,6 +13,11 @@ export async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Pr
   const client = await pool().connect();
   try {
     await client.query("BEGIN");
+    if (process.env.NODE_ENV === "production") {
+      const { rows } = await client.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user");
+      if (!rows[0] || rows[0].rolsuper || rows[0].rolbypassrls)
+        throw new Error("Production DATABASE_URL must use a non-superuser, non-BYPASSRLS role");
+    }
     const result = await fn(client);
     await client.query("COMMIT");
     return result;

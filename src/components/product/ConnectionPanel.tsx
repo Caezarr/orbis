@@ -11,7 +11,11 @@ import {
   Clapperboard,
   MessagesSquare,
 } from "lucide-react";
-import { integrations, integrationCategories, type IntegrationSlug } from "@/lib/integrations/catalog";
+import {
+  integrations,
+  integrationCategories,
+  type IntegrationSlug,
+} from "@/lib/integrations/catalog";
 import {
   solutions,
   solutionReadiness,
@@ -43,7 +47,7 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState("customers");
+  const [selected, setSelected] = useState("customer-support");
   const [availability, setAvailability] = useState("all");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All tools");
@@ -116,7 +120,10 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
     const detail = toolDetails[item.slug];
     return (
       (category === "All tools" || category === detail.category) &&
-      (availability === "all" || (availability === "configured" ? configured.includes(item.slug) : statuses[item.slug] === "connected")) &&
+      (availability === "all" ||
+        (availability === "configured"
+          ? configured.includes(item.slug)
+          : statuses[item.slug] === "connected")) &&
       `${item.name} ${item.purpose} ${detail.unlocks.join(" ")}`
         .toLowerCase()
         .includes(query.toLowerCase().trim())
@@ -155,7 +162,7 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
           })}
         </div>
       </section>
-      <MissionFlow kind={selected as "customers" | "rental" | "creator"} />
+      <MissionFlow kind={selected} />
       <section className={c.plan} aria-labelledby="connection-plan">
         <div className={c.planHead}>
           <div>
@@ -221,7 +228,10 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
       <div className={c.libraryHead}>
         <div>
           <h2>Your tools, working together.</h2>
-          <p>{integrations.length} tools to discover. Availability depends on your workspace configuration.</p>
+          <p>
+            {integrations.length} tools to discover. Availability depends on
+            your workspace configuration.
+          </p>
         </div>
         <button
           className={s.secondary}
@@ -262,7 +272,11 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
       <label className={c.availability}>
         Show
-        <select aria-label="Integration availability" value={availability} onChange={(e) => setAvailability(e.target.value)}>
+        <select
+          aria-label="Integration availability"
+          value={availability}
+          onChange={(e) => setAvailability(e.target.value)}
+        >
           <option value="all">All discoverable tools</option>
           <option value="configured">Configured in this workspace</option>
           <option value="connected">Active accounts</option>
@@ -336,16 +350,19 @@ export function ConnectionPanel({ isAdmin = false }: { isAdmin?: boolean }) {
                   <ShieldCheck size={19} />
                   <div>
                     <p>{detail.boundary}</p>
-                    <p>Permissions shown here are informational. {state === "connected" ? "Composio reports an active account; granted scopes and action permissions have not been verified." : "Account access and granted scopes have not been verified."}</p>
+                    <p>
+                      Permissions shown here are informational.{" "}
+                      {state === "connected"
+                        ? "Composio reports an active account; granted scopes and action permissions have not been verified."
+                        : "Account access and granted scopes have not been verified."}
+                    </p>
                     {detail.category === "Knowledge" && (
                       <Link href="/knowledge/scopes">
                         Choose knowledge scope →
                       </Link>
                     )}
                     {isAdmin && !loading && !configured.includes(item.slug) && (
-                      <p>
-                        {administratorSetup(item.slug)}
-                      </p>
+                      <p>{administratorSetup(item.slug)}</p>
                     )}
                     <p>
                       Review the exact permissions on the provider’s consent

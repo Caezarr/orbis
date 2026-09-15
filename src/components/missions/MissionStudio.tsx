@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { Mission, Run, StoreState } from "@/lib/domain/types";
 import styles from "./studio.module.css";
+import {QueueTask} from "./QueueTask";
 
 type Provider = { configured: boolean; provider: string; model: string };
 async function request(
@@ -325,14 +326,13 @@ export function MissionStudio({
               ) : (
                 <Play size={15} />
               )}{" "}
-              {busy || running ? "Your team is working…" : "Run this mission"}
+              {busy || running ? "Your team is working…" : "Test this mission"}
               <ArrowUpRight size={16} />
             </button>
             <p className={styles.fine}>
-              Up to 5 model calls · 2,400 output tokens per call.
-              <br />
-              Billed by your provider. No verified euro estimate.
+              Test the result against your sources before delegating recurring work.
             </p>
+            <QueueTask missionId={mission.id} text={input} />
             {!provider?.configured && (
               <details className={styles.connect}>
                 <summary>Connect your AI to start</summary>

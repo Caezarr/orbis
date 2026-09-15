@@ -1,15 +1,18 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { buildProfile } from "@/lib/runtime/profile";
-import { mutateStore } from "@/lib/store/store";
+import { getStore, mutateStore } from "@/lib/store/store";
 import { nowIso } from "@/lib/time";
 import { id } from "@/lib/ids";
 
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const body = (await request.json().catch(() => null)) as { input?: string } | null;
-  const input = body?.input?.trim();
-  if (!input) return fail("Provide a website or an explanation.");
-  const profile = buildProfile(input);
+  const input = typeof body?.input === "string" ? body.input.trim() : "";
+  if (!input || input.length > 8000) return fail("Provide a website or an explanation, up to 8,000 characters.");
+  const profile = buildProfile(input, getStore().workspace.tenantId);
   mutateStore((state) => {
+    profile.tenantId = state.workspace.tenantId;
     state.profile = profile;
     const existing = state.sources.find((s) => s.kind === "profile");
     if (existing) {
@@ -40,4 +43,5 @@ export async function POST(request: Request) {
     });
   });
   return ok({ jobId: id("job"), profile });
+  });
 }

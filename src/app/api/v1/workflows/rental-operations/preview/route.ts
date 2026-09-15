@@ -1,8 +1,12 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
+import { isOfflineMode } from "@/lib/platform/context";
 import { z } from "zod";
 import { isLocalMutation } from "@/lib/api/local-request";
 import { fail, ok } from "@/lib/api/http";
 import { previewHostawayReservations } from "@/lib/integrations/hostaway";
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
+  if (!isOfflineMode()) return fail("Tenant-scoped Hostaway credentials are required before enabling this preview.", 503);
   if (!isLocalMutation(request))
     return fail(
       "Authenticated workspace access is required. This installation is local-only.",
@@ -38,4 +42,5 @@ export async function POST(request: Request) {
       502,
     );
   }
+  });
 }

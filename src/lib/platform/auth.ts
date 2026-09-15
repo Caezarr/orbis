@@ -4,6 +4,14 @@ import { cookies } from "next/headers";
 export class PlatformError extends Error {
   constructor(message: string, public status = 500) { super(message); }
 }
+export function safeReturnTo(value: unknown, fallback = "/today") {
+  if (typeof value !== "string" || value.length > 4096 || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020]/.test(value)) return fallback;
+  try {
+    const url = new URL(value, "https://orbis.invalid");
+    if (url.origin !== "https://orbis.invalid" || /^\/(api|login)(\/|$)/.test(url.pathname)) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch { return fallback; }
+}
 export function authConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { suggestMissions } from "@/lib/product/conversation";
 import { businessWorkflows } from "@/lib/workflows/blueprints";
+import type { OrbiGuidance } from "@/lib/runtime/orbi-guidance";
 import s from "@/components/product/workspace.module.css";
 
 const templates = [
@@ -50,6 +51,10 @@ const templates = [
 export default function ChatPage() {
   const [value, setValue] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
+  const [guidance, setGuidance] = useState<Record<number, OrbiGuidance>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -65,9 +70,12 @@ export default function ChatPage() {
     }, 0);
     return () => clearTimeout(timer);
   }, []);
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (value.trim().length < 8) return;
+    if (value.trim().length < 8 || inFlight.current) return;
+    if (messages.length >= 30) { setError("Start a new conversation to continue."); return; }
+    inFlight.current = true;
+    setBusy(true); setError("");
     const next = [...messages, value.trim()].slice(-30);
     setMessages(next);
     try {
@@ -76,35 +84,34 @@ export default function ChatPage() {
       /* Keep the current session usable without storage. */
     }
     setValue("");
+    try {
+      const response = await fetch("/api/v1/orbi", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({text:next.join("\n").slice(-8000)}) });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error ?? "Could not prepare a recommendation.");
+      setGuidance(previous => ({...previous, [next.length - 1]:result}));
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not prepare a recommendation."); }
+    finally { inFlight.current = false; setBusy(false); }
   }
   return (
     <div className={`${s.page} ${s.chat}`}>
       <header className={s.welcome}>
-        <Orbi size={144} />
+        <Orbi size={144} working={busy} />
         <h1>Ask Orbi.</h1>
         <p>A task, an idea, or something taking too much of your day.</p>
       </header>
       {messages.map((message, i) => {
         const matches = suggestMissions(messages.slice(0, i + 1).join(" "));
-        const context = messages.slice(0, i + 1).join(" ");
-        const systems = businessWorkflows.filter((w) =>
-          w.id === "rental-operations"
-            ? /airbnb|booking|hostaway|rental|appartement|locati[of]/i.test(
-                context,
-              )
-            : /content|contenu|creator|createur|créateur|higgsfield|youtube|tiktok/i.test(
-                context,
-              ),
-        );
+        const recommendation = guidance[i];
+        const systems = businessWorkflows.filter(w => recommendation?.workflows.some(item => item.id === w.id));
         return (
           <section key={i} aria-label="Conversation">
             <div className={s.userMessage}>{message}</div>
             <div className={s.reply}>
-              <strong>Let’s turn that into a mission.</strong>
+              <strong>{recommendation ? "Here’s where Orbi can help." : "Marketplace starting points"}</strong>
               <p>
-                {matches.length || systems.length
+                {recommendation?.message ?? (matches.length || systems.length
                   ? "Here are starting points from your marketplace. Choose one to personalise its approach, context and tools."
-                  : "I couldn’t find a relevant template yet. What result do you want, and what information should the mission start from?"}
+                  : "What result do you want, and what information should the mission start from?")}
               </p>
               <div className={s.grid}>
                 {systems.map((w) => (
@@ -117,6 +124,7 @@ export default function ChatPage() {
                       <small>Complete business workflow</small>
                       <strong>{w.name}</strong>
                       <small>{w.outcome}</small>
+                      <small>{recommendation?.workflows.find(item => item.id === w.id)?.reason}</small>
                     </div>
                   </Link>
                 ))}
@@ -143,6 +151,7 @@ export default function ChatPage() {
                   </Link>
                 ))}
               </div>
+              {recommendation?.questions.map(question => <p key={question}>{question}</p>)}
               <p>
                 Need to be more specific? Tell me the outcome, the input you
                 have, or the tool you use.
@@ -154,8 +163,10 @@ export default function ChatPage() {
       {messages.length > 0 && (
         <button
           className={s.secondary + " mb-4"}
+          disabled={busy}
           onClick={() => {
             setMessages([]);
+            setGuidance({}); setError("");
             try {
               sessionStorage.removeItem("orbis:conversation");
             } catch {
@@ -168,6 +179,8 @@ export default function ChatPage() {
           Start a new conversation
         </button>
       )}
+      {busy && <p role="status">Orbi is finding the right starting point…</p>}
+      {error && <p role="alert">{error}</p>}
       <form className={s.composer} onSubmit={submit}>
         <label htmlFor="need" className="sr-only">
           Describe what you need
@@ -183,7 +196,7 @@ export default function ChatPage() {
         />
         <div className={s.composeBottom}>
           <small>Start with the result you want.</small>
-          <button className={s.primary} disabled={value.trim().length < 8}>
+          <button className={s.primary} disabled={busy || value.trim().length < 8}>
             Ask Orbi <ArrowUpRight size={17} />
           </button>
         </div>

@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { z } from "zod";
 import { ok, fail } from "@/lib/api/http";
 import { isLocalMutation } from "@/lib/api/local-request";
@@ -7,6 +8,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request)) return fail("Accès local requis.", 403);
   const parsed = z
     .object({
@@ -26,4 +28,5 @@ export async function POST(
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Installation impossible.");
   }
+  });
 }

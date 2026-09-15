@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { isLocalMutation } from "@/lib/api/local-request";
 import { getStore } from "@/lib/store/store";
@@ -11,6 +12,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ provider: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request))
     return fail(
       "Authenticated workspace access is required. This installation is local-only.",
@@ -39,4 +41,5 @@ export async function POST(
       502,
     );
   }
+  });
 }

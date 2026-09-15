@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { createMissionFromPackage } from "@/lib/runtime/engine";
@@ -5,11 +6,14 @@ import { nowIso } from "@/lib/time";
 import { z } from "zod";
 import { id } from "@/lib/ids";
 
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   return ok({ items: getStore().missions });
+  });
 }
 
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const body = (await request.json().catch(() => null)) as {
     slug?: string;
   } | null;
@@ -26,9 +30,11 @@ export async function POST(request: Request) {
       400,
     );
   }
+  });
 }
 
 export async function PATCH(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const parsed = z
     .object({
       missionId: z.string().min(1),
@@ -97,4 +103,5 @@ export async function PATCH(request: Request) {
       error instanceof Error ? error.message : "Could not save configuration",
     );
   }
+  });
 }

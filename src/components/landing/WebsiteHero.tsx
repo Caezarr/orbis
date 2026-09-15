@@ -17,7 +17,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
     const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     try {
       const parsed = new URL(candidate);
-      if (!parsed.hostname.includes(".") || parsed.hostname.startsWith("."))
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname.includes(".") || parsed.hostname.startsWith("."))
         return null;
       return parsed.toString();
     } catch {
@@ -36,15 +36,8 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           setBusy(false);
           return;
         }
-        const r = await fetch("/api/v1/company-site", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ website }),
-        });
-        const site = await r.json();
-        if (!r.ok) throw new Error(site.message);
-        sessionStorage.setItem("orbis:site-intake", JSON.stringify(site));
-        router.push(`/audit?website=${encodeURIComponent(site.website)}`);
+        sessionStorage.setItem("orbis:pending-website", website);
+        router.push(`/audit?website=${encodeURIComponent(website)}`);
       } else {
         sessionStorage.setItem("orbis:text-intake", value);
         router.push("/audit?from=description");
@@ -140,7 +133,7 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           <div className={s.composerBottom}>
             <span>
               {busy
-                ? "Reading your public page…"
+                ? "Opening your workspace…"
                 : mode === "site"
                   ? "Your website is the starting point. You confirm the context."
                   : "Your own words are enough to get started."}

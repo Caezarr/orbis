@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isLocalMutation } from "./local-request";
+beforeEach(() => {
+  vi.stubEnv("ORBIS_OFFLINE_MODE", "true");
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("VERCEL", "");
+});
+afterEach(() => vi.unstubAllEnvs());
 describe("local paid-call guard", () => {
   it("allows a same-origin localhost request", () =>
     expect(

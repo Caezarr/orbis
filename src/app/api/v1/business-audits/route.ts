@@ -1,17 +1,21 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { ok, fail } from "@/lib/api/http";
 import { isLocalMutation } from "@/lib/api/local-request";
 import { auditSchema } from "@/lib/product/audit";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { id } from "@/lib/ids";
-export async function GET() {
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const s = getStore();
   return ok({
     items: (s.businessAudits ?? []).filter(
       (a) => a.tenantId === s.workspace.tenantId,
     ),
   });
+  });
 }
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   if (!isLocalMutation(request))
     return fail(
       "Accès local requis avant configuration de l’authentification.",
@@ -34,4 +38,5 @@ export async function POST(request: Request) {
     return audit;
   });
   return ok(result, 201);
+  });
 }

@@ -1,0 +1,155 @@
+.pricing {
+  color: #182d5b;
+  max-width: 1100px;
+  margin: 24px auto;
+}
+.pricing header {
+  max-width: 720px;
+  margin-bottom: 28px;
+}
+.eyebrow {
+  color: #315fbe;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pricing h2 {
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  line-height: 1.2;
+  margin: 12px 0;
+}
+.pricing h3 {
+  font-size: 21px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+.pricing p {
+  color: #526987;
+  line-height: 1.65;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.card,
+.featured {
+  background: white;
+  border: 1px solid #d7e3f4;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.featured {
+  border-color: #779bdc;
+  background: #f5f8ff;
+  box-shadow: 0 8px 32px #28344b08;
+}
+.price {
+  font-size: 30px;
+  font-weight: 500;
+  margin: 12px 0;
+}
+.price small {
+  font-size: 13px;
+  font-weight: 400;
+  color: #526987;
+}
+.pricing ul {
+  padding-left: 20px;
+  line-height: 1.7;
+  margin: 0;
+}
+.pricing li + li {
+  margin-top: 8px;
+}
+.note {
+  font-size: 13px;
+}
+.seats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.seats select {
+  background: white;
+  border: 1px solid #d7e3f4;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #182d5b;
+  font: inherit;
+}
+.pricing button {
+  margin-top: auto;
+  padding: 12px 16px;
+  border: 1px solid #315fbe;
+  border-radius: 10px;
+  background: #315fbe;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+.pricing button:hover {
+  background: #254b9b;
+}
+.pricing :is(button, select, summary):focus-visible {
+  outline: 3px solid #85a9ee;
+  outline-offset: 3px;
+}
+.rates {
+  margin-top: 24px;
+  border: 1px solid #d7e3f4;
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+}
+.rates summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.rates h3 {
+  margin-top: 24px;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.rates table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 14px;
+}
+.rates caption {
+  text-align: left;
+  color: #526987;
+  margin-bottom: 12px;
+}
+.rates th,
+.rates td {
+  border-bottom: 1px solid #e5edf8;
+  padding: 12px 8px;
+  text-align: left;
+}
+.rates tbody th {
+  font-weight: 400;
+}
+.rates td {
+  white-space: nowrap;
+}
+@media (max-width: 800px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .pricing {
+    margin: 16px auto;
+  }
+  .card,
+  .featured {
+    padding: 20px;
+  }
+}

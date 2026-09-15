@@ -347,7 +347,7 @@ export function CompanyLanding() {
           <a href="#pricing">Pricing</a>
         </nav>
         <div className={s.navActions}>
-          <Link className={s.login} href="/today">
+          <Link className={s.login} href="/login">
             Login
           </Link>
           <LandingCta href="#start" enabled={enabled}>

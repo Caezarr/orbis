@@ -1,3 +1,5 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
+import { isOfflineMode } from "@/lib/platform/context";
 import { fail, ok } from "@/lib/api/http";
 import {
   getStore,
@@ -9,8 +11,9 @@ import { buildProfile } from "@/lib/runtime/profile";
 import { nowIso } from "@/lib/time";
 import { id } from "@/lib/ids";
 
-export async function GET() {
-  reconcileStaleRuns();
+export async function GET(request: Request) {
+  return withWorkspaceRequest(request, async () => {
+  if (isOfflineMode()) reconcileStaleRuns();
   const state = getStore();
   return ok({
     workspace: state.workspace,
@@ -38,25 +41,30 @@ export async function GET() {
     copilot: state.copilot,
     impact: state.impact,
   });
+  });
 }
 
 export async function POST(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const body = (await request.json().catch(() => ({}))) as { reset?: boolean };
   if (body.reset) {
+    if (!isOfflineMode()) return fail("Reset is available only in offline mode.", 403);
     resetStore();
     return ok({ reset: true });
   }
   return fail("Unsupported");
+  });
 }
 
 export async function PATCH(request: Request) {
+  return withWorkspaceRequest(request, async () => {
   const body = (await request.json().catch(() => ({}))) as {
     profile?: ReturnType<typeof buildProfile>;
     claims?: { id: string; value: string; kind?: string }[];
   };
   if (body.profile) {
     mutateStore((state) => {
-      state.profile = body.profile!;
+      state.profile = { ...body.profile!, tenantId: state.workspace.tenantId };
       const existing = state.sources.find((s) => s.kind === "profile");
       if (existing) {
         existing.excerpt = body.profile!.summary;
@@ -87,4 +95,5 @@ export async function PATCH(request: Request) {
     });
   }
   return ok({ profile: getStore().profile });
+  });
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoreState } from "@/lib/domain/types";
 const mocks = vi.hoisted(() => ({
   state: null as unknown as StoreState,
@@ -68,6 +68,7 @@ beforeEach(() => {
   mocks.state = buildSeed();
   mocks.generate.mockReset();
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("bounded enterprise workflow", () => {
   it.each([
@@ -215,6 +216,9 @@ describe("bounded enterprise workflow", () => {
 
 describe("evidence and memory boundaries", () => {
   it("forks an immutable version rather than overwriting it", async () => {
+    vi.stubEnv("ORBIS_OFFLINE_MODE", "true");
+    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("VERCEL", "");
     const mission = mocks.state.missions.find(
       (m) => m.id === "mission_request",
     )!;
@@ -226,7 +230,7 @@ describe("evidence and memory boundaries", () => {
     const response = await updateMission(
       new Request("http://localhost/api/v1/missions", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", origin: "http://localhost" },
         body: JSON.stringify({
           missionId: mission.id,
           instructions: "New operating rule",

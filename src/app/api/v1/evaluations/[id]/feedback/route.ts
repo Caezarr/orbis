@@ -1,3 +1,4 @@
+import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { applyFeedback } from "@/lib/runtime/engine";
 import { z } from "zod";
@@ -6,6 +7,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  return withWorkspaceRequest(request, async () => {
   const { id } = await context.params;
   const parsed = z
     .object({
@@ -29,4 +31,5 @@ export async function POST(
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Feedback failed");
   }
+  });
 }
