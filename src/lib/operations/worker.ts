@@ -11,6 +11,8 @@ import {
   evidenceChecks,
 } from "@/lib/runtime/contracts";
 import type { TaskInput, TaskOutput, TaskRow } from "./domain";
+import type { StoreState } from "@/lib/domain/types";
+import { contextSnapshot } from "@/lib/runtime/agent-engine";
 type Identity = { userId: string; workspaceId: string; tenantId: string };
 async function scoped<T>(
   identity: Identity,
@@ -106,6 +108,21 @@ export async function runOneTask(identity: Identity, generate = prepareTask) {
   let output: TaskOutput | null = null;
   const started = performance.now();
   try {
+    await scoped(identity, async (db) => {
+      const { rows } = await db.query<{ state: StoreState }>(
+        "SELECT state FROM workspace_state WHERE workspace_id=$1 AND tenant_id=$2",
+        [identity.workspaceId, identity.tenantId],
+      );
+      const state = rows[0]?.state;
+      if (
+        !state ||
+        state.workspace.id !== identity.workspaceId ||
+        state.workspace.tenantId !== identity.tenantId ||
+        contextSnapshot(state, task.input.missionId).hash !==
+          task.input.contextHash
+      )
+        throw new Error("Task context changed; queue a fresh result.");
+    });
     output = await generate(task.input);
   } catch {
     /* Failed output is never billable. */

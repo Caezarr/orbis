@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { track } from "@/lib/analytics/events";
+import { recordTaskCharge } from "@/lib/billing/task-ledger";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { contextSnapshot } from "@/lib/runtime/agent-engine";
@@ -63,6 +64,12 @@ export async function enqueue(input: EnqueueInput, requestKey: string) {
     return publicTask(prior.rows[0]);
   }
   const quote = quoteFor(input.missionId, input.workflowId);
+  const mode =
+    process.env.ORBIS_TASK_BILLING_ENABLED === "true"
+      ? "pay_per_task"
+      : "preview";
+  if (input.expectedBillingMode !== mode)
+    throw new PlatformError("Billing terms changed. Review a new quote.", 409);
   if (
     quote.totalCents !== input.expectedTotalCents ||
     quote.rateVersion !== input.expectedRateVersion
@@ -96,6 +103,7 @@ export async function enqueue(input: EnqueueInput, requestKey: string) {
       400,
     );
   const taskInput: TaskInput = {
+    billingMode: mode,
     missionId: input.missionId,
     packageSlug: snapshot.mission.packageSlug,
     contextHash: snapshot.hash,
@@ -221,6 +229,7 @@ export async function decideTask(
       VALUES($1,$2,$3,$4,$5)`,
       [row.id, ctx.workspaceId, ctx.tenantId, ctx.userId, row.total_cents],
     );
+    await recordTaskCharge(row);
   }
   const status =
     decision === "accept"
