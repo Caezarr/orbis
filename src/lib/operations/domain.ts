@@ -11,10 +11,12 @@ export const enqueueSchema = z
     expectedTotalCents: z.number().int().nonnegative(),
     expectedRateVersion: z.string().min(1).max(200),
     baselineMinutes: z.number().int().min(1).max(10080).optional(),
+    expectedBillingMode: z.enum(["preview", "pay_per_task"]).default("preview"),
   })
   .strict();
 export type EnqueueInput = z.infer<typeof enqueueSchema>;
 export type TaskInput = {
+  billingMode?: "preview" | "pay_per_task";
   missionId: string;
   packageSlug: string;
   contextHash: string;
@@ -89,5 +91,6 @@ export function publicTask(row: TaskRow) {
     reviewToken: digest({ id: row.id, output: row.output, quote: row.quote }),
     scope: "Read-only document preparation. No external action is performed.",
     billable: row.status === "completed",
+    billingMode: row.input.billingMode ?? "preview",
   };
 }

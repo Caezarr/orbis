@@ -14,6 +14,7 @@ export type MemoryContext = {
   state: StoreState;
   sourceIds: readonly string[];
   missionId?: string;
+  versionId?: string;
   customerKey?: string;
   runId?: string;
   now?: Date;

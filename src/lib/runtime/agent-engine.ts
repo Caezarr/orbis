@@ -1,4 +1,5 @@
 import { generateText, Output } from "ai";
+import { resolveApprovedMemory } from "@/lib/knowledge/memory";
 import { z } from "zod";
 import { findFlow } from "@/lib/product/catalog";
 import { id } from "@/lib/ids";
@@ -12,7 +13,6 @@ import {
   draftSchema,
   reviewSchema,
   evidenceChecks,
-  scopedMemory,
 } from "./contracts";
 import type { Run, StoreState } from "@/lib/domain/types";
 
@@ -31,7 +31,21 @@ export function contextSnapshot(state: StoreState, missionId: string) {
       version.knowledgeSourceIds.includes(s.id) &&
       s.status === "ready",
   );
-  const memory = scopedMemory(state.memory, mission.tenantId, mission.id);
+  if (
+    sources.some(
+      (s) =>
+        s.remote && !(Date.now() - Date.parse(s.remote.verifiedAt) < 3600000),
+    )
+  )
+    throw new Error(
+      "Refresh your connected knowledge before running this mission.",
+    );
+  const memory = resolveApprovedMemory({
+    state,
+    missionId: mission.id,
+    versionId: version.id,
+    sourceIds: sources.map((s) => s.id),
+  }).items;
   const instructions = state.instructions.filter(
     (i) =>
       i.tenantId === mission.tenantId &&

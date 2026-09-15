@@ -3,6 +3,10 @@ const mock = vi.hoisted(() => ({
   query: vi.fn(),
   transaction: vi.fn(),
   configured: true,
+  snapshot: vi.fn(),
+}));
+vi.mock("@/lib/runtime/agent-engine", () => ({
+  contextSnapshot: mock.snapshot,
 }));
 vi.mock("@/lib/platform/db", () => ({
   transaction: mock.transaction,
@@ -22,22 +26,46 @@ const identity = {
 beforeEach(() => {
   vi.resetAllMocks();
   mock.configured = true;
+  mock.snapshot.mockReturnValue({ hash: "context" });
   mock.transaction.mockImplementation((fn) => fn({ query: mock.query }));
   mock.query.mockImplementation(async (sql: string) => {
     if (sql.startsWith("SELECT 1 FROM memberships"))
       return { rowCount: 1, rows: [{}] };
+    if (sql.startsWith("SELECT state FROM workspace_state"))
+      return {
+        rows: [
+          { state: { workspace: { id: "workspace", tenantId: "tenant" } } },
+        ],
+      };
     if (sql.startsWith("SELECT * FROM operational_tasks"))
       return { rows: [{ id: "task" }] };
     if (sql.includes("attempts=attempts+1"))
       return {
         rows: [
-          { id: "task", lease_token: "lease", input: { text: "request" } },
+          {
+            id: "task",
+            lease_token: "lease",
+            input: {
+              text: "request",
+              contextHash: "context",
+              missionId: "mission",
+            },
+          },
         ],
       };
     return { rows: [], rowCount: 1 };
   });
 });
 describe("durable read-only worker", () => {
+  it("does not send stale or revoked context to the model", async () => {
+    mock.snapshot.mockReturnValue({ hash: "changed" });
+    const generate = vi.fn();
+    await runOneTask(identity, generate);
+    expect(generate).not.toHaveBeenCalled();
+    expect(
+      mock.query.mock.calls.find(([sql]) => sql.includes("output=$4"))?.[1][2],
+    ).toBe("failed");
+  });
   it("does not claim work without model configuration", async () => {
     mock.configured = false;
     await expect(runOneTask(identity, vi.fn())).rejects.toThrow();

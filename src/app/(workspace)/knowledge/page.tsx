@@ -3,6 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import { KnowledgeSearch } from "@/components/product/KnowledgeSearch";
+import { SourcePicker } from "@/components/product/SourcePicker";
+import { SourceActions } from "@/components/product/SourceActions";
+import { KnowledgeLearning } from "@/components/product/KnowledgeLearning";
 import type { StoreState } from "@/lib/domain/types";
 import s from "@/components/product/workspace.module.css";
 export default function KnowledgePage() {
@@ -53,7 +56,7 @@ export default function KnowledgePage() {
         </Link>
       </header>
       <nav className={s.tabs} aria-label="Knowledge sections">
-        {["Sources", "Instructions", "Memory"].map((t) => (
+        {["Sources", "Instructions", "Learning"].map((t) => (
           <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>
             {t}
           </button>
@@ -61,6 +64,7 @@ export default function KnowledgePage() {
       </nav>
       {tab === "Sources" && (
         <>
+          <SourcePicker state={data} onSaved={reload} />
           <KnowledgeSearch state={data} />
           <section className={s.section}>
             <h2>Your sources</h2>
@@ -72,6 +76,17 @@ export default function KnowledgePage() {
                     <span className={s.badge}>{item.status}</span>
                   </summary>
                   <p>{item.excerpt}</p>
+                  {item.remote && (
+                    <p>
+                      Verified{" "}
+                      {new Date(item.remote.verifiedAt).toLocaleString()}
+                    </p>
+                  )}
+                  <SourceActions
+                    id={item.id}
+                    remote={!!item.remote}
+                    reload={reload}
+                  />
                 </details>
               ))
             ) : (
@@ -133,6 +148,7 @@ export default function KnowledgePage() {
           </Link>
         </section>
       )}
+      {tab === "Learning" && <KnowledgeLearning state={data} reload={reload} />}
       {tab === "Memory" && (
         <section className={s.section}>
           <h2>What your agents remember</h2>
