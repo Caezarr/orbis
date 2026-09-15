@@ -187,6 +187,10 @@ export type MissionVersion = {
 };
 
 export type Source = {
+  remote?: {
+    location: import("@/lib/knowledge/remote").Location;
+    verifiedAt: string;
+  };
   id: string;
   tenantId: string;
   name: string;
@@ -210,6 +214,10 @@ export type Instruction = {
 };
 
 export type MemoryItem = {
+  sourceRefs?: { sourceId: string; sourceVersion: string }[];
+  version?: string;
+  expiresAt?: string;
+  history?: { at: string; actor: string; status: string; body: string }[];
   missionId?: string;
   runId?: string;
   id: string;
@@ -410,8 +418,13 @@ export type DecisionCard = {
 };
 
 export type StoreState = {
-  workflowBriefs?: {workflowId:string;tenantId:string;answers:Record<string,string>;updatedAt:string}[];
-  teamGroups?: {id:string; name:string; memberIds:string[]}[];
+  workflowBriefs?: {
+    workflowId: string;
+    tenantId: string;
+    answers: Record<string, string>;
+    updatedAt: string;
+  }[];
+  teamGroups?: { id: string; name: string; memberIds: string[] }[];
   businessAudits?: import("@/lib/product/audit").BusinessAudit[];
   knowledgeSelections?: import("@/lib/product/knowledge-scopes").KnowledgeSelection[];
   workspace: Workspace;
