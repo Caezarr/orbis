@@ -32,7 +32,7 @@ async function main() {
       await client.query(`GRANT USAGE ON SCHEMA public TO ${quoted}`);
       await client.query(`GRANT SELECT, INSERT ON workspaces, memberships TO ${quoted}`);
       await client.query(`GRANT SELECT, INSERT, UPDATE ON workspace_state TO ${quoted}`);
-      for (const table of ["stripe_customers", "stripe_subscriptions", "stripe_events", "stripe_checkout_attempts", "operational_tasks", "operational_acceptances"]) {
+      for (const table of ["stripe_customers", "stripe_subscriptions", "stripe_events", "stripe_checkout_attempts", "operational_tasks", "operational_acceptances", "product_events", "task_effort"]) {
         const exists = await client.query("SELECT to_regclass($1) AS relation", [`public.${table}`]);
         if (exists.rows[0].relation) await client.query(`GRANT SELECT, INSERT, UPDATE ON ${table} TO ${quoted}`);
       }
