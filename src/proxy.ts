@@ -8,7 +8,8 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   if (isOfflineMode()) return response;
   const pathname = request.nextUrl.pathname;
-  const protectedPage = !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
+  const publicCatalog = pathname === "/catalog" || pathname === "/catalog/";
+  const protectedPage = !publicCatalog && !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
   const login = () => {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

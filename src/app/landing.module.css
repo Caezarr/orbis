@@ -16,6 +16,9 @@
 .landing a {
   text-decoration: none;
 }
+.landing {
+  scroll-behavior: smooth;
+}
 .landing button {
   cursor: pointer;
   font: inherit;
