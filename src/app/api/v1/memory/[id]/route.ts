@@ -1,33 +1,48 @@
 import { withWorkspaceRequest } from "@/lib/platform/request";
 import { fail, ok } from "@/lib/api/http";
 import { mutateStore } from "@/lib/store/store";
+import { workspaceContext } from "@/lib/platform/context";
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  return withWorkspaceRequest(request, async () => {
-  const { id } = await context.params;
-  const body = await request.json().catch(() => null);
-  if (!body || !["approved", "rejected"].includes(body.status))
-    return fail("Choose approved or rejected.");
-  try {
-    return ok(
-      mutateStore((state) => {
-        const memory = state.memory.find(
-          (m) => m.id === id && m.tenantId === state.workspace.tenantId,
+  return withWorkspaceRequest(
+    request,
+    async () => {
+      const { id } = await context.params;
+      const body = await request.json().catch(() => null);
+      if (!body || !["approved", "rejected"].includes(body.status))
+        return fail("Choose approved or rejected.");
+      try {
+        return ok(
+          mutateStore((state) => {
+            const memory = state.memory.find(
+              (m) => m.id === id && m.tenantId === state.workspace.tenantId,
+            );
+            if (!memory || !memory.missionId || memory.scope !== "general_rule")
+              throw new Error(
+                "Only mission-scoped rules can be promoted here.",
+              );
+            memory.status = body.status;
+            (memory.history ??= []).push({
+              at: new Date().toISOString(),
+              actor: workspaceContext()?.userId ?? "workspace",
+              status: body.status,
+              body: memory.body,
+            });
+            const mission = state.missions.find(
+              (m) => m.id === memory.missionId,
+            );
+            if (mission) mission.state = "testing";
+            return memory;
+          }),
         );
-        if (!memory || !memory.missionId || memory.scope !== "general_rule")
-          throw new Error("Only mission-scoped rules can be promoted here.");
-        memory.status = body.status;
-        const mission = state.missions.find((m) => m.id === memory.missionId);
-        if (mission) mission.state = "testing";
-        return memory;
-      }),
-    );
-  } catch (error) {
-    return fail(
-      error instanceof Error ? error.message : "Could not update rule",
-    );
-  }
-  });
+      } catch (error) {
+        return fail(
+          error instanceof Error ? error.message : "Could not update rule",
+        );
+      }
+    },
+    { requireRole: ["owner", "admin"] },
+  );
 }

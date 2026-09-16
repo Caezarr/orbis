@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import styles from "./login.module.css";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
@@ -22,25 +23,39 @@ export default function LoginPage() {
     } catch { setMessage("Connection failed. Please try again."); }
     finally { setBusy(false); }
   }
-  return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <section className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-8 shadow-sm">
-        <a href="/" className="text-xl font-semibold">Orbis</a>
-        <h1 className="mt-8 text-2xl font-semibold">{mode === "sign-in" ? "Welcome back" : "Create your workspace"}</h1>
-        <p className="mt-2 text-sm text-black/60">Sign in to your company’s private workspace.</p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
-          <label className="block text-sm">Email
-            <input name="email" type="email" autoComplete="email" required maxLength={254} className="mt-1 w-full rounded-lg border border-black/20 p-3" />
-          </label>
-          <label className="block text-sm">Password
-            <input name="password" type="password" autoComplete={mode === "sign-in" ? "current-password" : "new-password"} required minLength={mode === "sign-up" ? 12 : 1} maxLength={1024} className="mt-1 w-full rounded-lg border border-black/20 p-3" />
-          </label>
-          {mode === "sign-up" && <p className="text-xs text-black/60">Use at least 12 characters.</p>}
-          <p role="status" aria-live="polite" className="text-sm">{message}</p>
-          <button disabled={busy} className="w-full rounded-lg bg-black p-3 text-white disabled:opacity-50">{busy ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"}</button>
+  const signup = mode === "sign-up";
+  return <main className={styles.page}>
+    <section className={styles.formPane}>
+      <a href="/" className={styles.brand}><span aria-hidden="true"/>Orbis</a>
+      <div>
+        <div className={styles.switch} role="group" aria-label="Account mode">
+          <button type="button" aria-pressed={!signup} onClick={() => {setMode("sign-in");setMessage("");}}>Sign in</button>
+          <button type="button" aria-pressed={signup} onClick={() => {setMode("sign-up");setMessage("");}}>Sign up</button>
+        </div>
+        <h1>{signup ? "Build your company’s extra capacity." : "Welcome back to Orbis."}</h1>
+        <p>{signup ? "Give Orbis a little context. Your workspace takes shape as you go." : "Your company’s work is ready when you are."}</p>
+        <form onSubmit={submit} className={styles.form}>
+          <label>Email<input name="email" type="email" autoComplete="email" required maxLength={254} /></label>
+          <label>Password<input name="password" type="password" autoComplete={signup ? "new-password" : "current-password"} required minLength={signup ? 12 : 1} maxLength={1024} /></label>
+          {signup && <span className={styles.fine}>Use at least 12 characters.</span>}
+          <p role="status" aria-live="polite" className={styles.message}>{message}</p>
+          <button disabled={busy} className={styles.submit}>{busy ? "Setting things up…" : signup ? "Create my workspace" : "Sign in to Orbis"}</button>
         </form>
-        <button type="button" disabled={busy} onClick={() => { setMode(mode === "sign-in" ? "sign-up" : "sign-in"); setMessage(""); }} className="mt-5 text-sm underline">{mode === "sign-in" ? "Create an account" : "Already have an account? Sign in"}</button>
-      </section>
-    </main>
-  );
+      </div>
+    </section>
+    <aside className={styles.preview} aria-label="Live workspace preview">
+      <div className={styles.previewInner}>
+        <div className={styles.orb} aria-hidden="true" />
+        <p className={styles.previewLead}>Your company, in motion.</p>
+        <h2>{signup ? <>A workspace that <em>learns</em> with you.</> : <>The work is waiting. <em>Orbi is ready.</em></>}</h2>
+        <p className={styles.previewLead}>Describe a need, choose a mission, and review useful work.</p>
+        <div className={styles.mock}>
+          <div className={styles.mockTop}><span className={styles.dot}/><span>Today</span><span style={{marginLeft:"auto"}}>Your workspace</span></div>
+          <div className={styles.mockRow}><div><strong>{signup ? "Understanding your company" : "Prepare a first result"}</strong><br/><small>{signup ? "Building your context" : "Ready to review"}</small></div><span>→</span></div>
+          <div className={styles.mockRow}><div><strong>Knowledge</strong><br/><small>Sources and approved memory</small></div><span>03</span></div>
+          <div className={styles.mockRow}><div><strong>Agents</strong><br/><small>Focused on the work that matters</small></div><span>+</span></div>
+        </div>
+      </div>
+    </aside>
+  </main>;
 }

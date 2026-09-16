@@ -37,10 +37,10 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           return;
         }
         sessionStorage.setItem("orbis:pending-website", website);
-        router.push(`/audit?website=${encodeURIComponent(website)}`);
+        router.push(`/login?returnTo=${encodeURIComponent(`/audit?website=${website}`)}`);
       } else {
         sessionStorage.setItem("orbis:text-intake", value);
-        router.push("/audit?from=description");
+        router.push(`/login?returnTo=${encodeURIComponent("/audit?from=description")}`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lecture impossible.");

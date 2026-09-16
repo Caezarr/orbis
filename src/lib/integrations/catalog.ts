@@ -15,6 +15,12 @@ const registry = [
     "Schedules and availability",
   ],
   ["googledrive", "Google Drive", "Knowledge", "Approved documents and media"],
+  [
+    "sharepoint",
+    "Microsoft SharePoint",
+    "Knowledge",
+    "Selected team documents and libraries",
+  ],
   ["notion", "Notion", "Knowledge", "Knowledge and editorial planning"],
   ["slack", "Slack", "Communication", "Operational alerts and team decisions"],
   [

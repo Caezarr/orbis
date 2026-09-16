@@ -18,12 +18,14 @@ export type RetrievalInput = {
   sourceIds: readonly string[];
   limit?: number;
   missionId?: string;
+  versionId?: string;
 };
 
 export function accessibleSources({
   state,
   sourceIds,
   missionId,
+  versionId,
 }: Omit<RetrievalInput, "query">): Source[] {
   const tenantId = state.workspace.tenantId;
   let allowed = new Set(sourceIds);
@@ -35,7 +37,8 @@ export function accessibleSources({
     if (!mission) return [];
     const version = state.missionVersions.find(
       (v) =>
-        v.id === (mission.activeVersionId ?? mission.draftVersionId) &&
+        v.id ===
+          (versionId ?? mission.activeVersionId ?? mission.draftVersionId) &&
         v.missionId === mission.id &&
         v.tenantId === tenantId,
     );
@@ -49,6 +52,7 @@ export function accessibleSources({
       s.tenantId === tenantId &&
       allowed.has(s.id) &&
       s.status === "ready" &&
+      (!s.remote || Date.now() - Date.parse(s.remote.verifiedAt) < 3600000) &&
       s.excerpt.trim().length > 0,
   );
 }

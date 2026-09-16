@@ -16,6 +16,7 @@ export function QueueTask({
   const [baseline, setBaseline] = useState("");
   const [offer, setOffer] = useState<{
     quote: TaskPriceSnapshot;
+    billingMode: "preview" | "pay_per_task";
     text: string;
     workflowId: string;
     key: string;
@@ -40,6 +41,7 @@ export function QueueTask({
         throw new Error("Connect your workspace database to queue tasks.");
       setOffer({
         quote: result.quote,
+        billingMode: result.billingMode ?? "preview",
         text,
         workflowId,
         key: crypto.randomUUID(),
@@ -75,6 +77,7 @@ export function QueueTask({
           text,
           expectedTotalCents: offer.quote.totalCents,
           expectedRateVersion: offer.quote.rateVersion,
+          expectedBillingMode: offer.billingMode,
           ...(baseline ? { baselineMinutes: Number(baseline) } : {}),
         }),
         signal: AbortSignal.timeout(20000),
@@ -151,6 +154,11 @@ export function QueueTask({
               currency: "EUR",
             }).format(offer.quote.totalCents / 100)}{" "}
             per accepted result. Failed or cancelled tasks do not count.
+          </p>
+          <p>
+            {offer.billingMode === "preview"
+              ? "Preview mode: this task will not be charged."
+              : "Accepting the result adds this amount to your task balance, unless covered by your plan allowance. An administrator pays the balance separately."}
           </p>
           <button
             type="button"
