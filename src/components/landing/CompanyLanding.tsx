@@ -342,7 +342,6 @@ export function CompanyLanding() {
         </Link>
         <nav className={s.desktopNav} aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
-          <Link href="/catalog">100+ missions</Link>
           <a href="#tools">Your tools</a>
           <a href="#pricing">Pricing</a>
         </nav>
@@ -350,7 +349,7 @@ export function CompanyLanding() {
           <Link className={s.login} href="/login">
             Login
           </Link>
-          <LandingCta href="#start" enabled={enabled}>
+          <LandingCta href="/login?returnTo=%2Faudit" enabled={enabled}>
             Launch your first agents
           </LandingCta>
           <button
@@ -367,7 +366,7 @@ export function CompanyLanding() {
         <nav className={s.mobileNav} aria-label="Mobile navigation">
           {[
             { href: "#how-it-works", text: "How it works" },
-            { href: "/catalog", text: "100+ missions" },
+            { href: "#tools", text: "Your tools" },
             { href: "#tools", text: "Your tools" },
             { href: "#pricing", text: "Pricing" },
           ].map((l) => (
@@ -546,8 +545,8 @@ export function CompanyLanding() {
         </div>
         <div>
           <span>Explore</span>
-          <Link href="/catalog">Mission catalogue</Link>
-          <Link href="/audit">Company audit</Link>
+          <Link href="/catalog">100+ mission catalogue</Link>
+          <Link href="/login?returnTo=%2Faudit">Launch your own agents</Link>
           <Link href="/pricing">Pricing & usage</Link>
         </div>
         <div>

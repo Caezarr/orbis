@@ -441,7 +441,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           unit: annual ? "/ year" : "/ month",
           copy: "Your first missions, with your own expertise.",
           cta: "Launch your first agents",
-          href: "/audit",
+          href: "/login?returnTo=%2Faudit",
           features: [
             "One operator",
             "100 mission contracts",
@@ -455,7 +455,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           unit: annual ? "/ year" : "/ month",
           copy: "Choose the people who work with your agents.",
           cta: "Launch your first agents",
-          href: `/audit?seats=${seats}`,
+          href: `/login?returnTo=${encodeURIComponent(`/audit?seats=${seats}`)}`,
           features: [
             "5 seats included in the proposed base",
             "€39 / additional seat / month proposed",
@@ -469,7 +469,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           unit: "",
           copy: "Design the right setup for the companies you help.",
           cta: "Discuss my setup",
-          href: "/audit?audience=integrator",
+          href: "/login?returnTo=%2Faudit%3Faudience%3Dintegrator",
           features: [
             "Client deployment plans",
             "Reusable mission configurations",

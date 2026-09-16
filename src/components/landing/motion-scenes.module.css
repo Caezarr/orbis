@@ -705,7 +705,8 @@
   padding: 4px;
   border: 1px solid rgba(101, 137, 190, .24);
   border-radius: 999px;
-  background: rgba(238, 245, 255, .72);
+  background: #f5f8fd;
+  min-height: 52px;
   box-shadow: 0 8px 24px rgba(52, 91, 146, .08);
 }
 
@@ -725,9 +726,9 @@
 .billingToggle button:focus-visible { color: #234b86; }
 
 .billingToggle .activeBilling {
-  background: #3e73c8;
+  background: linear-gradient(135deg, #4f80d1, #2f61b8);
   color: white;
-  box-shadow: 0 4px 12px rgba(43, 91, 166, .22);
+  box-shadow: 0 5px 14px rgba(43, 91, 166, .25), inset 0 1px 1px #ffffff55;
 }
 
 .billingToggle span {
