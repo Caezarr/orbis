@@ -16,7 +16,10 @@ export type EventName =
   | "knowledge_selected"
   | "memory_reviewed"
   | "connection_started"
-  | "workflow_installed";
+  | "workflow_installed"
+  | "inbox_batch_queued"
+  | "inbox_batch_completed"
+  | "first_draft_ready";
 type Properties = {
   task_id?: string;
   workflow_id?: string;
