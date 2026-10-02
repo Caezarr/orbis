@@ -645,6 +645,94 @@
   color: var(--marine);
   font-variant-numeric: tabular-nums;
 }
+/* Instant preview (step 1 confirmed, before any account). */
+.preview {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.preview > h3 {
+  margin: 8px 0 0;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+}
+.preview > h3:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.likely {
+  margin: 0;
+  padding-left: 22px;
+  list-style: decimal;
+  display: grid;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+ul.likely {
+  list-style: none;
+  padding: 0;
+}
+.likely li {
+  min-width: 0;
+}
+.likely blockquote {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--cobalt);
+  background: var(--ciel);
+  border-radius: 0 10px 10px 0;
+  color: var(--marine);
+  overflow-wrap: anywhere;
+}
+.missing {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 14px;
+}
+.example {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.incoming {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fafbfd;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.incoming dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.incoming dt {
+  font-weight: 600;
+}
+.incoming dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.simulated {
+  justify-self: start;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+}
 .srOnly {
   position: absolute;
   width: 1px;

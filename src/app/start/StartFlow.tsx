@@ -7,12 +7,17 @@ import { ToolLogo } from "@/components/product/ToolLogo";
 import {
   BLOCKER_COPY,
   decodePending,
+  decodePreviewShown,
   deriveStep,
   encodePending,
+  encodePreviewShown,
   flagLabel,
   inboxErrorKind,
   isPending,
+  NOT_FOUND_LABEL,
   PENDING_KEY,
+  PREVIEW_SHOWN_KEY,
+  quotePreview,
   progressPhase,
   stepState,
   summarizeResults,
@@ -20,6 +25,7 @@ import {
   type InboxBatchView,
   type InboxMessageView,
   type MailboxStatus,
+  type StartPreview,
   type StartProfile,
   type StartStep,
 } from "@/lib/start/flow";
@@ -69,6 +75,20 @@ function writePending(profile: StartProfile | null) {
     else store?.removeItem(PENDING_KEY);
   } catch {}
 }
+function previewShown(): { ai: boolean } | null {
+  try {
+    return decodePreviewShown(storage("local")?.getItem(PREVIEW_SHOWN_KEY) ?? null);
+  } catch {
+    return null;
+  }
+}
+function writePreviewShown(ai: boolean | null) {
+  try {
+    const store = storage("local");
+    if (ai === null) store?.removeItem(PREVIEW_SHOWN_KEY);
+    else store?.setItem(PREVIEW_SHOWN_KEY, encodePreviewShown(ai));
+  } catch {}
+}
 async function json<T>(response: Response): Promise<T & { error?: string; code?: string }> {
   return (await response.json().catch(() => ({}))) as T & { error?: string; code?: string };
 }
@@ -83,6 +103,8 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [editing, setEditing] = useState(false);
+  // Anonymous: the instant preview of the just-confirmed profile is open (still step 1).
+  const [previewing, setPreviewing] = useState(false);
   const [mailbox, setMailbox] = useState<Record<Provider, MailboxStatus>>({ gmail: "unknown", outlook: "unknown" });
   const [batch, setBatch] = useState<InboxBatchView | null>(null);
   const [messages, setMessages] = useState<InboxMessageView[]>([]);
@@ -138,10 +160,11 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
       setSaving(true);
       setSaveError("");
       try {
+        const shown = previewShown();
         const response = await fetch("/api/v1/start/profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile }),
+          body: JSON.stringify({ profile, ...(shown ? { preview: shown } : {}) }),
         });
         const body = await json<object>(response);
         if (response.status === 401) {
@@ -150,6 +173,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
         }
         if (!response.ok) throw new Error(body.error ?? "Enregistrement impossible. Réessayez.");
         writePending(null);
+        writePreviewShown(null);
         setPending(null);
         setEditing(false);
         await loadReadiness();
@@ -195,6 +219,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
     pendingProfile: !!pending,
     workspaceProfile: !!readiness?.profile,
     editingProfile: editing,
+    previewing,
     mailbox: anyConnected,
     batch: batch?.status ?? null,
   });
@@ -277,7 +302,19 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
               </div>
               {state === "current" && (
                 <div className={s.panel}>
-                  {id === "company" && (
+                  {id === "company" && previewing && pending && !authed && (
+                    <PreviewStep
+                      profile={pending}
+                      onContinue={() => setPreviewing(false)}
+                      onEdit={() => {
+                        setLastProfile(pending);
+                        writePending(null);
+                        setPending(null);
+                        setPreviewing(false);
+                      }}
+                    />
+                  )}
+                  {id === "company" && !(previewing && pending && !authed) && (
                     <CompanyStep
                       authed={authed}
                       saving={saving}
@@ -289,6 +326,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
                         else {
                           writePending(profile);
                           setPending(profile);
+                          setPreviewing(true);
                         }
                       }}
                     />
@@ -599,6 +637,213 @@ function ProfileReview({
         </button>
       </div>
     </form>
+  );
+}
+
+// ------------------------------------------- step 1, confirmed: instant preview
+
+function PreviewStep({
+  profile,
+  onContinue,
+  onEdit,
+}: {
+  profile: StartProfile;
+  onContinue: () => void;
+  onEdit: () => void;
+}) {
+  const [preview, setPreview] = useState<StartPreview | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    // Deferred: a Strict Mode double-mount cancels the first request before it is sent.
+    const timer = setTimeout(async () => {
+      let result: StartPreview;
+      try {
+        const response = await fetch("/api/v1/start/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile }),
+          signal: controller.signal,
+        });
+        const body = await json<{ preview?: StartPreview }>(response);
+        result = response.ok && body.preview ? body.preview : quotePreview(profile, "error");
+      } catch {
+        if (controller.signal.aborted) return;
+        result = quotePreview(profile, "error");
+      }
+      if (controller.signal.aborted) return;
+      setPreview(result);
+      writePreviewShown(result.mode === "ai");
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [profile]);
+
+  // Opened by the confirm click (never on reload): move focus to the result once it exists.
+  useEffect(() => {
+    if (preview) headingRef.current?.focus();
+  }, [preview]);
+
+  const host = profile.website ? new URL(profile.website).hostname : null;
+  return (
+    <div className={s.form}>
+      <p>
+        Profil de <strong>{profile.name}</strong> confirmé.{" "}
+        <button type="button" className={s.link} onClick={onEdit}>
+          Modifier le profil
+        </button>
+      </p>
+      {!preview ? (
+        <div className={s.working} role="status">
+          <Orbi mood="thinking" size={56} working />
+          <span>Orbi prépare ce que vos clients vous demandent probablement…</span>
+        </div>
+      ) : preview.mode === "ai" ? (
+        <section className={s.preview} aria-labelledby="start-preview-title">
+          <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
+            Ce que vos clients vous demandent probablement
+          </h3>
+          <p className={s.fine}>
+            Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
+            n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
+          </p>
+          <ol className={s.likely}>
+            {preview.questions.map((q, i) => (
+              <li key={i}>
+                <strong>{q.question}</strong>
+                {q.answer ? (
+                  <blockquote>
+                    {q.answer.quote}
+                    {q.answer.sourceUrl ? (
+                      <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
+                        Source : {q.answer.sourceName}
+                      </a>
+                    ) : (
+                      <span className={s.source}>Source : {q.answer.sourceName}</span>
+                    )}
+                  </blockquote>
+                ) : (
+                  <p className={s.missing}>{NOT_FOUND_LABEL}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+          {preview.flags.includes("source_instructions_ignored") && (
+            <p className={s.fine}>
+              Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
+              l’exécuter.
+            </p>
+          )}
+          {preview.examples.length > 0 && (
+            <>
+              <h3>À quoi ressemblent ses brouillons</h3>
+              <p className={s.fine}>
+                Deux mails imaginés pour l’exemple, et les brouillons qu’Orbi préparerait avec les mêmes règles que pour
+                votre vraie boîte. Rien n’est lu ni envoyé.
+              </p>
+              {preview.examples.map((ex, i) => (
+                <article key={i} className={s.example} aria-label={`Exemple ${i + 1} : ${ex.label}`}>
+                  <div className={s.incoming}>
+                    <span className={s.simulated}>{ex.incoming.label}</span>
+                    <dl>
+                      <dt>De</dt>
+                      <dd>{ex.incoming.from}</dd>
+                      <dt>À</dt>
+                      <dd>{ex.incoming.to}</dd>
+                      <dt>Objet</dt>
+                      <dd>{ex.incoming.subject}</dd>
+                    </dl>
+                    <p className={s.draftBody}>{ex.incoming.body}</p>
+                  </div>
+                  <div className={s.draft}>
+                    <header>
+                      <span className={s.simulated}>Brouillon d’exemple · {ex.draft.label}</span>
+                    </header>
+                    <p className={s.draftBody}>
+                      {splitPlaceholders(ex.draft.body).map((part, j) =>
+                        part.placeholder ? (
+                          <mark key={j} className={s.placeholder}>
+                            {part.text}
+                          </mark>
+                        ) : (
+                          <span key={j}>{part.text}</span>
+                        ),
+                      )}
+                    </p>
+                    {ex.draft.questions.length > 0 && (
+                      <div className={s.questions}>
+                        <h4>À confirmer avant d’envoyer</h4>
+                        <ul>
+                          {ex.draft.questions.map((q) => (
+                            <li key={q}>{q}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {ex.draft.citations.length > 0 && (
+                      <details className={s.sources}>
+                        <summary>Sources ({ex.draft.citations.length})</summary>
+                        <ul>
+                          {ex.draft.citations.map((c, j) => (
+                            <li key={j}>
+                              <strong>{c.sourceName}</strong>
+                              <blockquote>{c.excerpt}</blockquote>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </>
+          )}
+        </section>
+      ) : (
+        <section className={s.preview} aria-labelledby="start-preview-title">
+          <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
+            Ce qu’Orbi peut déjà citer dans une réponse
+          </h3>
+          <p className={s.fine}>
+            {preview.reason === "disabled"
+              ? "Lecture directe : uniquement des citations exactes de vos sources, sans interprétation."
+              : "L’aperçu détaillé n’est pas disponible pour le moment. Voici uniquement des citations exactes de vos sources."}{" "}
+            Les brouillons d’exemple apparaîtront avec vos vrais mails.
+          </p>
+          {preview.found.length > 0 ? (
+            <ul className={s.likely}>
+              {preview.found.map((f, i) => (
+                <li key={i}>
+                  <blockquote>
+                    <span className={s.factLabel}>{f.label}</span>
+                    {f.quote}
+                  </blockquote>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
+          )}
+          <div className={s.unknowns}>
+            <h3>Ce qu’Orbi ne devine pas</h3>
+            <ul>
+              {preview.unknowns.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
+            <p className={s.fine}>Orbi vous posera chacune de ces questions une seule fois, au lieu d’inventer.</p>
+          </div>
+        </section>
+      )}
+      <div className={s.actions}>
+        <button type="button" className={s.primary} onClick={onContinue}>
+          Brancher ma boîte pour de vrai
+        </button>
+      </div>
+    </div>
   );
 }
 

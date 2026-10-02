@@ -22,7 +22,8 @@ export type EventName =
   | "first_draft_ready"
   | "site_analyzed"
   | "account_created"
-  | "mailbox_connected";
+  | "mailbox_connected"
+  | "preview_shown";
 type Properties = {
   task_id?: string;
   workflow_id?: string;
@@ -31,6 +32,8 @@ type Properties = {
   attempt?: number;
   baseline_minutes?: number;
   success?: boolean;
+  /** preview_shown: true when the model preview was shown, false for quote-only. */
+  ai?: boolean;
 };
 export type EventIdentity = {
   workspaceId: string;
@@ -53,6 +56,7 @@ export async function recordEvent(
     "attempt",
     "baseline_minutes",
     "success",
+    "ai",
   ] as const) {
     const value = properties[key];
     if (value !== undefined) Object.assign(safe, { [key]: value });
