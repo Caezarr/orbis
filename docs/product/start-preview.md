@@ -34,7 +34,7 @@ Two modes, decided by the server (`POST /api/v1/start/preview`):
 | Timeouts | site read 15 s, questions call 20 s, each draft 25 s (drafts in parallel); route `maxDuration` 60 s |
 | Tools | none; `maxRetries: 0` |
 
-**All of these are per server instance (process memory).** On serverless, N instances mean up to N× the caps and no shared cache. Before enabling publicly: put an edge/WAF rate limit in front of `/api/v1/start/*`, and move the budget to a shared store (Postgres row with `UPDATE … RETURNING` or Redis) if more than one instance serves traffic. The budget is an estimate, not a measured provider cost.
+**Shared across instances since Phase 4** ([launch-hardening.md](launch-hardening.md)): the rate limits and the daily budgets are PostgreSQL counters (migration 012) behind an in-memory pre-check. The preview limiter and budget fail closed when the shared store is unreachable (quote-only view); the site-reading limiter fails open to its in-memory layer. Concurrency and the 6 h result cache remain per instance. An edge/WAF limit in front of `/api/v1/start/*` is still recommended. The budget is an estimate, not a measured provider cost.
 
 ## Event
 
