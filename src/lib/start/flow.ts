@@ -169,12 +169,14 @@ export type StartFacts = {
   workspaceProfile: boolean;
   /** The owner chose to edit the saved profile again. */
   editingProfile?: boolean;
+  /** Anonymous: the confirmed profile's instant preview is open (still step 1). */
+  previewing?: boolean;
   mailbox: MailboxStatus;
   batch: BatchStatus | null;
 };
 
 export function deriveStep(f: StartFacts): StartStep {
-  if (!f.authenticated) return f.pendingProfile ? "account" : "company";
+  if (!f.authenticated) return f.pendingProfile && !f.previewing ? "account" : "company";
   if (f.editingProfile || (!f.workspaceProfile && !f.pendingProfile)) return "company";
   // Authenticated with a pending profile: it is being saved (company step stays open).
   if (!f.workspaceProfile) return "company";
@@ -413,4 +415,72 @@ export function splitPlaceholders(text: string) {
   }
   if (last < text.length) parts.push({ text: text.slice(last), placeholder: false });
   return parts;
+}
+
+// ------------------------------------------------- instant preview (level 1)
+
+/** Shown on the simulated incoming email AND on its example draft. */
+export const SIMULATED_LABEL = "Exemple simulé — pas un vrai mail";
+export const NOT_FOUND_LABEL =
+  "Orbi ne trouve pas la réponse sur votre site → il vous la demandera une seule fois";
+/** Fictitious, code-defined parties of the example emails (never model output). */
+export const FICTITIOUS_SENDER = { name: "Client fictif", address: "client.fictif@exemple.invalid" } as const;
+export const FICTITIOUS_RECIPIENT = "Vous (exemple)";
+
+export type PreviewQuestion = {
+  question: string;
+  /** Verbatim quote of the source, or null: Orbi will ask the owner once. */
+  answer: { quote: string; sourceName: string; sourceUrl?: string } | null;
+};
+export type PreviewExample = {
+  label: typeof SIMULATED_LABEL;
+  incoming: { label: typeof SIMULATED_LABEL; from: string; to: string; subject: string; body: string };
+  draft: {
+    label: typeof SIMULATED_LABEL;
+    body: string;
+    questions: string[];
+    citations: { sourceName: string; excerpt: string }[];
+  };
+};
+export type PreviewFallbackReason = "disabled" | "rate_limited" | "budget" | "busy" | "unavailable" | "error";
+export type StartPreview =
+  | {
+      mode: "ai";
+      questions: PreviewQuestion[];
+      examples: PreviewExample[];
+      /** e.g. "source_instructions_ignored": the page contained instruction-like text. */
+      flags: string[];
+    }
+  | {
+      mode: "quotes";
+      reason: PreviewFallbackReason;
+      found: StartFact[];
+      unknowns: string[];
+    };
+
+/**
+ * Deterministic, model-free preview: only what the owner already confirmed
+ * (verbatim quotes) and what Orbi will not guess. No questions or drafts are
+ * invented from a template.
+ */
+export function quotePreview(profile: StartProfile, reason: PreviewFallbackReason): StartPreview {
+  return { mode: "quotes", reason, found: profile.facts.slice(0, 8), unknowns: profile.unknowns.slice(0, 8) };
+}
+
+/** Browser key: a preview was displayed before the account existed (funnel event). */
+export const PREVIEW_SHOWN_KEY = "orbis:start:preview-shown";
+const previewShownSchema = z.object({ v: z.literal(1), ai: z.boolean(), savedAt: z.number() }).strict();
+export function encodePreviewShown(ai: boolean, now = Date.now()) {
+  return JSON.stringify({ v: 1, ai, savedAt: now });
+}
+export function decodePreviewShown(raw: string | null, now = Date.now()): { ai: boolean } | null {
+  if (!raw || raw.length > 200) return null;
+  try {
+    const parsed = previewShownSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+    const age = now - parsed.data.savedAt;
+    return age < 0 || age > PENDING_TTL_MS ? null : { ai: parsed.data.ai };
+  } catch {
+    return null;
+  }
 }
