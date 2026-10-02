@@ -64,6 +64,14 @@ async function main() {
         "task_payment_batches",
         "inbox_batches",
         "inbox_messages",
+        // 009 company brain. No DELETE: rejected facts keep no quote, rows stay for audit.
+        "brain_jobs",
+        "brain_sent_messages",
+        "brain_facts",
+        "brain_questions",
+        "brain_question_messages",
+        "brain_draft_outcomes",
+        "brain_usage",
       ]) {
         const exists = await client.query(
           "SELECT to_regclass($1) AS relation",
@@ -97,6 +105,17 @@ async function main() {
         await client.query("SET LOCAL ROLE orbis_inbox_dispatch");
         await client.query(
           `GRANT EXECUTE ON FUNCTION orbis_inbox_due_workspaces(integer) TO ${quoted}`,
+        );
+        await client.query("RESET ROLE");
+      }
+      // 009: ids-only discovery of due brain jobs (same definer-function model).
+      const brain = await client.query(
+        "SELECT to_regprocedure('orbis_brain_due_workspaces(integer)') AS fn",
+      );
+      if (brain.rows[0].fn) {
+        await client.query("SET LOCAL ROLE orbis_inbox_dispatch");
+        await client.query(
+          `GRANT EXECUTE ON FUNCTION orbis_brain_due_workspaces(integer) TO ${quoted}`,
         );
         await client.query("RESET ROLE");
       }
