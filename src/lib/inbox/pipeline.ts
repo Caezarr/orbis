@@ -90,6 +90,8 @@ export type BatchStats = {
   quotaReached?: boolean;
   /** Mailbox drafts created by this run (quota units), including recipient mismatches. */
   draftsCreated?: number;
+  /** Follow-ups / pipeline pass run after an incremental batch (levels 6/7), counts only. */
+  followups?: Record<string, number | boolean>;
 };
 export class LeaseLostError extends Error {}
 
@@ -145,6 +147,17 @@ export async function processMailboxBatch(params: {
   shouldYield?: () => boolean;
   /** Plan drafts remaining (entitlements). Undefined = no plan quota. */
   draftQuota?: number;
+  /**
+   * Request pipeline (level 7): called once per actionable message, before
+   * drafting. Best effort: a failure never blocks the reply draft.
+   */
+  requests?: {
+    track(input: {
+      rowId: string;
+      message: MailMessage;
+      classification: Classification;
+    }): Promise<unknown>;
+  };
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -242,6 +255,10 @@ export async function processMailboxBatch(params: {
       }
       if (!ACTIONABLE.has(classification)) continue;
       stats.actionable++;
+      if (params.requests)
+        await params.requests
+          .track({ rowId: row.rowId, message, classification })
+          .catch(() => {});
       if (stats.drafted >= batch.maxDrafts) {
         // Stays non-terminal: a later batch with remaining quota drafts it.
         await store.update(row.rowId, {

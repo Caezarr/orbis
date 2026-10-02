@@ -54,8 +54,8 @@ export async function loadTrial(db: Db, ids: Ids): Promise<TrialFacts | null> {
 
 /**
  * Reply drafts created (real or simulated in test mode) in [start, end):
- * inbox drafts plus company-brain regenerations (a regeneration is a new draft
- * in the mailbox, so it consumes quota like any other draft; migration 009).
+ * inbox drafts plus company-brain regenerations (009) and follow-up drafts
+ * (011): each is a new draft in the mailbox, so it consumes quota like any other.
  */
 export async function countDrafts(db: Db, ids: Ids, start: Date | null, end: Date | null) {
   if (!start) return 0;
@@ -65,6 +65,8 @@ export async function countDrafts(db: Db, ids: Ids, start: Date | null, end: Dat
          SELECT 1 FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND draft_state IN ('created','simulated') AND drafted_at>=$3 AND ($4::timestamptz IS NULL OR drafted_at<$4)
          UNION ALL
          SELECT 1 FROM brain_jobs WHERE workspace_id=$1 AND tenant_id=$2 AND kind='regenerate_draft' AND draft_state IN ('created','simulated') AND drafted_at>=$3 AND ($4::timestamptz IS NULL OR drafted_at<$4)
+         UNION ALL
+         SELECT 1 FROM followups WHERE workspace_id=$1 AND tenant_id=$2 AND draft_state IN ('created','simulated') AND drafted_at>=$3 AND ($4::timestamptz IS NULL OR drafted_at<$4)
        ) drafts`,
       [ids.workspaceId, ids.tenantId, start, end],
     )
