@@ -567,6 +567,84 @@
   color: var(--text);
   overflow-wrap: anywhere;
 }
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.toggleText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.toggleText h3 {
+  margin: 0;
+}
+.toggleText p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.toggleText .fine {
+  font-size: 13px;
+}
+.aside .alert {
+  margin-top: 8px;
+}
+.digest {
+  --marine: #182d5b;
+  --cobalt: #305ee8;
+  --ciel: #edf3ff;
+  --text: #53627b;
+  --border: #dce4f0;
+  --amber: #8a5300;
+  --amber-soft: #fff4dc;
+  --red: #b4323f;
+  --red-soft: #fff0f1;
+  --green: #16845b;
+  display: grid;
+  gap: 12px;
+  color: var(--marine);
+  max-width: 1100px;
+  margin: 24px auto 0;
+  min-width: 0;
+}
+.digestHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.digestHead h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.tile {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+.tile strong {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--marine);
+  font-variant-numeric: tabular-nums;
+}
 .srOnly {
   position: absolute;
   width: 1px;
