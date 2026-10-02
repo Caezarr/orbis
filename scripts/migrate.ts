@@ -100,6 +100,20 @@ async function main() {
         );
         await client.query("RESET ROLE");
       }
+      // 010 trial + subscription plans: trials are insert-only for the runtime
+      // role (never extended/restarted); plan caps only through the clamping
+      // definer function. No privilege on billing_plan_caps.
+      const plans = await client.query(
+        "SELECT to_regclass('public.billing_trials') AS relation",
+      );
+      if (plans.rows[0].relation) {
+        await client.query(`GRANT SELECT, INSERT ON billing_trials TO ${quoted}`);
+        await client.query("SET LOCAL ROLE orbis_inbox_cap_admin");
+        await client.query(
+          `GRANT EXECUTE ON FUNCTION orbis_sync_workspace_plan_cap(text, text, integer) TO ${quoted}`,
+        );
+        await client.query("RESET ROLE");
+      }
     }
     await client.query("COMMIT");
     console.log("Migrations complete");

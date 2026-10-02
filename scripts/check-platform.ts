@@ -143,6 +143,35 @@ async function databaseChecks() {
           assert.ok(found || due.rowCount === 200, "tenant B due work discovered");
           if (found) assert.deepEqual([found.tenant_id, found.worker_user_id, found.poll_due], [ids[1], ids[1], true]);
           assert.equal((await db.query("SELECT * FROM inbox_batches WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "discovery grants no content access");
+          // Trial + subscription plans (migration 010).
+          if ((await db.query("SELECT to_regclass('public.billing_trials') AS r")).rows[0].r) {
+            await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+            await db.query("INSERT INTO billing_trials(workspace_id,tenant_id,started_at,ends_at,draft_limit,config_version) VALUES($1,$1,now(),now()+interval '14 days',50,'check')", [ids[1]]);
+            assert.equal((await db.query("INSERT INTO billing_trials(workspace_id,tenant_id,started_at,ends_at,draft_limit,config_version) VALUES($1,$1,now(),now()+interval '90 days',500,'check') ON CONFLICT(workspace_id) DO NOTHING", [ids[1]])).rowCount, 0, "a trial cannot be restarted");
+            await db.query("UPDATE inbox_batches SET status='quota_reached',completed_at=now() WHERE id=$1", [ids[1]]);
+            await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+            assert.equal((await db.query("SELECT * FROM billing_trials WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "billing_trials isolation");
+            for (const privilege of ["UPDATE", "DELETE"])
+              assert.equal((await db.query("SELECT has_table_privilege(current_user,'billing_trials',$1) AS p", [privilege])).rows[0].p, false, `runtime must not ${privilege} billing_trials`);
+            for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"])
+              assert.equal((await db.query("SELECT has_table_privilege(current_user,'billing_plan_caps',$1) AS p", [privilege])).rows[0].p, false, `runtime must not ${privilege} billing_plan_caps`);
+            assert.equal((await db.query("SELECT has_function_privilege(current_user,'orbis_sync_workspace_plan_cap(text,text,integer)','EXECUTE') AS p")).rows[0].p, true, "runtime syncs plan caps through the definer function");
+            const sync = (await db.query("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig FROM pg_proc p WHERE p.proname='orbis_sync_workspace_plan_cap'")).rows[0];
+            assert.equal(sync.owner, "orbis_inbox_cap_admin");
+            assert.equal(sync.prosecdef, true);
+            assert.ok((sync.proconfig ?? []).some((c: string) => c.startsWith("search_path=")), "sync function pins search_path");
+            assert.equal((await db.query("SELECT has_column_privilege('orbis_inbox_cap_admin','stripe_subscriptions','stripe_customer_id','SELECT') AS p")).rows[0].p, false, "cap admin reads plan/status only");
+            // Clamped to the operator ceiling, whatever the runtime asks for.
+            const ceiling = Number((await db.query("SELECT orbis_sync_workspace_plan_cap($1,'trial',2000000000) AS cap", [ids[1]])).rows[0].cap);
+            assert.ok(ceiling > 0 && ceiling < 2000000000, "trial cap clamped to its ceiling");
+            await db.query("SAVEPOINT paid_cap");
+            await assert.rejects(db.query("SELECT orbis_sync_workspace_plan_cap($1,'equipe',100)", [ids[1]]), Error, "paid cap without a synced subscription");
+            await db.query("ROLLBACK TO SAVEPOINT paid_cap");
+            assert.equal(Number((await db.query("SELECT orbis_sync_workspace_plan_cap($1,'none',5000) AS cap", [ids[1]])).rows[0].cap), 0, "no plan = cap 0");
+            await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+            assert.equal((await db.query("SELECT monthly_cap_cents FROM inbox_settings WHERE workspace_id=$1", [ids[1]])).rows[0].monthly_cap_cents, 0, "cap applied to the tenant's own workspace");
+            await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          }
         }
         await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
         assert.equal((await db.query("SELECT * FROM inbox_messages WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member");
@@ -152,7 +181,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, ids-only dispatcher role); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, ids-only dispatcher role); plan trials/caps (010); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();
