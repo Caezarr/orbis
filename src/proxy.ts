@@ -9,7 +9,9 @@ export async function proxy(request: NextRequest) {
   if (isOfflineMode()) return response;
   const pathname = request.nextUrl.pathname;
   const publicCatalog = pathname === "/catalog" || pathname === "/catalog/";
-  const protectedPage = !publicCatalog && !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
+  // Industry pages are public marketing pages and must stay crawlable.
+  const publicVertical = pathname === "/for" || pathname.startsWith("/for/");
+  const protectedPage = !publicCatalog && !publicVertical && !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
   const login = () => {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
