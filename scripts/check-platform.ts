@@ -80,11 +80,25 @@ async function databaseChecks() {
       await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
       assert.equal((await db.query("SELECT * FROM workspace_state WHERE workspace_id=$1 FOR UPDATE", [ids[0]])).rowCount, 1);
       assert.equal((await db.query("SELECT * FROM memberships WHERE user_id=$1", [ids[1]])).rowCount, 0);
+      // Inbox drafts (migration 007): rows of tenant B are invisible and immutable to A.
+      if ((await db.query("SELECT to_regclass('public.inbox_batches') AS r")).rows[0].r) {
+        await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+        await db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$1,$1,$1,'k','h','gmail','acc','v','test',14,50,5)", [ids[1]]);
+        await db.query("INSERT INTO inbox_messages(id,workspace_id,tenant_id,batch_id,provider,connected_account_id,message_id,thread_id,mission_version,content_hash,status) VALUES($1,$1,$1,$1,'gmail','acc','m','t','v','h','seen')", [ids[1]]);
+        await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+        for (const table of ["inbox_batches", "inbox_messages"]) {
+          assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+          assert.equal((await db.query(`UPDATE ${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+        }
+        await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
+        assert.equal((await db.query("SELECT * FROM inbox_messages WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member");
+        await assert.rejects(db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$2,$2,$1,'k2','h','gmail','acc','v','test',14,50,5)", [randomUUID(), ids[1]]));
+      }
       throw rollback;
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes; test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();

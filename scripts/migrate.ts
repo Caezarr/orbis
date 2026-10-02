@@ -62,6 +62,8 @@ async function main() {
         "task_effort",
         "task_charges",
         "task_payment_batches",
+        "inbox_batches",
+        "inbox_messages",
       ]) {
         const exists = await client.query(
           "SELECT to_regclass($1) AS relation",
