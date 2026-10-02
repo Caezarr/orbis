@@ -52,10 +52,22 @@ const jobs = [
     Icon: Search,
   },
 ];
-export function TaskWorkshop({ enabled }: { enabled: boolean }) {
+export type WorkshopJob = { input: string; output: string; detail: string };
+const workshopIcons = [Mail, FileText, Search];
+/** `jobs` is optional; without it the landing's default scenes are shown. */
+export function TaskWorkshop({
+  enabled,
+  jobs: custom,
+}: {
+  enabled: boolean;
+  jobs?: WorkshopJob[];
+}) {
+  const scenes = custom?.length
+    ? custom.map((j, i) => ({ ...j, Icon: workshopIcons[i % workshopIcons.length] }))
+    : jobs;
   const { ref, active } = useVisibleMotion(enabled);
-  const index = useCycle(active, jobs.length, 7600);
-  const job = jobs[index];
+  const index = useCycle(active, scenes.length, 7600);
+  const job = scenes[index] ?? scenes[0];
   return (
     <div
       ref={ref}
@@ -65,7 +77,9 @@ export function TaskWorkshop({ enabled }: { enabled: boolean }) {
     >
       <div className={v.workshopTop}>
         <span>One mission, end to end</span>
-        <span>0{index + 1} / 03</span>
+        <span>
+          0{index + 1} / {String(scenes.length).padStart(2, "0")}
+        </span>
       </div>
       <div className={v.workshopStage} key={index}>
         <div className={v.inputCard}>
