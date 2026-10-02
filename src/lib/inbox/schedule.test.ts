@@ -205,3 +205,31 @@ describe("enqueueDueIncremental", () => {
     ]);
   });
 });
+
+describe("enqueueDueIncremental plan gate", () => {
+  it("a refused plan gate queues nothing but still moves the schedule (no hot loop)", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (sql.startsWith("SELECT continuous_enabled"))
+        return {
+          rows: [
+            {
+              continuous_enabled: true,
+              provider: "gmail",
+              connected_account_id: "acc",
+              interval_minutes: 15,
+              cursor_at: null,
+              next_run_at: new Date("2026-10-02T10:15:00Z"),
+            },
+          ],
+        };
+      return { rows: [], rowCount: 0 };
+    });
+    const allow = vi.fn(async () => false);
+    expect(await enqueueDueIncremental(db, identity, new Date("2026-10-02T10:16:00Z"), { allow })).toBeNull();
+    expect(allow).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls.some(([sql]) => sql.startsWith("UPDATE inbox_settings SET next_run_at"))).toBe(true);
+    expect(query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO inbox_batches"))).toBe(false);
+    // continuous_enabled is not switched off: drafting resumes after upgrade/rollover.
+    expect(query.mock.calls.some(([sql]) => sql.includes("continuous_enabled=false"))).toBe(false);
+  });
+});

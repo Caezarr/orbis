@@ -406,3 +406,87 @@ describe("company brain hooks", () => {
     );
   });
 });
+
+describe("inbox worker plan enforcement", () => {
+  const blocked = (reason: string, plan = "solo") =>
+    vi.fn(async () => ({
+      state: reason === "quota_reached" ? "active" : "past_due",
+      plan,
+      canProcess: false,
+      reason,
+      draftsRemaining: 0,
+    })) as never;
+  const blockedUpdate = () =>
+    mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("UPDATE inbox_batches SET status=$4, error=$5"),
+    );
+  it.each([
+    ["quota_reached", "quota_reached"],
+    ["trial_drafts_used", "quota_reached"],
+    ["trial_expired", "plan_inactive"],
+    ["past_due", "plan_inactive"],
+    ["canceled", "plan_inactive"],
+  ])("%s: ends the batch as %s before any mailbox or model call", async (reason, status) => {
+    const result = await runOneInboxBatch(identity, {
+      mailbox,
+      model,
+      entitlement: blocked(reason),
+    });
+    expect(result).toMatchObject({ processed: true, blocked: status });
+    expect(mailbox).not.toHaveBeenCalled();
+    expect(model.classify).not.toHaveBeenCalled();
+    const [sql, params] = blockedUpdate()!;
+    expect(params.slice(0, 4)).toEqual(["batch-1", "ws-a", "tenant-a", status]);
+    expect(String(params[4])).toMatch(/brouillons passés restent consultables|Quota atteint/);
+    expect(sql).toContain("lease_token=$6");
+    // The cursor is not advanced: messages are listed again once the plan allows.
+    expect(
+      mock.query.mock.calls.some(([q]) => String(q).includes("cursor_at")),
+    ).toBe(false);
+  });
+  it("passes the remaining drafts to the pipeline and maps a mid-batch stop to quota_reached", async () => {
+    listInbound.mockResolvedValue([
+      {
+        provider: "gmail",
+        id: "m1",
+        threadId: "t1",
+        from: { address: "c@example.com" },
+        replyTo: [],
+        to: [],
+        receivedAt: "2026-10-02T10:00:00.000Z",
+        subject: "s",
+        text: "t",
+        labels: [],
+        headers: {},
+        fromOwner: false,
+        isDraft: false,
+      },
+    ]);
+    const result = await runOneInboxBatch(identity, {
+      mailbox,
+      model,
+      entitlement: vi.fn(async () => ({
+        state: "trialing",
+        plan: "trial",
+        canProcess: true,
+        draftsRemaining: 0,
+      })) as never,
+    });
+    expect(result.stats).toMatchObject({ quotaReached: true });
+    expect(model.classify).not.toHaveBeenCalled();
+    const [sql, params] = finalUpdate()!;
+    expect(params[3]).toBe("quota_reached");
+    expect(String(params[5])).toContain("brouillons de l’essai");
+    expect(sql).toContain("'quota_reached'");
+    expect(
+      mock.query.mock.calls.some(([q]) =>
+        String(q).startsWith("SELECT cursor_at"),
+      ),
+    ).toBe(false);
+  });
+  it("loads the entitlement inside the worker's tenant-scoped transaction", async () => {
+    const entitlement = vi.fn(async () => ({ canProcess: true, draftsRemaining: 10 })) as never;
+    await runOneInboxBatch(identity, { mailbox, model, entitlement });
+    expect(entitlement).toHaveBeenCalledWith(expect.anything(), identity);
+  });
+});

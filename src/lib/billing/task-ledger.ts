@@ -39,9 +39,10 @@ export async function recordTaskCharge(row: TaskRow) {
     if (sub) {
       period = new Date(sub.current_period_start).toISOString();
       const allowance =
-        sub.plan === "Solo"
+        // Plan keys: 'solo'/'equipe' since migration 010 (legacy names kept for safety).
+        sub.plan === "solo" || sub.plan === "Solo"
           ? proposedPlans.soloIncludedTasks
-          : sub.plan === "Business"
+          : sub.plan === "equipe" || sub.plan === "Business"
             ? proposedPlans.businessIncludedTasks
             : 0;
       const used = (

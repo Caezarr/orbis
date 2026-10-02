@@ -93,6 +93,14 @@ export async function enqueueDueIncremental(
   db: PoolClient,
   identity: Identity,
   now = new Date(),
+  opts: {
+    /**
+     * Plan gate (entitlements). False = continuous drafting is paused: the
+     * schedule still moves forward (no hot loop), no batch is queued, and it
+     * resumes by itself after an upgrade, payment or period rollover.
+     */
+    allow?: () => Promise<boolean>;
+  } = {},
 ) {
   const ids = [identity.workspaceId, identity.tenantId];
   const settings = (
@@ -107,6 +115,7 @@ export async function enqueueDueIncremental(
     "UPDATE inbox_settings SET next_run_at=$3::timestamptz + make_interval(mins => $4), updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2",
     [...ids, now, minutes],
   );
+  if (opts.allow && !(await opts.allow())) return null;
   const pending = await db.query(
     "SELECT 1 FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND kind='incremental' AND status IN ('queued','running') LIMIT 1",
     ids,

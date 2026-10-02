@@ -222,3 +222,51 @@ describe("company brain jobs in the dispatcher", () => {
     expect(result).toMatchObject({ stoppedBy: "deadline", yielded: 1, processed: 0 });
   });
 });
+
+const plan = vi.hoisted(() => ({ canProcess: true }));
+vi.mock("@/lib/billing/entitlements-store", () => ({
+  currentEntitlement: vi.fn(async () => ({ canProcess: plan.canProcess })),
+}));
+describe("dispatcher plan gate (default enqueue)", () => {
+  async function pass(canProcess: boolean) {
+    plan.canProcess = canProcess;
+    vi.stubEnv("ORBIS_INBOX_DRAFTS_ENABLED", "true");
+    const { transaction } = await import("@/lib/platform/db");
+    const query = vi.fn(async (sql: string) => {
+      if (sql.startsWith("SELECT 1 FROM memberships")) return { rowCount: 1, rows: [{}] };
+      if (sql.startsWith("SELECT continuous_enabled"))
+        return {
+          rows: [
+            {
+              continuous_enabled: true,
+              provider: "gmail",
+              connected_account_id: "acc",
+              interval_minutes: 15,
+              cursor_at: new Date("2026-10-02T10:00:00Z"),
+              next_run_at: new Date("2026-10-02T10:15:00Z"),
+            },
+          ],
+        };
+      if (sql.startsWith("SELECT 1 FROM inbox_batches")) return { rows: [], rowCount: 0 };
+      if (sql.startsWith("INSERT INTO inbox_batches")) return { rows: [{ id: "new" }] };
+      return { rows: [], rowCount: 1 };
+    });
+    vi.mocked(transaction).mockImplementation(async (fn) => fn({ query } as never));
+    const result = await dispatchInboxPass(
+      {},
+      { discover: async () => [ws("a", { pollDue: true })], runBatch: async () => ({ processed: false }) },
+    );
+    return { result, query };
+  }
+  it("pauses continuous drafting when the plan cannot process: schedule advances, no batch", async () => {
+    const { result, query } = await pass(false);
+    expect(result.enqueued).toBe(0);
+    expect(query.mock.calls.some(([sql]) => sql.startsWith("UPDATE inbox_settings SET next_run_at"))).toBe(true);
+    expect(query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO inbox_batches"))).toBe(false);
+  });
+  it("queues the incremental batch when the plan allows it", async () => {
+    const { result, query } = await pass(true);
+    expect(result.enqueued).toBe(1);
+    expect(query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO inbox_batches"))).toBe(true);
+  });
+});

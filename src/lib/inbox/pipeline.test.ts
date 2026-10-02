@@ -499,3 +499,46 @@ describe("incremental batches (continuous drafting)", () => {
     expect(drafts()).toHaveLength(2);
   });
 });
+
+describe("plan draft quota", () => {
+  it("stops gracefully at the quota: partial results kept, no further model call", async () => {
+    inbox = [
+      gmailMessage("q1", { messageTimestamp: "2026-10-01T12:00:00Z" }),
+      gmailMessage("q2", { messageTimestamp: "2026-10-01T11:00:00Z" }),
+      gmailMessage("q3", { messageTimestamp: "2026-10-01T10:00:00Z" }),
+    ];
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await processMailboxBatch({
+      batch,
+      mailbox: mailboxClient("gmail", batch, { mode: "scoped_autonomy" }),
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5 },
+      draftQuota: 1,
+    });
+    expect(stats).toMatchObject({ drafted: 1, draftsCreated: 1, quotaReached: true });
+    expect(drafts()).toHaveLength(1);
+    expect(m.classify).toHaveBeenCalledTimes(1);
+    expect(m.draft).toHaveBeenCalledTimes(1);
+    expect(rows.get("q1")).toMatchObject({ status: "drafted" });
+    // Untouched messages are listed again by the next batch (no row, no spend).
+    expect(rows.has("q2")).toBe(false);
+  });
+  it("no quota left: no model call at all", async () => {
+    const { store } = memoryStore();
+    const m = model();
+    const stats = await processMailboxBatch({
+      batch,
+      mailbox: mailboxClient("gmail", batch, { mode: "scoped_autonomy" }),
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5 },
+      draftQuota: 0,
+    });
+    expect(stats.quotaReached).toBe(true);
+    expect(m.classify).not.toHaveBeenCalled();
+  });
+});

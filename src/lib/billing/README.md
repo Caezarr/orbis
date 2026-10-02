@@ -1,3 +1,12 @@
+# Billing
+
+V1 self-serve subscriptions (trial + Essentiel/Équipe, draft quotas, plan caps):
+`plans.ts` (config), `entitlements.ts` (pure state machine), `entitlements-store.ts`
+(PostgreSQL), `view.ts` (UI copy). See docs/product/billing-v1.md.
+
+The accepted-task billing below is kept but disabled/unexposed for V1
+(`ORBIS_TASK_BILLING_ENABLED=false`).
+
 # Task billing integration
 
 Pure synchronous domain. No network, storage, subscription charge or payment operation.

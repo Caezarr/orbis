@@ -129,3 +129,7 @@ The migration owner is granted the two NOLOGIN roles `WITH INHERIT FALSE, SET TR
 - No HTML drafts (Outlook `comment` is plain text); placeholders are `[[…]]` text markers rather than color highlighting.
 - Classification and draft quality are unmeasured; no live model run has been done.
 - Scheduler: only inbox batches are multi-tenant; durable tasks (`runOneTask`) still use the single configured workspace. No email digest (in-app Today only). Polling cost: each incremental batch re-lists the mailbox even when the workspace is over budget (no model call is made). The global cap is per workspace, not a platform-wide total.
+
+## Plans and quotas (V1 Phase 3)
+
+Every batch is gated by the workspace entitlement ([billing-v1.md](billing-v1.md)). Without an active trial/plan or without drafts left: `POST /api/v1/inbox` returns 402 with a French reason; the dispatcher queues no continuous batch (drafting shows as paused, resumes automatically); the worker ends an already-queued batch as `plan_inactive` or `quota_reached` before any mailbox/model call. Mid-batch, the pipeline stops before the next message when the plan's drafts are used (`quota_reached`, partial results kept, cursor not advanced). Past drafts stay readable in every state.

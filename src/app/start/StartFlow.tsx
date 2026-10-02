@@ -30,6 +30,7 @@ import {
   type StartStep,
 } from "@/lib/start/flow";
 import { ContinuousToggle } from "./ContinuousToggle";
+import { PlanBanner } from "@/components/billing/PlanBanner";
 import { DraftCard } from "./DraftCard";
 import s from "./start.module.css";
 
@@ -1199,6 +1200,7 @@ function DraftsStep({
     return (
       <div className={s.form}>
         {testBanner}
+        <PlanBanner />
         <p>
           Orbi lit les messages reçus ces 14 derniers jours, écarte les newsletters et notifications, puis prépare des
           brouillons pour les demandes de clients et de devis. Le nombre de brouillons du premier passage est limité.
@@ -1284,6 +1286,17 @@ function Results({
   return (
     <div className={s.form}>
       {testBanner}
+      <PlanBanner refreshKey={`${batch.id}:${batch.status}`} />
+      {(batch.status === "quota_reached" || batch.status === "plan_inactive") && (
+        <div className={s.blocker} role="alert">
+          <strong>{batch.status === "quota_reached" ? "Quota atteint." : "Aucun nouveau traitement avec votre formule actuelle."}</strong>
+          <p>
+            {batch.error ??
+              "Orbi s’est arrêté avant tout nouvel appel au modèle. Les résultats ci-dessous sont conservés."}{" "}
+            <Link href="/billing">Voir les formules</Link>
+          </p>
+        </div>
+      )}
       {batch.status === "budget_exhausted" && (
         <div className={s.blocker} role="alert">
           <strong>Plafond de dépense atteint.</strong>
