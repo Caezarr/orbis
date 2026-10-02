@@ -12,6 +12,8 @@ import {
   MessageSquare,
   BarChart3,
   BookOpenCheck,
+  Inbox,
+  LineChart,
 } from "lucide-react";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { cn } from "@/lib/cn";
@@ -20,6 +22,8 @@ const NAV = [
   { href: "/chat", label: "Ask Orbi", icon: MessageSquare },
   { href: "/today", label: "Today", icon: Sun },
   { href: "/fiche", label: "Fiche entreprise", icon: BookOpenCheck },
+  { href: "/demandes", label: "Demandes", icon: Inbox },
+  { href: "/rapport", label: "Rapport", icon: LineChart },
   { href: "/catalog", label: "Marketplace", icon: Compass },
   { href: "/connections", label: "Integrations", icon: KeyRound },
   { href: "/knowledge", label: "Knowledge", icon: FolderOpen },
