@@ -218,6 +218,41 @@ async function databaseChecks() {
           assert.ok(brainFound || brainDue.rowCount === 200, "tenant B brain job discovered");
           assert.equal((await db.query("SELECT * FROM brain_jobs WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "brain discovery grants no content access");
         }
+        // Follow-ups + request pipeline (migration 011): isolated per tenant, no DELETE, no dispatcher access.
+        if ((await db.query("SELECT to_regclass('public.pipeline_items') AS r")).rows[0].r) {
+          const pipelineTables = ["pipeline_settings", "pipeline_items", "followups", "pipeline_usage"];
+          await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+          await db.query("INSERT INTO pipeline_settings(workspace_id,tenant_id,followup_business_days) VALUES($1,$1,5)", [ids[1]]);
+          await db.query("INSERT INTO pipeline_items(id,workspace_id,tenant_id,provider,connected_account_id,thread_id,first_message_row_id,kind,contact_name,contact_email,contact_domain,first_customer_at) VALUES($1,$1,$1,'gmail','acc','t1',$1,'quote_request','Claire','claire@client.test','client.test',now())", [ids[1]]);
+          await db.query("INSERT INTO followups(id,workspace_id,tenant_id,pipeline_item_id,stage,owner_message_at,due_at) VALUES($1,$1,$1,$1,1,now(),now())", [ids[1]]);
+          await db.query("INSERT INTO pipeline_usage(id,workspace_id,tenant_id,kind,ref_id,est_cost_cents) VALUES($1,$1,$1,'followup_draft',$1,5)", [ids[1]]);
+          // One follow-up per thread and stage; at most 2 stages; gagné/perdu need a human decision.
+          for (const [label, sql] of [
+            ["duplicate stage", "INSERT INTO followups(id,workspace_id,tenant_id,pipeline_item_id,stage,owner_message_at,due_at) VALUES(gen_random_uuid()::text,$1,$1,$1,1,now(),now())"],
+            ["stage 3", "INSERT INTO followups(id,workspace_id,tenant_id,pipeline_item_id,stage,owner_message_at,due_at) VALUES(gen_random_uuid()::text,$1,$1,$1,3,now(),now())"],
+            ["won without reviewer", "UPDATE pipeline_items SET status='gagne' WHERE id=$1"],
+            ["erased contact kept", "UPDATE pipeline_items SET contact_erased_at=now() WHERE id=$1"],
+          ] as const) {
+            await db.query("SAVEPOINT pipeline_check");
+            await assert.rejects(db.query(sql, [ids[1]]), Error, label);
+            await db.query("ROLLBACK TO SAVEPOINT pipeline_check");
+          }
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          for (const table of pipelineTables) {
+            assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+            assert.equal((await db.query(`UPDATE ${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+            assert.equal((await db.query("SELECT has_table_privilege(current_user,$1,'DELETE') AS p", [table])).rows[0].p, false, `no DELETE on ${table}`);
+            for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"])
+              assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch',$1,$2) AS p", [table, privilege])).rows[0].p, false, `dispatch must not ${privilege} ${table}`);
+          }
+          assert.equal((await db.query("SELECT COALESCE(sum(est_cost_cents),0)::int AS c FROM pipeline_usage WHERE workspace_id=$1", [ids[1]])).rows[0].c, 0, "cross-tenant pipeline usage invisible");
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
+          assert.equal((await db.query("SELECT * FROM pipeline_items WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member pipeline");
+          await db.query("SAVEPOINT pipeline_forgery");
+          await assert.rejects(db.query("INSERT INTO pipeline_items(id,workspace_id,tenant_id,provider,connected_account_id,thread_id,first_message_row_id,kind) VALUES($1,$2,$2,'gmail','acc','t2','r','customer_request')", [randomUUID(), ids[1]]), Error, "non-member cannot write pipeline items");
+          await db.query("ROLLBACK TO SAVEPOINT pipeline_forgery");
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+        }
         await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
         assert.equal((await db.query("SELECT * FROM inbox_messages WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member");
         await assert.rejects(db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$2,$2,$1,'k2','h','gmail','acc','v','test',14,50,5)", [randomUUID(), ids[1]]));
@@ -226,7 +261,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, ids-only dispatcher role); plan trials/caps (010); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, follow-ups/pipeline tables, ids-only dispatcher role); plan trials/caps (010); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();

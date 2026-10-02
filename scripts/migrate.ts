@@ -133,6 +133,21 @@ async function main() {
         );
         await client.query("RESET ROLE");
       }
+      // 011 follow-ups + request pipeline: no DELETE (contact erasure = UPDATE
+      // to NULL; workspace deletion cascades).
+      const pipeline = await client.query(
+        "SELECT to_regclass('public.pipeline_items') AS relation",
+      );
+      if (pipeline.rows[0].relation)
+        for (const table of [
+          "pipeline_settings",
+          "pipeline_items",
+          "followups",
+          "pipeline_usage",
+        ])
+          await client.query(
+            `GRANT SELECT, INSERT, UPDATE ON ${table} TO ${quoted}`,
+          );
     }
     await client.query("COMMIT");
     console.log("Migrations complete");
