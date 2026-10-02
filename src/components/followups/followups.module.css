@@ -406,3 +406,7 @@
     font-size: 22px;
   }
 }
+.followup > span {
+  justify-self: start;
+  white-space: normal;
+}
