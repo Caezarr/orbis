@@ -166,6 +166,19 @@ async function main() {
           await client.query(`GRANT EXECUTE ON FUNCTION ${fn} TO ${quoted}`);
           await client.query("RESET ROLE");
         }
+      const digest = await client.query(
+        "SELECT to_regclass('public.digest_subscriptions') AS relation",
+      );
+      if (digest.rows[0].relation) {
+        await client.query(
+          `GRANT SELECT, INSERT, UPDATE ON digest_subscriptions, digest_deliveries TO ${quoted}`,
+        );
+        await client.query("SET LOCAL ROLE orbis_inbox_dispatch");
+        await client.query(
+          `GRANT EXECUTE ON FUNCTION orbis_digest_due_subscriptions(integer) TO ${quoted}`,
+        );
+        await client.query("RESET ROLE");
+      }
     }
     await client.query("COMMIT");
     console.log("Migrations complete");

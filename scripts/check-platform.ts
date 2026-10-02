@@ -259,6 +259,45 @@ async function databaseChecks() {
         await assert.rejects(db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$2,$2,$1,'k2','h','gmail','acc','v','test',14,50,5)", [randomUUID(), ids[1]]));
         await db.query("ROLLBACK TO SAVEPOINT batch_forgery");
       }
+      // Daily digest (migration 013): user-private rows, ids-only discovery, no recipient for the dispatcher.
+      const digestRows = !!(await db.query("SELECT to_regclass('public.digest_subscriptions') AS r")).rows[0].r;
+      if (digestRows) {
+        await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+        await db.query("INSERT INTO digest_subscriptions(workspace_id,tenant_id,user_id,enabled,recipient,enabled_at) VALUES($1,$1,$1,true,'owner@b.test',now())", [ids[1]]);
+        await db.query("INSERT INTO digest_deliveries(workspace_id,tenant_id,user_id,day,idempotency_key,policy_hash,window_start,window_end,outcome) VALUES($1,$1,$1,current_date - 1,$2,$2,now()-interval '1 day',now(),'simulated')", [ids[1], "c".repeat(64)]);
+        for (const [label, sql] of [
+          ["enabled without recipient", "UPDATE digest_subscriptions SET recipient=NULL WHERE workspace_id=$1"],
+          ["second delivery same day", "INSERT INTO digest_deliveries(workspace_id,tenant_id,user_id,day,idempotency_key,policy_hash,window_start,window_end) VALUES($1,$1,$1,current_date - 1,repeat('d',64),repeat('d',64),now(),now())"],
+        ] as const) {
+          await db.query("SAVEPOINT digest_check");
+          await assert.rejects(db.query(sql, [ids[1]]), Error, label);
+          await db.query("ROLLBACK TO SAVEPOINT digest_check");
+        }
+        await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+        for (const table of ["digest_subscriptions", "digest_deliveries"]) {
+          assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+          assert.equal((await db.query(`UPDATE ${table} SET updated_at=updated_at WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+          assert.equal((await db.query("SELECT has_table_privilege(current_user,$1,'DELETE') AS p", [table])).rows[0].p, false, `no DELETE on ${table}`);
+          for (const privilege of ["INSERT", "UPDATE", "DELETE"])
+            assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch',$1,$2) AS p", [table, privilege])).rows[0].p, false, `dispatch must not ${privilege} ${table}`);
+        }
+        for (const column of ["recipient", "last_window_end"])
+          assert.equal((await db.query("SELECT has_column_privilege('orbis_inbox_dispatch','digest_subscriptions',$1,'SELECT') AS p", [column])).rows[0].p, false, `dispatch must not read digest_subscriptions.${column}`);
+        assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch','digest_deliveries','SELECT') AS p")).rows[0].p, false, "dispatch must not read deliveries");
+        // A member cannot subscribe another user of the same workspace, nor a non-member.
+        await db.query("SAVEPOINT digest_forgery");
+        await assert.rejects(db.query("INSERT INTO digest_subscriptions(workspace_id,tenant_id,user_id,enabled,recipient) VALUES($1,$1,$2,true,'x@y.test')", [ids[0], ids[1]]), Error, "subscription for another user");
+        await db.query("ROLLBACK TO SAVEPOINT digest_forgery");
+        const digestFn = (await db.query("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig FROM pg_proc p WHERE p.proname='orbis_digest_due_subscriptions'")).rows[0];
+        assert.equal(digestFn.owner, "orbis_inbox_dispatch");
+        assert.equal(digestFn.prosecdef, true);
+        assert.ok((digestFn.proconfig ?? []).some((c: string) => c.startsWith("search_path=")), "digest definer function pins search_path");
+        const digestDue = await db.query("SELECT * FROM orbis_digest_due_subscriptions(500)");
+        assert.deepEqual(digestDue.fields.map(f => f.name), ["tenant_id", "workspace_id", "user_id"], "digest discovery returns ids only");
+        const parisHour = Number((await db.query("SELECT extract(hour FROM now() AT TIME ZONE 'Europe/Paris')::int AS h")).rows[0].h);
+        if (parisHour >= 7) assert.ok(digestDue.rows.some(r => r.workspace_id === ids[1]) || digestDue.rowCount === 500, "tenant B subscription discovered");
+        assert.equal((await db.query("SELECT * FROM digest_subscriptions WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "digest discovery grants no content access");
+      }
       // Launch hardening (migration 012): shared limiter, retention purge, tenant erasure.
       if ((await db.query("SELECT to_regclass('public.rate_limit_counters') AS r")).rows[0].r) {
         await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
@@ -277,7 +316,7 @@ async function databaseChecks() {
           assert.ok((row.proconfig ?? []).some((c: string) => c.startsWith("search_path=")), `${fn} pins search_path`);
         }
         // Eraser: DELETE but no content columns; never DELETE outside the erasure setting.
-        for (const [table, column] of [["inbox_messages", "draft_preview"], ["pipeline_items", "contact_email"], ["memberships", "email"], ["workspace_state", "state"], ["brain_facts", "statement"]])
+        for (const [table, column] of [["inbox_messages", "draft_preview"], ["pipeline_items", "contact_email"], ["memberships", "email"], ["workspace_state", "state"], ["brain_facts", "statement"], ["digest_subscriptions", "recipient"]])
           if ((await db.query("SELECT to_regclass($1) AS r", [`public.${table}`])).rows[0].r)
             assert.equal((await db.query("SELECT has_column_privilege('orbis_tenant_eraser',$1,$2,'SELECT') AS p", [table, column])).rows[0].p, false, `eraser must not read ${table}.${column}`);
         assert.equal((await db.query("SELECT has_column_privilege('orbis_retention','memberships','email','SELECT') AS p")).rows[0].p, false, "retention must not read emails");
@@ -325,6 +364,7 @@ async function databaseChecks() {
         if ((await db.query("SELECT to_regclass('public.brain_facts') AS r")).rows[0].r)
           for (const table of ["brain_facts", "brain_jobs", "brain_usage"]) assert.ok(counts[table] >= 1, `tenant B rows erased from ${table}`);
         if (pipelineRows) for (const table of ["pipeline_items", "followups", "pipeline_usage"]) assert.ok(counts[table] >= 1, `tenant B rows erased from ${table}`);
+        if (digestRows) for (const table of ["digest_subscriptions", "digest_deliveries"]) assert.ok(counts[table] >= 1, `tenant B rows erased from ${table}`);
         assert.equal((await db.query("SELECT count(*)::int AS n FROM stripe_customers WHERE tenant_id=$1", [ids[1]])).rows[0].n, 0, "tenant B billing rows gone");
         assert.equal((await db.query("SELECT count(*)::int AS n FROM stripe_customers WHERE tenant_id=$1", [ids[0]])).rows[0].n, 1, "tenant A billing rows intact");
         await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
@@ -336,7 +376,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, follow-ups/pipeline tables, ids-only dispatcher role); plan trials/caps (010); shared limiter, retention purge and single-tenant erasure (012); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, follow-ups/pipeline tables, digest subscriptions/deliveries, ids-only dispatcher role); plan trials/caps (010); shared limiter, retention purge and single-tenant erasure (012); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();

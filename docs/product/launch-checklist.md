@@ -50,6 +50,8 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | `ORBIS_SCHEDULER_BUDGET_MS`, `_RESERVE_MS`, `_MAX_BATCHES`, `_MAX_PER_WORKSPACE`, `_MAX_WORKSPACES` | defaults are fine on Vercel Pro (60 s) | Code ✅ |
 | `ORBIS_OPERATIONS_MONTHLY_CAP_CENTS` | hard per-workspace ceiling; must be ≥ the highest plan cap | À faire |
 | `ORBIS_WORKSPACE_MONTHLY_CAP_CENTS` | optional default | Décision |
+| `ORBIS_DIGEST=true` | daily digest opt-in on Today ([daily-digest.md](daily-digest.md)); off by default | Décision |
+| `ORBIS_DIGEST_DELIVERY` | only `simulated` exists (composed + recorded, nothing sent). A real transport needs a provider decision first | Décision |
 
 ### /start
 
@@ -125,7 +127,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Step | Status |
 |---|---|
 | **Vercel Pro**: function `maxDuration` 60 s and crons more frequent than daily (Hobby allows daily crons only) | À faire |
-| Add `vercel.json` crons: `{"crons":[{"path":"/api/cron/inbox","schedule":"*/5 * * * *"},{"path":"/api/cron/retention","schedule":"17 3 * * *"}]}`. Not committed, so current deploys stay unchanged | À faire |
+| Add `vercel.json` crons: `{"crons":[{"path":"/api/cron/inbox","schedule":"*/5 * * * *"},{"path":"/api/cron/retention","schedule":"17 3 * * *"},{"path":"/api/cron/digest","schedule":"5 6 * * *"}]}` (digest: 06:05 UTC = 07:05 or 08:05 Paris; it is a no-op until `ORBIS_DIGEST=true`). Not committed, so current deploys stay unchanged | À faire |
 | Own domain replacing `orbis-omega-ashen.vercel.app`; DNS A/CNAME; HTTPS; set `APP_ORIGIN`/`ORBIS_APP_URL`; update Supabase redirect URLs and the Stripe webhook URL | Bloquant |
 | Email DNS for the auth sender (SPF, DKIM, DMARC) | Bloquant |
 | HSTS is sent automatically on HTTPS; add `preload` only once the domain is final | Décision |
@@ -161,7 +163,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Public sign-up from the landing, without a human | `/start` → magic link/password/OAuth → mailbox → first drafts, done by an external tester on production | Code ✅ · test À faire |
 | Median < 3 min from URL to first useful draft (measured) | `site_analyzed → first_draft_ready` funnel on ≥10 beta users | À faire |
 | Outlook **and** Gmail in production (or Outlook + Gmail « en vérification », shown) | section 3, CASA answer | Bloquant |
-| Continuous drafts on new mail, daily digest | continuous drafting ✅. **Email digest not built** (the JSON exists; sending needs the action broker) | Gap: decide whether in-app Today counts for launch |
+| Continuous drafts on new mail, daily digest | continuous drafting ✅. Daily digest: opt-in, counts-only content, once per Paris day, ledger and broker step ✅ (migration 013). **Delivery is simulated: no e-mail transport is built** (provider decision) | Décision: transport (provider, sending domain) or in-app Today only for launch |
 | Trial → live Stripe subscription, cost caps active | section 4, `billing_plan_caps` set | À faire |
 | Tenant isolation tested on the real database; server-only secrets; effective revocation | `check-platform --database` on the production database (PASS); revocation test of section 3 | Code ✅ (throwaway PG16) · prod À faire |
 | CGU, privacy, DPA, account deletion online | `/legal/*` templates ✅, deletion + export ✅; lawyer review + DPA À faire | Bloquant |
