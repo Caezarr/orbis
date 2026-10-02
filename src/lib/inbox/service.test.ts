@@ -185,6 +185,57 @@ describe("postgres store", () => {
     expect(spend[0]).toContain("inbox_messages");
     expect(spend[1]).toEqual(["ws-a", "tenant-a"]);
   });
+  it("enforces a per-workspace cap below the global ceiling", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: [{ monthly_cap_cents: 100 }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "98" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(true);
+    expect(await reserveInboxBudget(db, ids, "row", 3)).toBe(false);
+    const capRead = query.mock.calls.find(([sql]) =>
+      sql.startsWith("SELECT monthly_cap_cents"),
+    )!;
+    expect(capRead[1]).toEqual(["ws-a", "tenant-a"]);
+    // The cap is read after the per-tenant lock, so it is serialized too.
+    const order = query.mock.calls.map(([sql]) => String(sql).slice(0, 30));
+    expect(order.indexOf("SELECT pg_advisory_xact_lock(h")).toBeLessThan(
+      order.findIndex((q) => q.startsWith("SELECT monthly_cap_cents")),
+    );
+  });
+  it("the global cap stays a hard ceiling over a higher workspace cap", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: [{ monthly_cap_cents: 100_000 }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "499" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(false);
+  });
+  it("defaults each workspace to ORBIS_WORKSPACE_MONTHLY_CAP_CENTS; a stored 0 blocks spend", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    vi.stubEnv("ORBIS_WORKSPACE_MONTHLY_CAP_CENTS", "50");
+    let stored: number | null = null;
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: stored === null ? [] : [{ monthly_cap_cents: stored }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "49" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 1)).toBe(true);
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(false);
+    stored = 0;
+    expect(await reserveInboxBudget(db, ids, "row", 1)).toBe(false);
+  });
   it("ledger claims once, then returns the receipt or an uncertain state, always tenant-scoped", async () => {
     const run = <T>(fn: (db: PoolClient) => Promise<T>) =>
       fn({ query } as unknown as PoolClient);

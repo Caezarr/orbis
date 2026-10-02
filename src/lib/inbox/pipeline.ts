@@ -29,6 +29,8 @@ export type InboxBatch = {
   windowDays: number;
   maxMessages: number;
   maxDrafts: number;
+  /** Incremental batches: list only messages received at or after this ISO instant. */
+  since?: string;
 };
 export type MessageStatus =
   | "seen"
@@ -76,6 +78,8 @@ export type BatchStats = {
   failed: number;
   budgetExhausted: boolean;
   leaseLost: boolean;
+  /** Stopped between messages because the caller's time budget ran out. */
+  yielded?: boolean;
 };
 export class LeaseLostError extends Error {}
 
@@ -127,6 +131,8 @@ export async function processMailboxBatch(params: {
   context: ReplyContext;
   costs: { classifyCents: number; draftCents: number };
   now?: Date;
+  /** Checked before each message; true = stop cleanly, the batch is resumed later. */
+  shouldYield?: () => boolean;
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -142,13 +148,19 @@ export async function processMailboxBatch(params: {
     budgetExhausted: false,
     leaseLost: false,
   };
+  const since = batch.since ? new Date(batch.since) : undefined;
   const messages = (
     await mailbox.listInbound({
       windowDays: batch.windowDays,
       maxMessages: batch.maxMessages,
       now: params.now,
+      ...(since ? { since } : {}),
     })
-  ).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  )
+    // Defensive: providers filter by date, but never process older mail in an
+    // incremental batch even if a provider ignores the bound.
+    .filter((m) => !batch.since || !m.receivedAt || m.receivedAt >= batch.since)
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   stats.listed = messages.length;
   let tone: string[] | undefined;
   const toneSamples = async () => {
@@ -163,6 +175,10 @@ export async function processMailboxBatch(params: {
     return tone;
   };
   for (const message of messages) {
+    if (params.shouldYield?.()) {
+      stats.yielded = true;
+      break;
+    }
     if (!(await store.heartbeat())) {
       stats.leaseLost = true;
       break;

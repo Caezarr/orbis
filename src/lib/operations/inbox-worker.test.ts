@@ -167,3 +167,87 @@ describe("inbox worker job", () => {
     expect(mailbox).not.toHaveBeenCalled();
   });
 });
+
+describe("inbox worker scheduling behaviour", () => {
+  it("claims at most one running batch per workspace, serialized per workspace", async () => {
+    await runOneInboxBatch(identity, { mailbox, model });
+    const lock = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("SELECT pg_advisory_xact_lock"),
+    )!;
+    expect(lock[1]).toEqual(["orbis-inbox-claim:tenant-a:ws-a"]);
+    const claim = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("SELECT * FROM inbox_batches"),
+    )!;
+    expect(claim[0]).toContain("FOR UPDATE SKIP LOCKED");
+    expect(claim[0]).toContain(
+      "live.status='running' AND live.lease_until>=now()",
+    );
+  });
+  it("passes the incremental cursor to the mailbox listing", async () => {
+    claimed = batchRow({
+      kind: "incremental",
+      since_at: new Date("2026-10-02T10:00:00Z"),
+    });
+    await runOneInboxBatch(identity, { mailbox, model });
+    expect(listInbound).toHaveBeenCalledWith(
+      expect.objectContaining({ since: new Date("2026-10-02T10:00:00Z") }),
+    );
+  });
+  it("yields on the deadline: re-queued now, attempt not consumed, cursor untouched", async () => {
+    listInbound.mockResolvedValue([
+      {
+        provider: "gmail",
+        id: "m1",
+        threadId: "t1",
+        from: { address: "c@example.com" },
+        replyTo: [],
+        to: [],
+        receivedAt: "2026-10-02T10:00:00.000Z",
+        subject: "s",
+        text: "t",
+        labels: [],
+        headers: {},
+        fromOwner: false,
+        isDraft: false,
+      },
+    ]);
+    const result = await runOneInboxBatch(identity, {
+      mailbox,
+      model,
+      deadline: Date.now() - 1,
+    });
+    expect(result).toMatchObject({ processed: true });
+    const [sql, params] = finalUpdate()!;
+    expect(params[3]).toBe("queued");
+    expect(params[7]).toBe(true);
+    expect(sql).toContain("greatest(attempts-1,0)");
+    expect(
+      mock.query.mock.calls.some(([q]) => String(q).includes("cursor_at")),
+    ).toBe(false);
+  });
+  it("transient failures back off exponentially", async () => {
+    listInbound.mockRejectedValue(new Error("timeout"));
+    await runOneInboxBatch(identity, { mailbox, model });
+    const [sql, params] = finalUpdate()!;
+    expect(params[3]).toBe("queued");
+    expect(params[7]).toBe(false);
+    expect(sql).toContain("power(4, greatest(attempts-1,0))");
+  });
+  it("advances the account cursor only after a completed batch", async () => {
+    await runOneInboxBatch(identity, { mailbox, model });
+    const cursor = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("SELECT cursor_at FROM inbox_settings"),
+    )!;
+    expect(cursor[1]).toEqual(["ws-a", "tenant-a", "account"]);
+  });
+  it("a mailbox policy failure pauses continuous drafting for that account", async () => {
+    listInbound.mockRejectedValue(new MailboxPolicyError("revoked"));
+    await runOneInboxBatch(identity, { mailbox, model });
+    const pause = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith(
+        "UPDATE inbox_settings SET continuous_enabled=false",
+      ),
+    )!;
+    expect(pause[1]).toEqual(["ws-a", "tenant-a", "account"]);
+  });
+});

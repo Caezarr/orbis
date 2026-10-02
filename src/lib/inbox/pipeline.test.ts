@@ -454,3 +454,48 @@ describe("adversarial emails", () => {
     expect(drafts()[0].args).not.toHaveProperty("subject");
   });
 });
+
+describe("incremental batches (continuous drafting)", () => {
+  it("lists after the cursor with Gmail after: and never processes older mail", async () => {
+    inbox = [
+      gmailMessage("old", { messageTimestamp: "2026-10-01T09:00:00Z" }),
+      gmailMessage("new", { messageTimestamp: "2026-10-01T11:00:00Z" }),
+    ];
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await run(m, store, { since: "2026-10-01T10:00:00.000Z" });
+    const list = executed().find(
+      (c) =>
+        c.slug === "GMAIL_FETCH_EMAILS" &&
+        String(c.args.query).startsWith("in:inbox"),
+    )!;
+    expect(list.args.query).toBe(
+      `in:inbox -in:chats -in:sent -in:drafts after:${Date.parse("2026-10-01T10:00:00Z") / 1000}`,
+    );
+    // The provider returned an older message anyway: it is dropped, no model call.
+    expect(stats.listed).toBe(1);
+    expect(rows.has("old")).toBe(false);
+    expect(rows.get("new")).toMatchObject({ status: "drafted" });
+    expect(m.classify).toHaveBeenCalledTimes(1);
+  });
+  it("yields between messages when the time budget is spent, without losing work", async () => {
+    inbox = [gmailMessage("a"), gmailMessage("b")];
+    const { store, rows } = memoryStore();
+    let calls = 0;
+    const stats = await processMailboxBatch({
+      batch,
+      mailbox: mailboxClient("gmail", batch, { mode: "scoped_autonomy" }),
+      model: model(),
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5 },
+      shouldYield: () => ++calls > 1,
+    });
+    expect(stats.yielded).toBe(true);
+    expect(rows.size).toBe(1);
+    // Resume: the processed message is reused, the other one is drafted.
+    const again = await run(model(), store);
+    expect(again).toMatchObject({ reused: 1, drafted: 1 });
+    expect(drafts()).toHaveLength(2);
+  });
+});

@@ -124,6 +124,8 @@ const listInput = z
     windowDays: z.number().int().min(1).max(LIST_LIMITS.maxWindowDays),
     maxMessages: z.number().int().min(1).max(LIST_LIMITS.maxMessages),
     now: z.date().optional(),
+    // Incremental batches: only messages received at or after this instant.
+    since: z.date().optional(),
   })
   .strict();
 const draftInput = z
@@ -143,22 +145,34 @@ export function buildArguments(
   input: Record<string, unknown>,
 ): Record<string, unknown> {
   if (operation === "list_inbound" || operation === "list_sent") {
-    const { windowDays, maxMessages, now } = listInput.parse(input);
+    const {
+      windowDays,
+      maxMessages,
+      now,
+      since: after,
+    } = listInput.parse(input);
     const sent = operation === "list_sent";
+    const inboundAfter = sent ? undefined : after;
     if (provider === "gmail")
       return {
         user_id: "me",
         // Inbound: inbox only, excluding chats; spam/trash excluded by default.
+        // Incremental: Gmail `after:` accepts epoch seconds (second precision).
         query: sent
           ? `in:sent newer_than:${windowDays}d`
-          : `in:inbox -in:chats -in:sent -in:drafts newer_than:${windowDays}d`,
+          : `in:inbox -in:chats -in:sent -in:drafts ${
+              inboundAfter
+                ? `after:${Math.floor(inboundAfter.getTime() / 1000)}`
+                : `newer_than:${windowDays}d`
+            }`,
         max_results: maxMessages,
         verbose: true,
         include_payload: true,
         include_spam_trash: false,
       };
-    const since = new Date(
-      (now ?? new Date()).getTime() - windowDays * 86_400_000,
+    const since = (
+      inboundAfter ??
+      new Date((now ?? new Date()).getTime() - windowDays * 86_400_000)
     ).toISOString();
     return {
       user_id: "me",
@@ -427,11 +441,12 @@ export function mailboxClient(
       windowDays: number;
       maxMessages: number;
       now?: Date;
+      since?: Date;
     }): Promise<MailMessage[]> {
-      return normalize(await read("list_inbound", input)).slice(
-        0,
-        input.maxMessages,
-      );
+      const since = input.since?.toISOString();
+      return normalize(await read("list_inbound", input))
+        .filter((m) => !since || !m.receivedAt || m.receivedAt >= since)
+        .slice(0, input.maxMessages);
     },
     async listSent(input: { windowDays: number; maxMessages: number }) {
       return normalize(await read("list_sent", input))

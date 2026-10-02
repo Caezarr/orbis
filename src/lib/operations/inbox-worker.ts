@@ -20,6 +20,7 @@ import {
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
 import { providerStatus } from "@/lib/runtime/provider";
+import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
 import { scoped, type Identity } from "./worker";
 
 export { inboxDraftsEnabled };
@@ -41,18 +42,23 @@ type BatchRow = {
   max_drafts: number;
   attempts: number;
   lease_token: string;
+  since_at: Date | null;
 };
 export type InboxWorkerDeps = {
   model?: InboxModel;
   mailbox?: (
     ...args: Parameters<typeof mailboxClient>
   ) => Parameters<typeof processMailboxBatch>[0]["mailbox"];
+  /** Epoch ms after which no new message is started (serverless time budget). */
+  deadline?: number;
 };
 
 /**
  * Inbox job type of the operations worker: one mailbox batch per invocation,
- * leased (5 min, renewed per message), at most 3 attempts. Model and mailbox
- * calls happen outside database transactions.
+ * leased (5 min, renewed per message), at most 3 attempts with exponential
+ * backoff (1, 4 min), at most one running batch per workspace. Model and
+ * mailbox calls happen outside database transactions. With `deps.deadline` the
+ * batch yields between messages and is re-queued without consuming an attempt.
  */
 export async function runOneInboxBatch(
   identity: Identity,
@@ -75,9 +81,14 @@ export async function runOneInboxBatch(
       "UPDATE inbox_messages SET subject_preview=NULL,draft_preview=NULL,updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (subject_preview IS NOT NULL OR draft_preview IS NOT NULL)",
       [identity.workspaceId, identity.tenantId],
     );
+    // One running batch per workspace (mailbox rate limits, fairness): claims of
+    // the same workspace are serialized, then refused while a live lease exists.
+    await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      `orbis-inbox-claim:${identity.tenantId}:${identity.workspaceId}`,
+    ]);
     const row = (
       await db.query<BatchRow>(
-        "SELECT * FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND available_at<=now() AND attempts<3 AND (status='queued' OR (status='running' AND lease_until<now())) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1",
+        "SELECT * FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND available_at<=now() AND attempts<3 AND (status='queued' OR (status='running' AND lease_until<now())) AND NOT EXISTS (SELECT 1 FROM inbox_batches live WHERE live.workspace_id=$1 AND live.tenant_id=$2 AND live.status='running' AND live.lease_until>=now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1",
         [identity.workspaceId, identity.tenantId],
       )
     ).rows[0];
@@ -100,6 +111,9 @@ export async function runOneInboxBatch(
     windowDays: claimed.window_days,
     maxMessages: claimed.max_messages,
     maxDrafts: claimed.max_drafts,
+    ...(claimed.kind === "incremental" && claimed.since_at
+      ? { since: new Date(claimed.since_at).toISOString() }
+      : {}),
   };
   if (
     batch.tenantId !== identity.tenantId ||
@@ -141,6 +155,10 @@ export async function runOneInboxBatch(
         classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
         draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
       },
+      shouldYield:
+        deps.deadline === undefined
+          ? undefined
+          : () => Date.now() >= deps.deadline!,
     });
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
@@ -152,17 +170,22 @@ export async function runOneInboxBatch(
         : failure
           ? "failed"
           : null;
+    // Time budget reached between messages: resume soon, attempt not consumed.
+    const yielded = !failure && !!stats?.yielded && !stats.leaseLost;
     const status =
       retry ??
       (stats?.leaseLost
         ? null
-        : stats?.budgetExhausted
-          ? "budget_exhausted"
-          : "completed");
+        : yielded
+          ? "queued"
+          : stats?.budgetExhausted
+            ? "budget_exhausted"
+            : "completed");
     if (!status) return; // Lease lost: the new owner finalizes the batch.
     const result = await db.query(
       `UPDATE inbox_batches SET status=$4, stats=$5::jsonb, error=$6, lease_token=NULL, lease_until=NULL,
-       available_at=CASE WHEN $4='queued' THEN now()+interval '1 minute' ELSE available_at END,
+       attempts=CASE WHEN $8::boolean THEN greatest(attempts-1,0) ELSE attempts END,
+       available_at=CASE WHEN $8::boolean THEN now() WHEN $4='queued' THEN now()+make_interval(mins => power(4, greatest(attempts-1,0))::int) ELSE available_at END,
        completed_at=CASE WHEN $4 IN ('completed','failed','budget_exhausted') THEN now() ELSE NULL END
        WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND lease_token=$7 AND status='running'`,
       [
@@ -177,8 +200,16 @@ export async function runOneInboxBatch(
             ? "Mailbox batch failed. It will be retried; nothing was sent."
             : null,
         claimed.lease_token,
+        yielded,
       ],
     );
+    if (result.rowCount && status === "completed")
+      await advanceCursor(db, identity, {
+        id: batch.id,
+        connectedAccountId: batch.connectedAccountId,
+      });
+    if (result.rowCount && failure === "policy")
+      await pauseContinuous(db, identity, batch.connectedAccountId);
     if (result.rowCount && status !== "queued") {
       await recordEvent(db, identity, "inbox_batch_completed", {
         task_id: batch.id,
@@ -190,5 +221,11 @@ export async function runOneInboxBatch(
         });
     }
   });
-  return { processed: true, batchId: batch.id, stats, failure };
+  return {
+    processed: true,
+    batchId: batch.id,
+    workspaceId: batch.workspaceId,
+    stats,
+    failure,
+  };
 }
