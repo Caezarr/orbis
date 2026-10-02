@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { track, type EventName } from "@/lib/analytics/events";
+import { recordEvent, track, type EventName } from "@/lib/analytics/events";
 import type { PoolClient } from "pg";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -123,6 +123,8 @@ async function resolveContext(client: PoolClient): Promise<WorkspaceContext> {
       "INSERT INTO workspace_state(workspace_id,tenant_id,state) VALUES($1,$2,$3::jsonb)",
       [id, tenantId, JSON.stringify(blankTenantState(workspace))],
     );
+    // Funnel: first authenticated request provisions the account's workspace.
+    await recordEvent(client, { workspaceId: id, tenantId, userId: user.id }, "account_created");
   }
   // A cookie selects among verified memberships; it never grants membership.
   const selected = (await cookies()).get("orbis_workspace")?.value;

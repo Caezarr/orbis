@@ -11,7 +11,10 @@ export async function proxy(request: NextRequest) {
   const publicCatalog = pathname === "/catalog" || pathname === "/catalog/";
   // Industry pages are public marketing pages and must stay crawlable.
   const publicVertical = pathname === "/for" || pathname.startsWith("/for/");
-  const protectedPage = !publicCatalog && !publicVertical && !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
+  // /start step 1 (company reading) works without an account; later steps are
+  // enforced server-side by the session-only /api/v1/start/* and /api/v1/inbox routes.
+  const publicStart = pathname === "/start" || pathname === "/start/";
+  const protectedPage = !publicCatalog && !publicVertical && !publicStart && !pathname.startsWith("/api/") && pathname !== "/" && pathname !== "/login" && !pathname.startsWith("/_next/") && !/\.[a-z0-9]+$/i.test(pathname);
   const login = () => {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
