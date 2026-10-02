@@ -74,6 +74,32 @@ async function main() {
             `GRANT SELECT, INSERT, UPDATE ON ${table} TO ${quoted}`,
           );
       }
+      // 008 inbox scheduler: column-scoped writes so the runtime role can never
+      // raise its own monthly cap; discovery only through the definer function.
+      const scheduler = await client.query(
+        "SELECT to_regclass('public.inbox_settings') AS relation",
+      );
+      if (scheduler.rows[0].relation) {
+        const writable =
+          "continuous_enabled, provider, connected_account_id, interval_minutes, cursor_at, next_run_at, enabled_by, enabled_at, updated_at";
+        await client.query(`GRANT SELECT ON inbox_settings TO ${quoted}`);
+        await client.query(
+          `GRANT INSERT (workspace_id, tenant_id, ${writable}) ON inbox_settings TO ${quoted}`,
+        );
+        await client.query(
+          `GRANT UPDATE (${writable}) ON inbox_settings TO ${quoted}`,
+        );
+        await client.query(
+          `GRANT SELECT, INSERT, UPDATE ON inbox_visits TO ${quoted}`,
+        );
+        // Only the function owner can grant EXECUTE: act as it for this one
+        // statement (the migration owner holds SET, not INHERIT, on it).
+        await client.query("SET LOCAL ROLE orbis_inbox_dispatch");
+        await client.query(
+          `GRANT EXECUTE ON FUNCTION orbis_inbox_due_workspaces(integer) TO ${quoted}`,
+        );
+        await client.query("RESET ROLE");
+      }
     }
     await client.query("COMMIT");
     console.log("Migrations complete");

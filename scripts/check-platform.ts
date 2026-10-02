@@ -90,6 +90,60 @@ async function databaseChecks() {
           assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
           assert.equal((await db.query(`UPDATE ${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
         }
+        // Inbox scheduler (migration 008): settings/visits isolation + dispatcher privilege model.
+        if ((await db.query("SELECT to_regclass('public.inbox_settings') AS r")).rows[0].r) {
+          await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+          await db.query("INSERT INTO inbox_settings(workspace_id,tenant_id,continuous_enabled,provider,connected_account_id,next_run_at) VALUES($1,$1,true,'gmail','acc',now())", [ids[1]]);
+          await db.query("INSERT INTO inbox_visits(workspace_id,tenant_id,user_id) VALUES($1,$1,$1)", [ids[1]]);
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          for (const table of ["inbox_settings", "inbox_visits"]) {
+            assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+            // inbox_settings grants UPDATE on scheduling columns only (never ids or the cap).
+            const column = table === "inbox_settings" ? "updated_at" : "seen_at";
+            assert.equal((await db.query(`UPDATE ${table} SET ${column}=${column} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+          }
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
+          assert.equal((await db.query("SELECT * FROM inbox_settings WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member settings");
+          // A member cannot write a visit marker for another user.
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          await db.query("SAVEPOINT visit_forgery");
+          await assert.rejects(db.query("INSERT INTO inbox_visits(workspace_id,tenant_id,user_id) VALUES($1,$1,$2)", [ids[0], ids[1]]), Error, "visit for another user");
+          await db.query("ROLLBACK TO SAVEPOINT visit_forgery");
+          // Runtime role can never raise its own cap.
+          assert.equal((await db.query("SELECT has_column_privilege(current_user,'inbox_settings','monthly_cap_cents','UPDATE') AS p")).rows[0].p, false, "runtime role must not UPDATE monthly_cap_cents");
+          assert.equal((await db.query("SELECT has_table_privilege(current_user,'inbox_settings','DELETE') AS p")).rows[0].p, false, "no DELETE on inbox_settings");
+          // Dispatcher role: NOLOGIN, no BYPASSRLS, not reachable from the runtime role.
+          const dispatch = (await db.query("SELECT rolcanlogin,rolbypassrls,rolsuper FROM pg_roles WHERE rolname='orbis_inbox_dispatch'")).rows[0];
+          assert.deepEqual(dispatch, { rolcanlogin: false, rolbypassrls: false, rolsuper: false }, "dispatch role attributes");
+          assert.equal((await db.query("SELECT pg_has_role(current_user,'orbis_inbox_dispatch','MEMBER') AS m")).rows[0].m, false, "runtime role must not be a member of orbis_inbox_dispatch");
+          await db.query("SAVEPOINT set_role");
+          await assert.rejects(db.query("SET LOCAL ROLE orbis_inbox_dispatch"), Error, "runtime cannot assume dispatch role");
+          await db.query("ROLLBACK TO SAVEPOINT set_role");
+          assert.equal((await db.query("SELECT has_function_privilege(current_user,'orbis_set_workspace_inbox_cap(text,integer)','EXECUTE') AS p")).rows[0].p, false, "runtime role must not set caps");
+          const capAdmin = (await db.query("SELECT rolcanlogin,rolbypassrls,rolsuper FROM pg_roles WHERE rolname='orbis_inbox_cap_admin'")).rows[0];
+          assert.deepEqual(capAdmin, { rolcanlogin: false, rolbypassrls: false, rolsuper: false }, "cap admin role attributes");
+          assert.equal((await db.query("SELECT pg_has_role(current_user,'orbis_inbox_cap_admin','MEMBER') AS m")).rows[0].m, false, "runtime role must not be a member of orbis_inbox_cap_admin");
+          for (const column of ["cursor_at", "connected_account_id", "continuous_enabled"])
+            assert.equal((await db.query("SELECT has_column_privilege('orbis_inbox_cap_admin','inbox_settings',$1,'SELECT') AS p", [column])).rows[0].p, false, `cap admin must not read ${column}`);
+          const fn = (await db.query("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig FROM pg_proc p WHERE p.proname='orbis_inbox_due_workspaces'")).rows[0];
+          assert.equal(fn.owner, "orbis_inbox_dispatch");
+          assert.equal(fn.prosecdef, true);
+          assert.ok((fn.proconfig ?? []).some((c: string) => c.startsWith("search_path=")), "definer function pins search_path");
+          // Column-level least privilege: scheduling columns only, read-only.
+          for (const [table, column] of [["inbox_messages", "draft_preview"], ["inbox_messages", "subject_preview"], ["inbox_messages", "message_id"], ["inbox_batches", "stats"], ["inbox_batches", "connected_account_id"], ["inbox_batches", "error"], ["inbox_settings", "cursor_at"], ["inbox_settings", "connected_account_id"], ["inbox_settings", "monthly_cap_cents"], ["workspace_state", "state"], ["memberships", "email"], ["memberships", "name"], ["workspaces", "name"]])
+            assert.equal((await db.query("SELECT has_column_privilege('orbis_inbox_dispatch',$1,$2,'SELECT') AS p", [table, column])).rows[0].p, false, `dispatch must not read ${table}.${column}`);
+          for (const table of ["inbox_batches", "inbox_messages", "inbox_settings", "inbox_visits", "memberships", "workspace_state", "workspaces"])
+            for (const privilege of ["INSERT", "UPDATE", "DELETE"])
+              assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch',$1,$2) AS p", [table, privilege])).rows[0].p, false, `dispatch must not ${privilege} ${table}`);
+          // Discovery works across tenants (ids only) while content stays invisible.
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          const due = await db.query("SELECT * FROM orbis_inbox_due_workspaces(200)");
+          assert.deepEqual(due.fields.map(f => f.name), ["tenant_id", "workspace_id", "worker_user_id", "due_batches", "poll_due", "due_since"], "discovery returns ids only");
+          const found = due.rows.find(r => r.workspace_id === ids[1]);
+          assert.ok(found || due.rowCount === 200, "tenant B due work discovered");
+          if (found) assert.deepEqual([found.tenant_id, found.worker_user_id, found.poll_due], [ids[1], ids[1], true]);
+          assert.equal((await db.query("SELECT * FROM inbox_batches WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "discovery grants no content access");
+        }
         await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
         assert.equal((await db.query("SELECT * FROM inbox_messages WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member");
         await assert.rejects(db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$2,$2,$1,'k2','h','gmail','acc','v','test',14,50,5)", [randomUUID(), ids[1]]));
@@ -98,7 +152,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, ids-only dispatcher role); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();
