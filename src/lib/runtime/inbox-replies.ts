@@ -153,7 +153,8 @@ export type ReplyDraft = z.infer<typeof replyDraftSchema>;
 export type ReplySource = {
   id: string;
   name: string;
-  kind: "profile" | "knowledge" | "memory" | "instruction";
+  /** "fact" = owner-approved company sheet fact (src/lib/brain). */
+  kind: "profile" | "knowledge" | "memory" | "instruction" | "fact";
   content: string;
 };
 export type DraftInput = {

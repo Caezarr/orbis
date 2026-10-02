@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { recordEvent } from "@/lib/analytics/events";
-import type { StoreState } from "@/lib/domain/types";
 import { replyContext } from "@/lib/inbox/context";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
 import {
@@ -13,6 +12,7 @@ import { monthlyCapCents, postgresInboxStore } from "@/lib/inbox/store";
 import {
   mailboxClient,
   MailboxPolicyError,
+  type MailboxClient,
   type MailboxMode,
 } from "@/lib/integrations/mailbox";
 import {
@@ -21,6 +21,16 @@ import {
 } from "@/lib/runtime/inbox-replies";
 import { providerStatus } from "@/lib/runtime/provider";
 import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
+import { enqueueExtraction } from "@/lib/brain/store";
+import { factSources } from "@/lib/brain/facts";
+import { providerBrainModel, type BrainModel } from "@/lib/brain/model";
+import { checkDraftOutcomes, type OutcomeStats } from "@/lib/brain/outcomes";
+import {
+  BRAIN_COSTS,
+  loadWorkspaceContext,
+  postgresOutcomeStore,
+  trustedProfileText,
+} from "@/lib/brain/worker";
 import { scoped, type Identity } from "./worker";
 
 export { inboxDraftsEnabled };
@@ -46,9 +56,12 @@ type BatchRow = {
 };
 export type InboxWorkerDeps = {
   model?: InboxModel;
+  /** Company brain model (draft-vs-sent explanations). */
+  brainModel?: BrainModel;
   mailbox?: (
     ...args: Parameters<typeof mailboxClient>
-  ) => Parameters<typeof processMailboxBatch>[0]["mailbox"];
+  ) => Parameters<typeof processMailboxBatch>[0]["mailbox"] &
+    Partial<Pick<MailboxClient, "listThreadSent">>;
   /** Epoch ms after which no new message is started (serverless time budget). */
   deadline?: number;
 };
@@ -122,35 +135,30 @@ export async function runOneInboxBatch(
     throw new Error("Batch identity mismatch");
   let stats: BatchStats | null = null;
   let failure: "policy" | "transient" | null = null;
+  let mailbox: ReturnType<NonNullable<InboxWorkerDeps["mailbox"]>> | null =
+    null;
+  let trustedText = "";
   try {
-    const state = await run(async (db) => {
-      const { rows } = await db.query<{ state: StoreState }>(
-        "SELECT state FROM workspace_state WHERE workspace_id=$1 AND tenant_id=$2",
-        [identity.workspaceId, identity.tenantId],
-      );
-      const value = rows[0]?.state;
-      if (
-        !value ||
-        value.workspace.id !== identity.workspaceId ||
-        value.workspace.tenantId !== identity.tenantId
-      )
-        throw new Error("Workspace state unavailable");
-      return value;
-    });
+    // Workspace snapshot + owner-approved company sheet facts (never candidates).
+    const { state, facts } = await run((db) =>
+      loadWorkspaceContext(db, identity),
+    );
+    trustedText = trustedProfileText(state);
+    mailbox = (deps.mailbox ?? mailboxClient)(
+      batch.provider,
+      {
+        tenantId: batch.tenantId,
+        workspaceId: batch.workspaceId,
+        connectedAccountId: batch.connectedAccountId,
+      },
+      { mode: claimed.mode },
+    );
     stats = await processMailboxBatch({
       batch,
-      mailbox: (deps.mailbox ?? mailboxClient)(
-        batch.provider,
-        {
-          tenantId: batch.tenantId,
-          workspaceId: batch.workspaceId,
-          connectedAccountId: batch.connectedAccountId,
-        },
-        { mode: claimed.mode },
-      ),
+      mailbox,
       model: deps.model ?? providerInboxModel,
       store: postgresInboxStore(run, batch, { token: claimed.lease_token }),
-      context: replyContext(state),
+      context: replyContext(state, factSources(facts)),
       costs: {
         classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
         draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
@@ -163,6 +171,7 @@ export async function runOneInboxBatch(
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
   }
+  let finalStatus = null as string | null;
   await run(async (db) => {
     const retry =
       failure === "transient" && claimed.attempts < 3
@@ -182,6 +191,7 @@ export async function runOneInboxBatch(
             ? "budget_exhausted"
             : "completed");
     if (!status) return; // Lease lost: the new owner finalizes the batch.
+    finalStatus = status;
     const result = await db.query(
       `UPDATE inbox_batches SET status=$4, stats=$5::jsonb, error=$6, lease_token=NULL, lease_until=NULL,
        attempts=CASE WHEN $8::boolean THEN greatest(attempts-1,0) ELSE attempts END,
@@ -220,8 +230,42 @@ export async function runOneInboxBatch(
           task_id: batch.id,
         });
     }
+    // Company brain: read the owner's sent mail ONCE after the first completed
+    // run of a mailbox (manual re-runs from the company sheet page).
+    if (result.rowCount && status === "completed" && claimed.kind === "first_run")
+      await enqueueExtraction(db, identity, {
+        provider: batch.provider,
+        connectedAccountId: batch.connectedAccountId,
+        mode: claimed.mode,
+        requestKey: `extract:auto:${batch.connectedAccountId}`,
+      });
   });
+  // Level 5: on completed incremental batches, check a few earlier real drafts
+  // against what the owner actually sent (best effort, budgeted, bounded).
+  let outcomes: OutcomeStats | undefined;
+  const timeLeft =
+    deps.deadline === undefined ? Infinity : deps.deadline - Date.now();
+  if (
+    finalStatus === "completed" &&
+    claimed.kind === "incremental" &&
+    mailbox?.listThreadSent &&
+    timeLeft > 5_000
+  ) {
+    const listThreadSent = mailbox.listThreadSent.bind(mailbox);
+    outcomes = await checkDraftOutcomes({
+      mailbox: { listThreadSent },
+      model: deps.brainModel ?? providerBrainModel,
+      store: postgresOutcomeStore(run, identity, "orbi"),
+      trustedText,
+      cents: BRAIN_COSTS.explain(),
+      shouldYield:
+        deps.deadline === undefined
+          ? undefined
+          : () => Date.now() >= deps.deadline!,
+    }).catch(() => undefined);
+  }
   return {
+    outcomes,
     processed: true,
     batchId: batch.id,
     workspaceId: batch.workspaceId,

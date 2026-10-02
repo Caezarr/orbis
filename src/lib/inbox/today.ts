@@ -2,7 +2,9 @@ import { z } from "zod";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { intervalMinutes } from "./schedule";
-import { publicMessage, type InboxResult } from "./service";
+import { draftsWithNewInfo, openQuestions } from "@/lib/brain/service";
+import type { MailboxMode } from "@/lib/integrations/mailbox";
+import { inboxMode, publicMessage, type InboxResult } from "./service";
 import { effectiveMonthlyCap } from "./store";
 
 /**
@@ -73,7 +75,8 @@ export async function inboxSettings(): Promise<InboxSettingsView> {
   ).rows[0];
   const spent = (
     await ctx.db.query<{ cents: string }>(
-      "SELECT COALESCE(sum(est_cost_cents),0)::text AS cents FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now())",
+      `SELECT ((SELECT COALESCE(sum(est_cost_cents),0) FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+        + (SELECT COALESCE(sum(est_cost_cents),0) FROM brain_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now())))::text AS cents`,
       ids,
     )
   ).rows[0];
@@ -148,6 +151,13 @@ export type TodayDigest = {
   };
   drafts: InboxResult[];
   settings: InboxSettingsView;
+  /** ORBIS_INBOX_MODE: "test" = drafts are simulated, nothing written to the mailbox. */
+  mode: MailboxMode;
+  /** « Questions d’Orbi » — asked once, answered once (company brain). */
+  questions: Awaited<ReturnType<typeof openQuestions>>;
+  /** Unsent drafts that asked a question answered since: new info available. */
+  newInfo: Awaited<ReturnType<typeof draftsWithNewInfo>>;
+  canAnswer: boolean;
 };
 const DEFAULT_LOOKBACK_MS = 7 * 86_400_000;
 
@@ -196,6 +206,10 @@ export async function todayDigest(now = new Date()): Promise<TodayDigest> {
     },
     drafts: drafts.map(publicMessage),
     settings: await inboxSettings(),
+    mode: inboxMode(),
+    questions: await openQuestions(ctx),
+    newInfo: await draftsWithNewInfo(ctx),
+    canAnswer: ctx.role === "owner" || ctx.role === "admin",
   };
 }
 

@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { Classification } from "@/lib/runtime/inbox-replies";
+import { recordDraftQuestions } from "@/lib/brain/store";
 import type { InboxBatch, InboxStore, MessageStatus } from "./pipeline";
 
 /** Runs fn in a short tenant-scoped transaction (worker `scoped`). */
@@ -36,13 +37,14 @@ export function effectiveMonthlyCap(stored: number | null | undefined) {
 }
 /**
  * Same monthly budget as durable tasks: reserved task quotes + estimated inbox
- * model cost this month, against the workspace's effective cap. Serialized per
- * tenant so concurrent workers cannot both pass the check.
+ * and company-brain model cost this month, against the workspace's effective
+ * cap. Takes the per-tenant budget lock (held until the caller's transaction
+ * ends) so concurrent workers cannot both pass the check; the caller records
+ * its reservation in the same transaction.
  */
-export async function reserveInboxBudget(
+export async function workspaceBudgetAllows(
   db: PoolClient,
   ids: { workspaceId: string; tenantId: string },
-  rowId: string,
   cents: number,
 ) {
   if (!monthlyCapCents()) return false;
@@ -61,10 +63,19 @@ export async function reserveInboxBudget(
     `SELECT (
       (SELECT COALESCE(sum(total_cents),0) FROM operational_tasks WHERE workspace_id=$1 AND tenant_id=$2 AND (status IN ('queued','running','needs_review') OR (status='completed' AND completed_at>=date_trunc('month',now()))))
       + (SELECT COALESCE(sum(est_cost_cents),0) FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+      + (SELECT COALESCE(sum(est_cost_cents),0) FROM brain_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
     )::text AS reserved`,
     [ids.workspaceId, ids.tenantId],
   );
-  if (Number(spend.rows[0]?.reserved ?? 0) + cents > cap) return false;
+  return Number(spend.rows[0]?.reserved ?? 0) + cents <= cap;
+}
+export async function reserveInboxBudget(
+  db: PoolClient,
+  ids: { workspaceId: string; tenantId: string },
+  rowId: string,
+  cents: number,
+) {
+  if (!(await workspaceBudgetAllows(db, ids, cents))) return false;
   const updated = await db.query(
     "UPDATE inbox_messages SET est_cost_cents=est_cost_cents+$4, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3",
     [rowId, ids.workspaceId, ids.tenantId, cents],
@@ -249,6 +260,16 @@ export function postgresInboxStore(
       );
     },
     ledger,
+    async recordQuestions(rowId, questions) {
+      return scoped((db) =>
+        recordDraftQuestions(
+          db,
+          { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
+          rowId,
+          questions,
+        ),
+      );
+    },
     async heartbeat() {
       return scoped(async (db) => {
         const result = await db.query(

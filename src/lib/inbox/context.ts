@@ -6,8 +6,10 @@ import type { ReplySource } from "@/lib/runtime/inbox-replies";
  * Trusted reply sources for one workspace: confirmed website profile, approved
  * workspace rules/memory and imported (ready, non-fixture) knowledge. State must
  * come from the authenticated workspace snapshot loaded by the worker.
+ * `facts` = owner-approved company sheet facts (src/lib/brain factSources()):
+ * only approved, unexpired facts are ever passed here.
  */
-export function replyContext(state: StoreState) {
+export function replyContext(state: StoreState, facts: ReplySource[] = []) {
   const tenantId = state.workspace.tenantId;
   const knowledgeIds = state.sources
     .filter(
@@ -67,7 +69,7 @@ export function replyContext(state: StoreState) {
         name: e.sourceName,
         content: e.excerpt,
       }));
-      return [...fixed.slice(0, 12), ...knowledge];
+      return [...fixed.slice(0, 12), ...facts.slice(0, 20), ...knowledge];
     },
   };
 }

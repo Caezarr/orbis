@@ -119,6 +119,8 @@ const providerId = z
   .max(1024)
   .regex(/^[A-Za-z0-9_\-=+/.:]+$/);
 export const LIST_LIMITS = { maxMessages: 50, maxWindowDays: 31 } as const;
+/** Sent-mail reads (company sheet extraction): one bounded page, read-only. */
+export const SENT_LIST_LIMITS = { maxMessages: 200, maxWindowDays: 90 } as const;
 const listInput = z
   .object({
     windowDays: z.number().int().min(1).max(LIST_LIMITS.maxWindowDays),
@@ -150,7 +152,14 @@ export function buildArguments(
       maxMessages,
       now,
       since: after,
-    } = listInput.parse(input);
+    } = (
+      operation === "list_sent"
+        ? listInput.extend({
+            windowDays: z.number().int().min(1).max(SENT_LIST_LIMITS.maxWindowDays),
+            maxMessages: z.number().int().min(1).max(SENT_LIST_LIMITS.maxMessages),
+          })
+        : listInput
+    ).parse(input);
     const sent = operation === "list_sent";
     const inboundAfter = sent ? undefined : after;
     if (provider === "gmail")
@@ -452,6 +461,13 @@ export function mailboxClient(
       return normalize(await read("list_sent", input))
         .filter((m) => m.fromOwner || provider === "outlook")
         .slice(0, input.maxMessages);
+    },
+    /** Messages the owner sent in one thread (Gmail SENT label / Outlook sentitems). */
+    async listThreadSent(threadId: string) {
+      const messages = normalize(await read("list_thread_sent", { threadId }));
+      return provider === "gmail"
+        ? messages.filter((m) => m.fromOwner && !m.isDraft)
+        : messages.map((m) => ({ ...m, fromOwner: true }));
     },
     async readThread(threadId: string) {
       const messages = normalize(await read("read_thread", { threadId }));
