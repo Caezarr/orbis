@@ -217,6 +217,7 @@ export type BlockerKind =
   | "flag_disabled"
   | "budget_missing"
   | "provider_not_configured"
+  | "no_provider"
   | "ai_not_configured"
   | "connection_unverified"
   | "multiple_mailboxes"
@@ -257,6 +258,10 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
   provider_not_configured: {
     title: "La connexion à cette messagerie n’est pas configurée sur ce déploiement.",
     action: "Essayez l’autre messagerie si elle est disponible, ou revenez une fois la configuration faite.",
+  },
+  no_provider: {
+    title: "Aucune messagerie n’est encore configurée sur ce déploiement.",
+    action: "Gmail et Outlook seront proposés ici dès leur configuration. Votre profil est conservé.",
   },
   ai_not_configured: {
     title: "Aucun modèle d’IA n’est configuré.",

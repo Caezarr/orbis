@@ -163,16 +163,14 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
   );
 
   // Boot: restore the pending profile, read the OAuth return marker, load server state.
-  const booted = useRef(false);
+  // Deferred so a Strict Mode double-mount cancels the first run before it acts.
   useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
-    const stored = readPending();
-    const params = new URLSearchParams(window.location.search);
-    const connected = params.get("connected");
-    const back = connected === "gmail" || connected === "outlook" ? connected : null;
-    if (params.toString()) window.history.replaceState(null, "", "/start");
     const timer = setTimeout(async () => {
+      const stored = readPending();
+      const params = new URLSearchParams(window.location.search);
+      const connected = params.get("connected");
+      const back = connected === "gmail" || connected === "outlook" ? connected : null;
+      if (params.toString()) window.history.replaceState(null, "", "/start");
       if (stored) setPending(stored);
       if (back) setReturnedFrom(back);
       if (initialSession === "anonymous") return;
@@ -204,8 +202,10 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
   // Move focus to the newly opened step for keyboard and screen-reader users.
   const headingRefs = useRef<Partial<Record<StartStep, HTMLHeadingElement | null>>>({});
   const previousStep = useRef(step);
+  // Only after a user action: the initial server-state load must not steal focus.
+  const userActed = useRef(false);
   useEffect(() => {
-    if (previousStep.current !== step) headingRefs.current[step]?.focus();
+    if (previousStep.current !== step && userActed.current) headingRefs.current[step]?.focus();
     previousStep.current = step;
   }, [step]);
 
@@ -225,7 +225,12 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
   };
 
   return (
-    <main className={s.page} lang="fr">
+    <main
+      className={s.page}
+      lang="fr"
+      onClickCapture={() => (userActed.current = true)}
+      onSubmitCapture={() => (userActed.current = true)}
+    >
       <header className={s.top}>
         <Link href="/" className={s.brand}>
           <span aria-hidden="true" />
@@ -427,7 +432,9 @@ function CompanyStep({
       ) : (
         <>
           <label>
-            Nom de l’entreprise <span className={s.optional}>(facultatif)</span>
+            <span>
+              Nom de l’entreprise <span className={s.optional}>(facultatif)</span>
+            </span>
             <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="organization" maxLength={120} />
           </label>
           <label>
@@ -529,7 +536,9 @@ function ProfileReview({
         />
       </label>
       <label>
-        Résumé proposé <span className={s.optional}>— corrigez-le si besoin</span>
+        <span>
+          Résumé proposé <span className={s.optional}>— corrigez-le si besoin</span>
+        </span>
         <textarea
           value={profile.summary}
           onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
@@ -761,7 +770,7 @@ function MailboxStep({
         contre cette liste.
       </p>
       {configured.length === 0 ? (
-        <Blocker kind="provider_not_configured" onRetry={onRecheck} />
+        <Blocker kind={readiness.session === "offline" ? "offline" : "no_provider"} onRetry={onRecheck} />
       ) : (
         <div className={s.providers}>
           {PROVIDERS.map((p) => {
@@ -1127,7 +1136,7 @@ function Results({
         </article>
       ))}
       {summary.review.length > 0 && (
-        <section className={s.aside} aria-label="À vérifier par vous">
+        <section className={`${s.aside} ${s.reviewList}`} aria-label="À vérifier par vous">
           <h3>À vérifier par vous ({summary.review.length})</h3>
           <ul>
             {summary.review.map((m) => (
