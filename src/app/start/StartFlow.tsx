@@ -34,6 +34,9 @@ import { ContinuousToggle } from "./ContinuousToggle";
 import { PlanBanner } from "@/components/billing/PlanBanner";
 import { DraftCard } from "./DraftCard";
 import s from "./start.module.css";
+import { AuthPanel } from "@/components/auth/AuthPanel";
+import { LegalLinks } from "@/components/legal/LegalLinks";
+import type { AuthOptions } from "@/lib/platform/auth";
 
 export type StartSession = "anonymous" | "authenticated" | "offline";
 type Provider = "gmail" | "outlook";
@@ -95,7 +98,13 @@ async function json<T>(response: Response): Promise<T & { error?: string; code?:
   return (await response.json().catch(() => ({}))) as T & { error?: string; code?: string };
 }
 
-export function StartFlow({ session: initialSession }: { session: StartSession }) {
+export function StartFlow({
+  session: initialSession,
+  authOptions,
+}: {
+  session: StartSession;
+  authOptions: AuthOptions;
+}) {
   const [session, setSession] = useState<StartSession>(initialSession);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -335,6 +344,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
                   )}
                   {id === "account" && pending && (
                     <AccountStep
+                      authOptions={authOptions}
                       profileName={pending.name}
                       onEdit={() => {
                         setLastProfile(pending);
@@ -373,6 +383,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
           );
         })}
       </ol>
+      <LegalLinks className={s.legal} />
     </main>
   );
 }
@@ -851,54 +862,17 @@ function PreviewStep({
 
 // ------------------------------------------------------------------ step 2
 
-function AccountStep({ profileName, onEdit }: { profileName: string; onEdit: () => void }) {
-  const [mode, setMode] = useState<"sign-up" | "sign-in">("sign-up");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [confirmation, setConfirmation] = useState(false);
-  const signup = mode === "sign-up";
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch(`/api/auth/${mode}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password"), returnTo: "/start" }),
-      });
-      const result = await json<{ confirmationRequired?: boolean }>(response);
-      if (!response.ok)
-        setMessage(
-          response.status === 503
-            ? "La création de compte n’est pas disponible sur ce déploiement."
-            : signup
-              ? "Création impossible. Vérifiez l’adresse et un mot de passe de 12 caractères minimum, ou connectez-vous."
-              : "Connexion impossible. Vérifiez vos identifiants et la confirmation de votre adresse.",
-        );
-      else if (result.confirmationRequired) setConfirmation(true);
-      // Full reload: the server page must re-render with the new session cookies.
-      else window.location.reload();
-    } catch {
-      setMessage("Connexion au service impossible. Réessayez.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (confirmation)
-    return (
-      <div className={s.form} role="status">
-        <p>
-          <strong>Confirmez votre adresse.</strong> Ouvrez l’e-mail reçu : le lien vous ramène ici, à l’étape suivante.
-        </p>
-        <p className={s.fine}>
-          Le profil de {profileName} reste enregistré sur cet appareil pendant 24 heures, jamais dans un lien.
-        </p>
-      </div>
-    );
+function AccountStep({
+  profileName,
+  onEdit,
+  authOptions,
+}: {
+  profileName: string;
+  onEdit: () => void;
+  authOptions: AuthOptions;
+}) {
   return (
-    <form onSubmit={submit} className={s.form}>
+    <div className={s.form}>
       <p>
         Le profil de <strong>{profileName}</strong> est prêt. Il sera enregistré dans votre espace dès que votre compte
         existe.{" "}
@@ -906,47 +880,14 @@ function AccountStep({ profileName, onEdit }: { profileName: string; onEdit: () 
           Modifier le profil
         </button>
       </p>
-      <div className={s.switch} role="group" aria-label="Type d’accès">
-        <button type="button" aria-pressed={signup} onClick={() => setMode("sign-up")}>
-          Créer un compte
-        </button>
-        <button type="button" aria-pressed={!signup} onClick={() => setMode("sign-in")}>
-          J’ai déjà un compte
-        </button>
-      </div>
-      <label>
-        E-mail professionnel
-        <input name="email" type="email" autoComplete="email" required maxLength={254} />
-      </label>
-      <label>
-        Mot de passe
-        <input
-          name="password"
-          type="password"
-          autoComplete={signup ? "new-password" : "current-password"}
-          required
-          minLength={signup ? 12 : 1}
-          maxLength={1024}
-          aria-describedby={signup ? "start-password-hint" : undefined}
-        />
-        {signup && (
-          <span id="start-password-hint" className={s.fine}>
-            12 caractères minimum.
-          </span>
-        )}
-      </label>
-      {message && (
-        <p className={s.alert} role="alert">
-          {message}
-        </p>
-      )}
-      <div className={s.actions}>
-        <button className={s.primary} disabled={busy}>
-          {busy ? "Un instant…" : signup ? "Créer mon compte" : "Me connecter"}
-        </button>
-      </div>
-      <p className={s.fine}>Le profil est conservé sur cet appareil pendant 24 heures au plus, jamais dans un lien.</p>
-    </form>
+      {/* Full reload after a password sign-in: the server page must re-render with the new session cookies.
+          Magic link and Google/Microsoft come back through /api/auth/callback → /start. */}
+      <AuthPanel options={authOptions} returnTo="/start" initialMode="sign-up" onSignedIn={() => window.location.reload()} />
+      <p className={s.fine}>
+        Le profil est conservé sur cet appareil pendant 24 heures au plus, jamais dans un lien. Un lien de connexion doit être
+        ouvert dans ce même navigateur.
+      </p>
+    </div>
   );
 }
 
