@@ -159,7 +159,9 @@ export type BatchStatus =
   | "running"
   | "completed"
   | "failed"
-  | "budget_exhausted";
+  | "budget_exhausted"
+  | "quota_reached"
+  | "plan_inactive";
 
 export type StartFacts = {
   authenticated: boolean;
@@ -225,11 +227,13 @@ export type BlockerKind =
   | "auth_required"
   | "forbidden"
   | "conflict"
+  | "plan_required"
   | "unknown";
 
 /** Maps an /api/v1/inbox error response to an actionable kind. */
 export function inboxErrorKind(status: number, message = ""): BlockerKind {
   if (status === 401) return "auth_required";
+  if (status === 402) return "plan_required";
   if (status === 403) return "forbidden";
   if (status === 503) {
     if (/not enabled/i.test(message)) return "flag_disabled";
@@ -291,6 +295,10 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
     title: "Une demande différente utilise déjà cet identifiant.",
     action: "Rechargez la page pour repartir du dernier lot.",
   },
+  plan_required: {
+    title: "Votre formule ne permet pas de nouveau traitement pour l’instant.",
+    action: "Vos brouillons passés restent consultables. Choisissez ou régularisez votre formule depuis la page Abonnement.",
+  },
   unknown: {
     title: "Le service n’a pas pu traiter la demande.",
     action: "Réessayez dans un instant. Rien n’a été envoyé.",
@@ -298,7 +306,7 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
 };
 
 /** Phase displayed while a batch is pending — only states the backend reports. */
-export type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget";
+export type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget" | "quota";
 export function progressPhase(
   batch: Pick<InboxBatchView, "status">,
   messages: Pick<InboxMessageView, "status">[],
@@ -312,6 +320,9 @@ export function progressPhase(
       return "done";
     case "budget_exhausted":
       return "budget";
+    case "quota_reached":
+    case "plan_inactive":
+      return "quota";
     default:
       return "failed";
   }

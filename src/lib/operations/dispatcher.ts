@@ -1,6 +1,7 @@
 import { transaction } from "@/lib/platform/db";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
 import { enqueueDueIncremental } from "@/lib/inbox/schedule";
+import { currentEntitlement } from "@/lib/billing/entitlements-store";
 import { runOneInboxBatch, type InboxWorkerDeps } from "./inbox-worker";
 import { scoped, type Identity } from "./worker";
 
@@ -123,7 +124,13 @@ export async function dispatchInboxPass(
   const enqueue =
     deps.enqueue ??
     ((identity: Identity) =>
-      scoped(identity, (db) => enqueueDueIncremental(db, identity)));
+      scoped(identity, (db) =>
+        enqueueDueIncremental(db, identity, new Date(), {
+          // No new continuous batch without an active plan and drafts left.
+          allow: async () =>
+            (await currentEntitlement(db, identity)).canProcess,
+        }),
+      ));
   const runBatch =
     deps.runBatch ??
     (async (identity: Identity, batchDeadline: number) => {

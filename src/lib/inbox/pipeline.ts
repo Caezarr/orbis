@@ -80,6 +80,10 @@ export type BatchStats = {
   leaseLost: boolean;
   /** Stopped between messages because the caller's time budget ran out. */
   yielded?: boolean;
+  /** Stopped before any further model call: the plan's draft quota is used up. */
+  quotaReached?: boolean;
+  /** Mailbox drafts created by this run (quota units), including recipient mismatches. */
+  draftsCreated?: number;
 };
 export class LeaseLostError extends Error {}
 
@@ -133,6 +137,8 @@ export async function processMailboxBatch(params: {
   now?: Date;
   /** Checked before each message; true = stop cleanly, the batch is resumed later. */
   shouldYield?: () => boolean;
+  /** Plan drafts remaining (entitlements). Undefined = no plan quota. */
+  draftQuota?: number;
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -147,7 +153,11 @@ export async function processMailboxBatch(params: {
     failed: 0,
     budgetExhausted: false,
     leaseLost: false,
+    draftsCreated: 0,
   };
+  const quotaUsed = () =>
+    params.draftQuota !== undefined &&
+    (stats.draftsCreated ?? 0) >= params.draftQuota;
   const since = batch.since ? new Date(batch.since) : undefined;
   const messages = (
     await mailbox.listInbound({
@@ -175,6 +185,11 @@ export async function processMailboxBatch(params: {
     return tone;
   };
   for (const message of messages) {
+    if (quotaUsed()) {
+      // Graceful stop: results so far are kept, nothing else costs a model call.
+      stats.quotaReached = true;
+      break;
+    }
     if (params.shouldYield?.()) {
       stats.yielded = true;
       break;
@@ -292,6 +307,7 @@ export async function processMailboxBatch(params: {
         },
         store.ledger(row.rowId),
       );
+      stats.draftsCreated = (stats.draftsCreated ?? 0) + 1;
       const mismatch =
         receipt.recipients !== undefined &&
         (receipt.recipients.length !== 1 ||
