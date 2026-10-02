@@ -1,6 +1,6 @@
 # Inbox reply drafts (V1 Phase 1 backend + Phase 2 scheduler)
 
-Status: backend built behind `ORBIS_INBOX_DRAFTS_ENABLED=false`. Not activated. Phase 2 (multi-tenant scheduler, continuous drafting, per-workspace caps, Today decisions) added on branch `feat/inbox-scheduler`. No live Composio, Gmail, Outlook or model call has been made. Updated 2026-10-02. Context: [17-v1-self-serve.md](../strategy/17-v1-self-serve.md) (branch `docs/v1-self-serve-plan`).
+Status: backend built behind `ORBIS_INBOX_DRAFTS_ENABLED=false`. Not activated. Phase 2 (multi-tenant scheduler, continuous drafting, per-workspace caps, Today decisions) added on branch `feat/inbox-scheduler`. No live Composio, Gmail, Outlook or model call has been made. Updated 2026-10-02. Context: [17-v1-self-serve.md](../strategy/17-v1-self-serve.md) (branch `docs/v1-self-serve-plan`). Company sheet, ask-once questions and learning from edits (levels 3–5) build on this: see [company-brain.md](company-brain.md).
 
 ## What it does
 
@@ -9,7 +9,7 @@ For one connected Gmail or Outlook mailbox of a workspace:
 1. Lists recent **inbound** mail (default 14 days, at most 50 messages).
 2. Drops noise with deterministic rules, before any model call: no sender, own/sent messages, drafts, `no-reply`/`mailer-daemon`/`newsletter` senders, `List-Unsubscribe`/`List-Id`/`Precedence: bulk`, `Auto-Submitted`/`X-Autoreply`, "Automatic reply / Réponse automatique / Out of office" subjects, Gmail promotions/social/updates/forums categories.
 3. Classifies the rest with a cheap model call: `customer_request`, `quote_request`, `supplier`, `admin`, `noise`.
-4. For `customer_request` and `quote_request` only (max 5 per first run): skips threads the owner already answered, then generates a reply grounded in the confirmed website profile, approved workspace rules/memory, imported knowledge (BM25 over ready sources) and up to 3 of the owner's recent sent mails (tone only, never facts).
+4. For `customer_request` and `quote_request` only (max 5 per first run): skips threads the owner already answered, then generates a reply grounded in the confirmed website profile, owner-approved company sheet facts ([company-brain.md](company-brain.md)), approved workspace rules/memory, imported knowledge (BM25 over ready sources) and up to 3 of the owner's recent sent mails (tone only, never facts).
 5. Creates the reply as a **draft** in the same thread, addressed to the original sender. **Never sends.**
 
 Results (classification, draft preview, open questions, citations, draft id, link to the mailbox's drafts folder) are returned by `GET /api/v1/inbox`.
@@ -119,6 +119,8 @@ The migration owner is granted the two NOLOGIN roles `WITH INHERIT FALSE, SET TR
 - Composio's docs that were reviewed **do not state** which default scopes the managed Gmail app requests, whether that app is verified for `gmail.readonly`/`gmail.compose`, or whether using it removes the need for a CASA assessment on our side. This is an open question for Composio support; do not assume coverage. Google's own policy on restricted Gmail scopes should be checked directly before launch.
 
 ## Known limits / follow-ups
+
+- Company brain (migration 009): open `[[À CONFIRMER]]` placeholders become deduplicated questions, a sent-mail extraction is queued once after the first completed run, and incremental batches check draft outcomes. See [company-brain.md](company-brain.md).
 
 - Response shapes are untested against real accounts (see above). Gmail reconciliation scans one page of 100 drafts.
 - A message whose draft is `uncertain` is regenerated on the next run before reconciliation (one extra model call) because the full draft text is not stored.

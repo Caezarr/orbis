@@ -17,6 +17,7 @@ import {
   type InboxModel,
   type ModelUsage,
 } from "@/lib/runtime/inbox-replies";
+import { draftQuestions } from "@/lib/brain/questions";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -65,6 +66,11 @@ export type InboxStore = {
   ledger(rowId: string): DraftLedger;
   /** Renew the batch lease; false means another worker owns it now. */
   heartbeat(): Promise<boolean>;
+  /** Company brain: register this draft's open questions (deduplicated per workspace). */
+  recordQuestions?(
+    rowId: string,
+    questions: { canonicalKey: string; label: string }[],
+  ): Promise<unknown>;
 };
 export type BatchStats = {
   listed: number;
@@ -302,6 +308,17 @@ export async function processMailboxBatch(params: {
       });
       if (mismatch) stats.needsReview++;
       else stats.drafted++;
+      if (store.recordQuestions) {
+        const questions = draftQuestions(guarded.body, guarded.questions, {
+          thirdParties: [
+            recipient,
+            ...(message.from?.name ? [message.from.name] : []),
+          ],
+        });
+        // Best effort: a question bookkeeping failure never undoes a draft.
+        if (questions.length)
+          await store.recordQuestions(row.rowId, questions).catch(() => {});
+      }
     } catch (error) {
       if (error instanceof MailboxPolicyError) throw error;
       if (error instanceof MailboxUncertainError) {

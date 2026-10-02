@@ -144,6 +144,51 @@ async function databaseChecks() {
           if (found) assert.deepEqual([found.tenant_id, found.worker_user_id, found.poll_due], [ids[1], ids[1], true]);
           assert.equal((await db.query("SELECT * FROM inbox_batches WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "discovery grants no content access");
         }
+        // Company brain (migration 009): facts, questions, outcomes, usage, jobs isolated per tenant.
+        if ((await db.query("SELECT to_regclass('public.brain_facts') AS r")).rows[0].r) {
+          const brainTables = ["brain_jobs", "brain_sent_messages", "brain_facts", "brain_questions", "brain_question_messages", "brain_draft_outcomes", "brain_usage"];
+          await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+          await db.query("INSERT INTO brain_jobs(id,workspace_id,tenant_id,created_by,request_key,kind,provider,connected_account_id,mode) VALUES($1,$1,$1,$1,'k','extract_sent','gmail','acc','test')", [ids[1]]);
+          await db.query("INSERT INTO brain_sent_messages(id,workspace_id,tenant_id,job_id,connected_account_id,message_id,content_hash,status) VALUES($1,$1,$1,$1,'acc','m','h','processed')", [ids[1]]);
+          await db.query("INSERT INTO brain_facts(id,workspace_id,tenant_id,category,topic_key,statement,status,origin,quotes) VALUES($1,$1,$1,'pricing','prix','Pose : 45 € HT/m²','candidate','sent_mail','[{\"quote\":\"45 € HT/m²\",\"messageId\":\"m\",\"sentAt\":\"2026-09-01T00:00:00Z\"}]'::jsonb)", [ids[1]]);
+          await db.query("INSERT INTO brain_questions(id,workspace_id,tenant_id,canonical_key,label) VALUES($1,$1,$1,'m2 pose prix','prix de la pose au m²')", [ids[1]]);
+          await db.query("INSERT INTO brain_question_messages(workspace_id,tenant_id,question_id,inbox_message_id) VALUES($1,$1,$1,$1)", [ids[1]]);
+          await db.query("INSERT INTO brain_draft_outcomes(id,workspace_id,tenant_id,inbox_message_id,outcome) VALUES($1,$1,$1,$1,'sent_edited')", [ids[1]]);
+          await db.query("INSERT INTO brain_usage(id,workspace_id,tenant_id,kind,ref_id,est_cost_cents) VALUES($1,$1,$1,'extract',$1,3)", [ids[1]]);
+          // A fact can never be approved without a human reviewer (CHECK).
+          await db.query("SAVEPOINT unreviewed");
+          await assert.rejects(db.query("UPDATE brain_facts SET status='approved' WHERE id=$1", [ids[1]]), Error, "approval requires reviewed_by");
+          await db.query("ROLLBACK TO SAVEPOINT unreviewed");
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          for (const table of brainTables) {
+            assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+            assert.equal((await db.query(`UPDATE ${table} SET tenant_id=tenant_id WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, table);
+            assert.equal((await db.query("SELECT has_table_privilege(current_user,$1,'DELETE') AS p", [table])).rows[0].p, false, `no DELETE on ${table}`);
+          }
+          // Budget sums only see the session tenant's usage.
+          assert.equal((await db.query("SELECT COALESCE(sum(est_cost_cents),0)::int AS c FROM brain_usage WHERE workspace_id=$1", [ids[1]])).rows[0].c, 0, "cross-tenant usage invisible");
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
+          assert.equal((await db.query("SELECT * FROM brain_facts WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member facts");
+          await db.query("SAVEPOINT brain_forgery");
+          await assert.rejects(db.query("INSERT INTO brain_facts(id,workspace_id,tenant_id,category,topic_key,statement,status,origin) VALUES($1,$2,$2,'other','x','forged','candidate','sent_mail')", [randomUUID(), ids[1]]), Error, "non-member cannot write facts");
+          await db.query("ROLLBACK TO SAVEPOINT brain_forgery");
+          // Dispatcher: brain_jobs scheduling columns only; ids-only discovery.
+          for (const [table, column] of [["brain_jobs", "stats"], ["brain_jobs", "error"], ["brain_jobs", "draft_preview"], ["brain_jobs", "connected_account_id"], ["brain_facts", "statement"], ["brain_facts", "quotes"], ["brain_questions", "label"], ["brain_usage", "est_cost_cents"]])
+            assert.equal((await db.query("SELECT has_column_privilege('orbis_inbox_dispatch',$1,$2,'SELECT') AS p", [table, column])).rows[0].p, false, `dispatch must not read ${table}.${column}`);
+          for (const table of brainTables)
+            for (const privilege of ["INSERT", "UPDATE", "DELETE"])
+              assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch',$1,$2) AS p", [table, privilege])).rows[0].p, false, `dispatch must not ${privilege} ${table}`);
+          const brainFn = (await db.query("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, p.proconfig FROM pg_proc p WHERE p.proname='orbis_brain_due_workspaces'")).rows[0];
+          assert.equal(brainFn.owner, "orbis_inbox_dispatch");
+          assert.equal(brainFn.prosecdef, true);
+          assert.ok((brainFn.proconfig ?? []).some((c: string) => c.startsWith("search_path=")), "brain definer function pins search_path");
+          await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+          const brainDue = await db.query("SELECT * FROM orbis_brain_due_workspaces(200)");
+          assert.deepEqual(brainDue.fields.map(f => f.name), ["tenant_id", "workspace_id", "worker_user_id", "due_jobs", "due_since"], "brain discovery returns ids only");
+          const brainFound = brainDue.rows.find(r => r.workspace_id === ids[1]);
+          assert.ok(brainFound || brainDue.rowCount === 200, "tenant B brain job discovered");
+          assert.equal((await db.query("SELECT * FROM brain_jobs WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "brain discovery grants no content access");
+        }
         await setTenantContext(db, { userId: ids[0], tenantId: ids[1], workspaceId: ids[1] });
         assert.equal((await db.query("SELECT * FROM inbox_messages WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "non-member");
         await assert.rejects(db.query("INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts) VALUES($1,$2,$2,$1,'k2','h','gmail','acc','v','test',14,50,5)", [randomUUID(), ids[1]]));
@@ -152,7 +197,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, ids-only dispatcher role); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, ids-only dispatcher role); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();

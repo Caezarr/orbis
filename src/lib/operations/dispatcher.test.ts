@@ -189,3 +189,36 @@ describe("multi-tenant dispatcher", () => {
     expect(result.enqueued).toBe(1);
   });
 });
+
+describe("company brain jobs in the dispatcher", () => {
+  it("runs one brain job per due workspace, under that workspace's identity, counted in the pass cap", async () => {
+    const q = fakeQueue({ a: 1, b: 1 });
+    const runBrain = vi.fn(async () => ({ processed: true }));
+    const result = await dispatchInboxPass(
+      { maxBatches: 3, budgetMs: 60_000, reserveMs: 0 },
+      {
+        discover: async () => [ws("a", { brainDue: 1 }), ws("b")],
+        runBatch: q.runBatch,
+        runBrain,
+      },
+    );
+    expect(runBrain).toHaveBeenCalledTimes(1);
+    expect(runBrain).toHaveBeenCalledWith(
+      { userId: "u-a", workspaceId: "a", tenantId: "t-a" },
+      expect.any(Number),
+    );
+    expect(result).toMatchObject({ brainProcessed: 1, processed: 2, stoppedBy: "max_batches" });
+  });
+  it("a brain job that yields stops the pass", async () => {
+    const q = fakeQueue({ a: 1 });
+    const result = await dispatchInboxPass(
+      { budgetMs: 60_000, reserveMs: 0 },
+      {
+        discover: async () => [ws("a", { brainDue: 1 })],
+        runBatch: q.runBatch,
+        runBrain: async () => ({ processed: true, yielded: true }),
+      },
+    );
+    expect(result).toMatchObject({ stoppedBy: "deadline", yielded: 1, processed: 0 });
+  });
+});
