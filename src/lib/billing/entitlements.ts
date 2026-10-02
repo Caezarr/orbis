@@ -202,3 +202,27 @@ export function blockMessage(reason: BlockReason): string {
 export function entitlementsEnforced(env: Record<string, string | undefined> = process.env) {
   return env.ORBIS_ENTITLEMENTS_ENFORCED !== "false";
 }
+
+/**
+ * Company brain jobs under the plan (V1 integration of #21 + #22).
+ * - `regenerate_draft` creates a reply draft: it needs the same entitlement as
+ *   an inbox draft (plan can process, at least one draft left) and the created
+ *   draft counts in the draft quota (`countDrafts`).
+ * - `extract_sent` (and the draft-vs-sent explanations) create no draft: they
+ *   do not consume the draft quota, but their estimated cost is reserved in the
+ *   same per-workspace cost cap. They still need a live plan: a paid plan whose
+ *   drafts are used up may keep learning (`quota_reached`), an expired trial,
+ *   unpaid or canceled plan may not (no model call).
+ * Returns the blocking reason, or null when the job may run.
+ */
+export function brainJobBlock(
+  entitlement: Pick<Entitlement, "canProcess" | "reason" | "draftsRemaining">,
+  kind: "extract_sent" | "regenerate_draft",
+): BlockReason | null {
+  if (kind === "regenerate_draft")
+    return entitlement.canProcess && entitlement.draftsRemaining >= 1
+      ? null
+      : (entitlement.reason ?? "quota_reached");
+  if (entitlement.canProcess || entitlement.reason === "quota_reached") return null;
+  return entitlement.reason ?? "canceled";
+}

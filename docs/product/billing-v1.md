@@ -50,6 +50,18 @@ Logique pure : [`entitlements.ts`](../../src/lib/billing/entitlements.ts). Adapt
 3. Worker (`runOneInboxBatch`) : le contrôle a lieu **avant tout appel à la boîte mail ou au modèle**. Formule bloquée → lot `plan_inactive` (ou `quota_reached`). Sinon, le pipeline reçoit `draftQuota` et s'arrête **avant le message suivant** quand le quota est atteint. Le lot passe en `quota_reached`, les résultats partiels sont conservés et le curseur n'avance pas : les messages restants seront relus plus tard.
 4. Les brouillons passés restent consultables dans tous les états (GET /api/v1/inbox, Today).
 
+### Fiche entreprise et formule (intégration V1, #21 + #22)
+
+| Travail de la fiche entreprise | Formule exigée | Quota de brouillons | Plafond de coût |
+|---|---|---|---|
+| Nouveau brouillon après une info validée (`regenerate_draft`) | identique à un brouillon : formule active **et** au moins 1 brouillon restant | **compte pour 1 brouillon** (`countDrafts` additionne `inbox_messages` et les régénérations de `brain_jobs`) | oui (`brain_usage`) |
+| Lecture des mails envoyés (`extract_sent`) | formule vivante : essai en cours ou abonnement payé, **même si les brouillons du mois sont épuisés** (`quota_reached`) ; bloquée pour essai terminé, impayé, résilié | non (aucun brouillon créé) | oui (`brain_usage`, même plafond que les brouillons) |
+| Comparaison brouillon / mail envoyé (niveau 5) | uniquement après un lot incrémental terminé (donc autorisé) | non | oui |
+
+Logique pure : `brainJobBlock` ([`entitlements.ts`](../../src/lib/billing/entitlements.ts)). Contrôles : `POST /api/v1/brain/regenerations` et `POST /api/v1/brain/extractions` répondent **402** avec le message de la formule ; le worker de la fiche vérifie la formule **avant tout appel boîte mail ou modèle** : une lecture bloquée est reportée de 6 h sans consommer de tentative (elle reprend seule après un paiement), une régénération bloquée se termine `failed` avec le message de la formule. Une première passe arrêtée par le quota (`quota_reached`) déclenche quand même la lecture des mails envoyés si la formule le permet.
+
+Limite connue : comme pour les brouillons de boîte, la vérification se fait au début du travail ; deux travaux parallèles d'un même workspace (un lot et une régénération) peuvent dépasser le quota d'un brouillon.
+
 ## Plafonds par workspace (synchronisation privilégiée)
 
 La migration 008 interdit au rôle runtime d'écrire `monthly_cap_cents`. La fonction 008 `orbis_set_workspace_inbox_cap` est réservée à l'opérateur et accepte n'importe quelle valeur. La migration **010** ajoute une **nouvelle fonction SECURITY DEFINER** `orbis_sync_workspace_plan_cap(tenant, plan, cents)` :

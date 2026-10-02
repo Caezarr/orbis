@@ -5,6 +5,8 @@ import { inboxMode } from "@/lib/inbox/service";
 import { monthlyCapCents } from "@/lib/inbox/store";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
+import { currentEntitlement } from "@/lib/billing/entitlements-store";
+import { blockMessage, brainJobBlock } from "@/lib/billing/entitlements";
 import {
   CATEGORY_LABELS,
   factCategories,
@@ -123,12 +125,15 @@ export async function requestExtraction(requestKey: string) {
     throw new PlatformError("Configurez un budget mensuel avant de lancer la lecture.", 503);
   const account = (
     await ctx.db.query<{ provider: "gmail" | "outlook"; connected_account_id: string }>(
-      "SELECT provider,connected_account_id FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND kind='first_run' AND status='completed' ORDER BY completed_at DESC NULLS LAST LIMIT 1",
+      "SELECT provider,connected_account_id FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND kind='first_run' AND status IN ('completed','quota_reached') ORDER BY completed_at DESC NULLS LAST LIMIT 1",
       p(ctx),
     )
   ).rows[0];
   if (!account)
     throw new PlatformError("Connectez d’abord votre boîte mail et lancez un premier passage.", 409);
+  // Plan gate (402): no extraction model call on an expired/unpaid/canceled plan.
+  const extractBlock = brainJobBlock(await currentEntitlement(ctx.db, idsOf(ctx)), "extract_sent");
+  if (extractBlock) throw new PlatformError(blockMessage(extractBlock), 402);
   const id = await enqueueExtraction(
     ctx.db,
     { ...idsOf(ctx), userId: ctx.userId },
@@ -357,6 +362,9 @@ export async function requestRegeneration(inboxMessageId: string) {
   if (!row || row.status !== "drafted" || !["created", "simulated"].includes(row.draft_state))
     throw new PlatformError("Brouillon introuvable.", 404);
   if (!monthlyCapCents()) throw new PlatformError("Configurez un budget mensuel d’abord.", 503);
+  // A regeneration is a new draft: same plan gate and draft quota as inbox drafts (402).
+  const regenBlock = brainJobBlock(await currentEntitlement(ctx.db, idsOf(ctx)), "regenerate_draft");
+  if (regenBlock) throw new PlatformError(blockMessage(regenBlock), 402);
   await ctx.db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `orbis-brain-regen:${inboxMessageId}`,
   ]);

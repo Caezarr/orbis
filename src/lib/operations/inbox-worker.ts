@@ -284,7 +284,13 @@ export async function runOneInboxBatch(
     }
     // Company brain: read the owner's sent mail ONCE after the first completed
     // run of a mailbox (manual re-runs from the company sheet page).
-    if (result.rowCount && status === "completed" && claimed.kind === "first_run")
+    // A first run stopped by the draft quota still learns from sent mail when
+    // the plan allows it (the brain worker re-checks the entitlement).
+    if (
+      result.rowCount &&
+      (status === "completed" || status === "quota_reached") &&
+      claimed.kind === "first_run"
+    )
       await enqueueExtraction(db, identity, {
         provider: batch.provider,
         connectedAccountId: batch.connectedAccountId,

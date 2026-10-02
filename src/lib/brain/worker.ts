@@ -21,6 +21,8 @@ import {
 } from "@/lib/runtime/inbox-replies";
 import { providerStatus } from "@/lib/runtime/provider";
 import { scoped, type Identity } from "@/lib/operations/worker";
+import { currentEntitlement } from "@/lib/billing/entitlements-store";
+import { blockMessage, brainJobBlock, type Entitlement } from "@/lib/billing/entitlements";
 import { processExtraction, type ExtractionStats } from "./extract";
 import { factSources } from "./facts";
 import { providerBrainModel, type BrainModel } from "./model";
@@ -70,7 +72,11 @@ export type BrainWorkerDeps = {
   inboxModel?: InboxModel;
   mailbox?: (...args: Parameters<typeof mailboxClient>) => Mailbox;
   deadline?: number;
+  /** Plan entitlement loader (tests); defaults to the PostgreSQL entitlement service. */
+  entitlement?: (db: PoolClient, identity: Identity) => Promise<Entitlement>;
 };
+/** A blocked extraction is deferred (not failed) so it resumes after a plan change. */
+export const BRAIN_PLAN_RETRY_MINUTES = 360;
 
 /** Workspace snapshot + approved facts, read under the worker's RLS context. */
 export async function loadWorkspaceContext(db: PoolClient, identity: Identity) {
@@ -189,6 +195,32 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
   if (!claimed) return { processed: false };
   if (claimed.workspace_id !== identity.workspaceId || claimed.tenant_id !== identity.tenantId)
     throw new Error("Job identity mismatch");
+  // Plan gate BEFORE any mailbox or model call (see brainJobBlock): blocked
+  // extraction is deferred without consuming an attempt; a blocked regeneration
+  // ends `failed` with the plan message (the owner asked for it now, not later).
+  const entitlement = await run((db) =>
+    (deps.entitlement ?? ((d, i) => currentEntitlement(d, i)))(db, identity),
+  );
+  const blocked = brainJobBlock(entitlement, claimed.kind);
+  if (blocked) {
+    await run((db) =>
+      db.query(
+        claimed.kind === "extract_sent"
+          ? `UPDATE brain_jobs SET status='queued', error=$5, lease_token=NULL, lease_until=NULL, attempts=greatest(attempts-1,0),
+             available_at=now()+make_interval(mins => $6::int) WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND lease_token=$4 AND status='running'`
+          : `UPDATE brain_jobs SET status='failed', error=$5, lease_token=NULL, lease_until=NULL, completed_at=now(), stats=jsonb_build_object('outcome','plan_blocked')
+             WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND lease_token=$4 AND status='running'`,
+        [
+          claimed.id,
+          ...ids,
+          claimed.lease_token,
+          blockMessage(blocked),
+          ...(claimed.kind === "extract_sent" ? [BRAIN_PLAN_RETRY_MINUTES] : []),
+        ],
+      ),
+    );
+    return { processed: true, jobId: claimed.id, kind: claimed.kind, stats: null, failure: null, blocked };
+  }
   const heartbeat = () =>
     run(async (db) => {
       const r = await db.query(
