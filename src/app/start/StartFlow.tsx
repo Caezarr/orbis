@@ -19,6 +19,7 @@ import {
   PREVIEW_SHOWN_KEY,
   quotePreview,
   progressPhase,
+  splitPlaceholders,
   stepState,
   summarizeResults,
   type BlockerKind,
