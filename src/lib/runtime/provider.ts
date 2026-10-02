@@ -19,13 +19,21 @@ export function providerStatus() {
   };
 }
 
-export function getModel() {
+/**
+ * `classifier` uses ORBIS_AI_CLASSIFIER_MODEL (same provider and key) when set,
+ * so cheap triage never silently routes data to another provider.
+ */
+export function getModel(purpose: "default" | "classifier" = "default") {
   const config = providerStatus();
   if (!config.configured)
     throw new Error(
       "Connect an AI provider first: set ORBIS_AI_PROVIDER, ORBIS_AI_MODEL and its API key on the server.",
     );
+  const model =
+    (purpose === "classifier" &&
+      process.env.ORBIS_AI_CLASSIFIER_MODEL?.trim()) ||
+    config.model;
   return config.provider === "anthropic"
-    ? createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(config.model)
-    : createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(config.model);
+    ? createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(model)
+    : createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(model);
 }
