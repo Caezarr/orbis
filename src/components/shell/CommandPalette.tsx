@@ -6,6 +6,7 @@ import type { StoreState } from "@/lib/domain/types";
 const pages = [
   ["/chat", "New conversation"],
   ["/today", "Today"],
+  ["/fiche", "Fiche entreprise"],
   ["/catalog", "Marketplace"],
   ["/connections", "Integrations"],
   ["/knowledge", "Knowledge"],
