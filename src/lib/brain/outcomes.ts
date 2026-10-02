@@ -2,7 +2,7 @@ import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { ModelUsage } from "@/lib/runtime/inbox-replies";
 import { buildCandidate, type CandidateFact } from "./candidates";
 import { classifyOutcome, type Outcome } from "./diff";
-import type { BrainModel } from "./model";
+import { editProposalSchema, type BrainModel } from "./model";
 
 /*
  * Level 5 — learning from edits. For real (non-simulated) Orbis drafts, later
@@ -11,6 +11,7 @@ import type { BrainModel } from "./model";
  * for edited replies ask the model for at most 2 candidate rules/facts. They
  * go to the same validation queue as extracted facts. Nothing is auto-applied.
  */
+const PROPOSAL_SCHEMA = editProposalSchema.shape.proposals.element;
 export const OUTCOME_CHECK_LIMIT = 5;
 export type DueDraft = {
   rowId: string;
@@ -88,8 +89,13 @@ export async function checkDraftOutcomes(params: {
           });
           await params.store.addUsage(usageId, explained.usage);
           const reply = sent.find((s) => s.id === result.reply!.id);
-          const candidates = explained.output.proposals
-            .slice(0, 2)
+          // Untrusted model output: at most 2 proposals, each schema-checked.
+          const rawProposals = (explained.output as { proposals?: unknown })?.proposals;
+          const candidates = (Array.isArray(rawProposals) ? rawProposals.slice(0, 2) : [])
+            .flatMap((p) => {
+              const parsed = PROPOSAL_SCHEMA.safeParse(p);
+              return parsed.success ? [parsed.data] : [];
+            })
             .map((p) =>
               buildCandidate(
                 {

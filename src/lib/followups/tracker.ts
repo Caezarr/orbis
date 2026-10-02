@@ -10,6 +10,7 @@ import { redactThirdParty, stripQuoted } from "@/lib/brain/text";
 import type { ReplyContext } from "@/lib/inbox/context";
 import {
   guardDraft,
+  replyDraftSchema,
   replyRecipient,
   replyToDiverges,
   type Classification,
@@ -27,7 +28,7 @@ import {
   type PipelineStatus,
 } from "./detect";
 import type { FollowupModel } from "./model";
-import { verifyRequest } from "./request";
+import { requestExtractionSchema, verifyRequest } from "./request";
 
 /*
  * Orchestration of levels 6 and 7 for one mailbox, with a store interface so
@@ -278,7 +279,10 @@ export async function runFollowups(params: {
         sources,
       });
       await store.addUsage(usageId, generated.usage);
-      const guarded = guardDraft(generated.output, { sources, message: customer });
+      // Untrusted model output: wrong shape → failed (catch below), no draft.
+      const parsedDraft = replyDraftSchema.safeParse(generated.output);
+      if (!parsedDraft.success) throw new Error("invalid_model_output");
+      const guarded = guardDraft(parsedDraft.data, { sources, message: customer });
       const flags = [...guarded.issues.map((i) => `guard:${i}`), `owner_message:${kind}`];
       await store.finishFollowup(followupId, {
         status: "drafting",
@@ -366,7 +370,9 @@ export async function trackRequest(
   try {
     const result = await params.model.extractRequest(message);
     await params.store.addUsage(usageId, result.usage);
-    const verified = verifyRequest(result.output, message.text);
+    const parsed = requestExtractionSchema.safeParse(result.output);
+    if (!parsed.success) throw new Error("invalid_model_output");
+    const verified = verifyRequest(parsed.data, message.text);
     const third = [contact.email ?? "", contact.name ?? ""].filter(Boolean);
     const clean = (v: string | null) => (v ? redactThirdParty(v, { thirdParties: third }) : null);
     await params.store.saveExtraction(itemId, {

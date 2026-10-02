@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { ModelUsage } from "@/lib/runtime/inbox-replies";
 import { buildCandidate, type CandidateFact } from "./candidates";
-import type { BrainModel } from "./model";
+import { extractionSchema, type BrainModel } from "./model";
 import { stripQuoted } from "./text";
 
 /*
@@ -10,6 +10,7 @@ import { stripQuoted } from "./text";
  * messages), resumable (one row per sent message; processed/skipped rows are
  * never re-billed), budgeted (reservation before every model call).
  */
+const FACT_SCHEMA = extractionSchema.shape.facts.element;
 export const EXTRACTION_LIMITS = { maxWindowDays: 90, maxMessages: 200 } as const;
 export const CHUNK_MESSAGES = 6;
 export const CHUNK_CHARS = 9000;
@@ -216,7 +217,15 @@ export async function processExtraction(params: {
     await store.addUsage(usageId, result.usage);
     const found: Record<string, number> = {};
     const candidates: CandidateFact[] = [];
-    for (const fact of result.output.facts) {
+    // Untrusted model output: each fact is schema-checked on its own (wrong
+    // shape, oversized fields → rejected); at most 20 are considered.
+    const rawFacts = (result.output as { facts?: unknown })?.facts;
+    const facts = (Array.isArray(rawFacts) ? rawFacts.slice(0, 20) : []).flatMap((f) => {
+      const parsed = FACT_SCHEMA.safeParse(f);
+      if (!parsed.success) stats.rejectedQuotes++;
+      return parsed.success ? [parsed.data] : [];
+    });
+    for (const fact of facts) {
       const candidate = buildCandidate(
         {
           ...fact,
