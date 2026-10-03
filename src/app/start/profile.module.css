@@ -1,0 +1,219 @@
+/* Step 1 result: the profile grouped by category. Colours come from .page in start.module.css. */
+.groups {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.groupsHead h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  min-width: 0;
+  animation: reveal 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.card h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #3d5079;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.count {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ciel);
+  color: var(--cobalt);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.card ul {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-top: 1px solid #f0f3f8;
+  min-width: 0;
+}
+.fact:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.fact[data-kept="false"] .factBody {
+  opacity: 0.45;
+}
+.fact[data-kept="false"] .value {
+  text-decoration: line-through;
+}
+.factBody {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  transition: opacity 160ms ease;
+}
+.factLabel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+.check,
+.cited,
+.corrected {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.check {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+.cited {
+  background: var(--ciel);
+  color: var(--cobalt);
+}
+.corrected {
+  background: #e6f6ef;
+  color: var(--green);
+  margin-left: 4px;
+}
+.value {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--marine);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+a.value {
+  color: var(--cobalt);
+}
+.quote {
+  margin: 2px 0 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--cobalt);
+  background: #f7faff;
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #3d5079;
+  overflow-wrap: anywhere;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: #6f7f9a;
+}
+.meta a {
+  color: var(--cobalt);
+}
+.factActions {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.fact .keep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: #3d5079;
+}
+.keep input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cobalt);
+}
+.edit {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  min-width: 0;
+}
+.edit input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px !important;
+  font-size: 15px !important;
+}
+.edit button {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+.pages summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #3d5079;
+}
+.pages ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.pages a {
+  color: var(--cobalt);
+  overflow-wrap: anywhere;
+}
+.unknownList li {
+  margin-bottom: 4px;
+}
+.unknownList .edit {
+  display: flex;
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 640px) {
+  .fact {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .factActions {
+    display: flex;
+    justify-items: start;
+    align-items: center;
+    gap: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}
