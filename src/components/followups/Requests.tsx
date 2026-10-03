@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RequestsView, type Filters, type RequestAction, type RequestsData } from "./RequestsView";
+import { NotOnThisDeployment } from "@/components/shell/EmptyState";
 import s from "./followups.module.css";
 
 const DONE: Record<RequestAction["action"], string> = {
@@ -14,9 +15,10 @@ const DONE: Record<RequestAction["action"], string> = {
   erase_contact: "Contact effacé. Les brouillons déjà dans votre boîte mail n’ont pas été modifiés.",
 };
 
-export function Requests() {
+/** `view="relances"` opens the same pipeline on the follow-ups waiting for review. */
+export function Requests({ view = "demandes" }: { view?: "demandes" | "relances" }) {
   const [data, setData] = useState<RequestsData | null>(null);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>(view === "relances" ? { followup: "ready" } : {});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -90,10 +92,7 @@ export function Requests() {
   if (unavailable)
     return (
       <div className={`${s.root} ${s.page}`}>
-        <header className={s.head}>
-          <h1>Demandes</h1>
-          <p>Les demandes s’activent avec les brouillons de réponse. Elles ne sont pas encore disponibles sur ce déploiement.</p>
-        </header>
+        <NotOnThisDeployment page={view === "relances" ? "Relances" : "Demandes"} />
       </div>
     );
   if (!data)
@@ -104,12 +103,13 @@ export function Requests() {
             {error}
           </p>
         ) : (
-          <p role="status">Chargement des demandes…</p>
+          <p role="status">{view === "relances" ? "Chargement des relances…" : "Chargement des demandes…"}</p>
         )}
       </div>
     );
   return (
     <RequestsView
+      view={view}
       data={data}
       filters={filters}
       busy={busy}

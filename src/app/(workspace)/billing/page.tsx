@@ -2,7 +2,7 @@ import { SubscriptionPlans } from "@/components/billing/SubscriptionPlans";
 import Link from "next/link";
 import s from "@/components/billing/billing.module.css";
 
-export const metadata = { title: "Abonnement — Orbis" };
+export const metadata = { title: "Abonnement · Orbis" };
 
 export default function Page() {
   return (

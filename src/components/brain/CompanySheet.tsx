@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { NotOnThisDeployment } from "@/components/shell/EmptyState";
 import s from "./brain.module.css";
 
 type Quote = { quote: string; messageId: string; sentAt: string };
@@ -140,10 +141,7 @@ export function CompanySheet({ initial }: { initial?: Overview }) {
   if (unavailable)
     return (
       <div className={`${s.root} ${s.page}`}>
-        <header className={s.head}>
-          <h1>Fiche entreprise</h1>
-          <p>La fiche entreprise s’active avec les brouillons de réponse. Elle n’est pas encore disponible sur ce déploiement.</p>
-        </header>
+        <NotOnThisDeployment page="Fiche entreprise" />
       </div>
     );
   if (!data)

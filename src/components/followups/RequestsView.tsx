@@ -42,7 +42,7 @@ export const dateFr = (iso: string | null, withTime = false) =>
         month: "short",
         ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
       }).format(new Date(iso))
-    : "—";
+    : "pas encore";
 function statusClass(status: PipelineStatus) {
   return status === "gagne" ? s.ok : status === "perdu" ? s.bad : status === "nouveau" ? s.warn : s.badge;
 }
@@ -63,6 +63,7 @@ function Body({ text }: { text: string }) {
 }
 
 export function RequestsView({
+  view = "demandes",
   data,
   filters,
   busy,
@@ -72,6 +73,7 @@ export function RequestsView({
   onAction,
   onSaveSettings,
 }: {
+  view?: "demandes" | "relances";
   data: RequestsData;
   filters: Filters;
   busy: string | null;
@@ -85,12 +87,24 @@ export function RequestsView({
   return (
     <div className={`${s.root} ${s.page}`}>
       <header className={s.head}>
-        <h1>Demandes</h1>
-        <p>
-          Chaque demande de client ou de devis reçue devient une ligne. Le statut avance tout seul quand vous répondez ou
-          relancez ; « gagné » et « perdu » restent votre décision. Aucune valeur n’est inventée : le besoin, le budget et le
-          délai ne sont remplis que s’ils figurent mot pour mot dans le mail du client.
-        </p>
+        {view === "relances" ? (
+          <>
+            <h1>Relances</h1>
+            <p>
+              Quand un client ne répond pas à votre devis ou à votre réponse, Orbi prépare un brouillon de relance dans la
+              même conversation. Relisez-le dans votre boîte mail, puis envoyez-le vous-même. Orbi n’envoie rien.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1>Demandes</h1>
+            <p>
+              Chaque demande de client ou de devis reçue devient une ligne. Le statut avance tout seul quand vous répondez ou
+              relancez ; « gagné » et « perdu » restent votre décision. Aucune valeur n’est inventée : le besoin, le budget et
+              le délai ne sont remplis que s’ils figurent mot pour mot dans le mail du client.
+            </p>
+          </>
+        )}
       </header>
       {data.mode !== "scoped_autonomy" && (
         <p className={s.test} role="note">
@@ -164,7 +178,9 @@ export function RequestsView({
 
       {data.items.length === 0 ? (
         <p className={s.empty}>
-          Aucune demande pour ce filtre. Les demandes apparaissent ici dès qu’Orbi a classé un mail de client ou de devis.
+          {filters.followup === "ready"
+            ? `Aucune relance à relire. Orbi en prépare une quand un client reste ${data.settings.businessDays} jours ouvrés sans répondre à votre dernier message (avec les brouillons en continu activés).`
+            : "Aucune demande pour ce filtre. Les demandes apparaissent ici dès qu’Orbi a classé un mail de client ou de devis."}
         </p>
       ) : (
         <ul className={s.list}>

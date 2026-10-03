@@ -115,7 +115,7 @@ export function ContinuousToggle({
           disabled={saving || (!on && !settings.eligible)}
           onClick={() => void toggle()}
         >
-          {saving ? "Enregistrement…" : on ? "Activé — désactiver" : "Activer"}
+          {saving ? "Enregistrement…" : on ? "Activé · désactiver" : "Activer"}
         </button>
       </div>
       {error && (

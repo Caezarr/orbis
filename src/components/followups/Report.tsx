@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ReportView, type ReportData } from "./ReportView";
+import { NotOnThisDeployment } from "@/components/shell/EmptyState";
 import s from "./followups.module.css";
 
 export function Report() {
@@ -29,10 +30,7 @@ export function Report() {
   if (unavailable)
     return (
       <div className={`${s.root} ${s.page}`}>
-        <header className={s.head}>
-          <h1>Rapport de la semaine</h1>
-          <p>Le rapport s’active avec les brouillons de réponse. Il n’est pas encore disponible sur ce déploiement.</p>
-        </header>
+        <NotOnThisDeployment page="Rapport de la semaine" />
       </div>
     );
   if (!data)
