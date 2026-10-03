@@ -143,6 +143,25 @@ async function databaseChecks() {
           assert.ok(found || due.rowCount === 200, "tenant B due work discovered");
           if (found) assert.deepEqual([found.tenant_id, found.worker_user_id, found.poll_due], [ids[1], ids[1], true]);
           assert.equal((await db.query("SELECT * FROM inbox_batches WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "discovery grants no content access");
+          // Supabase hosting (migration 015): the Data API roles reach nothing, and
+          // server-only tables keep RLS off even where `ensure_rls` turned it on.
+          for (const apiRole of ["anon", "authenticated"])
+            if ((await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [apiRole])).rowCount)
+              assert.equal(
+                Number((await db.query("SELECT count(*) AS n FROM information_schema.role_table_grants WHERE grantee=$1 AND table_schema='public'", [apiRole])).rows[0].n),
+                0,
+                `${apiRole} must have no privilege on public tables`,
+              );
+          for (const apiRole of ["anon", "authenticated"])
+            if ((await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [apiRole])).rowCount)
+              assert.deepEqual(
+                (await db.query("SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'orbis\\_%' AND has_function_privilege($1,p.oid,'EXECUTE')", [apiRole])).rows,
+                [],
+                `${apiRole} must not execute Orbis functions (Data API RPC)`,
+              );
+          for (const table of ["billing_plan_caps", "stripe_customers", "stripe_subscriptions", "stripe_events", "stripe_checkout_attempts", "task_payment_batches"])
+            if ((await db.query("SELECT to_regclass($1) AS r", [`public.${table}`])).rows[0].r)
+              assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass($1)", [`public.${table}`])).rows[0].relrowsecurity, false, `${table} is server-only, guarded by grants, without RLS`);
           // Trial + subscription plans (migration 010).
           if ((await db.query("SELECT to_regclass('public.billing_trials') AS r")).rows[0].r) {
             await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
@@ -404,7 +423,7 @@ async function databaseChecks() {
     });
   } catch (error) { if (error !== rollback) throw error; }
   finally { await pool().end(); }
-  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, follow-ups/pipeline tables, digest subscriptions/deliveries, ids-only dispatcher role); plan trials/caps (010); shared limiter, retention purge and single-tenant erasure (012); test rows rolled back");
+  console.log("PASS: PostgreSQL RLS blocks cross-tenant reads/writes (incl. inbox tables, scheduler settings/visits, company brain tables, follow-ups/pipeline tables, digest subscriptions/deliveries, ids-only dispatcher role); plan trials/caps (010); Supabase API roles revoked and server-only tables without RLS (015); shared limiter, retention purge and single-tenant erasure (012); test rows rolled back");
 }
 checks().then(async () => {
   if (process.argv.includes("--database")) await databaseChecks();
