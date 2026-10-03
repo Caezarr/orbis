@@ -1,0 +1,38 @@
+name: Inbox scheduler
+
+# Vercel Hobby only runs daily crons, so the 5-minute inbox pass is triggered
+# from here. Daily jobs (retention, digest) stay in vercel.json.
+# Needs repository secret CRON_SECRET (same value as in Vercel) and
+# repository variable ORBIS_APP_URL (public origin, no trailing slash).
+# Does nothing until both are set.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: inbox-scheduler
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger one inbox dispatcher pass
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ORBIS_APP_URL: ${{ vars.ORBIS_APP_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$ORBIS_APP_URL" ]; then
+            echo "Scheduler not configured (CRON_SECRET / ORBIS_APP_URL missing), skipping."
+            exit 0
+          fi
+          status=$(curl -sS -o response.json -w '%{http_code}' --max-time 90 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "$ORBIS_APP_URL/api/cron/inbox")
+          cat response.json; echo
+          test "$status" = "200"
