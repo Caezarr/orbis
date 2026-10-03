@@ -65,13 +65,33 @@ export async function prepareStartProfile(
     // facts and unknowns stay the deterministic ground truth.
     const raw = await (deps.synthesize ?? providerSynthesis)(synthesisPrompt(base), AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS));
     const parsed = synthesisSchema.safeParse(raw);
-    if (!parsed.success) return base;
+    if (!parsed.success) {
+      logFallback("schema");
+      return base;
+    }
     const checked = validateSynthesis(parsed.data, base);
     return { ...base, name: checked.name, summary: checked.summary, summarySources: checked.sources, origin: "ai" };
-  } catch {
+  } catch (error) {
     // Model failure never blocks step 1: fall back to the deterministic reading.
+    logFallback(fallbackReason(error));
     return base;
   }
+}
+
+const VALIDATION_REASONS = new Set(["summary cites no known fact", "summary rejected", "unsupported figure"]);
+
+/** Why the AI summary was not used: a reason code only, never site or model content. */
+function fallbackReason(error: unknown) {
+  const e = error as { name?: string; statusCode?: number; status?: number; message?: string };
+  const status = e?.statusCode ?? e?.status;
+  if (status) return `provider_${status}`;
+  if (e?.name === "TimeoutError" || e?.name === "AbortError") return "timeout";
+  // validateSynthesis throws fixed messages only (no content).
+  if (e?.message && VALIDATION_REASONS.has(e.message)) return `validation: ${e.message}`;
+  return (e?.name || "error").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40) || "error";
+}
+function logFallback(reason: string) {
+  console.warn(JSON.stringify({ event: "start_profile_ai_fallback", reason }));
 }
 
 const SYNTHESIS_TIMEOUT_MS = 15_000;
