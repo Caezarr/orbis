@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { inboxMode } from "@/lib/inbox/service";
+import { DEMO_MAILBOX_PAGE, demoMailboxActive } from "@/lib/integrations/demo-mailbox/guard";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { parseLocalDate } from "./calendar";
@@ -93,8 +94,9 @@ function publicItem(r: ItemRow) {
     followupsDismissed: r.followups_dismissed,
     closedAt: iso(r.closed_at),
     drafts: Number(r.drafts ?? 0),
-    openUrl:
-      r.provider === "gmail"
+    openUrl: demoMailboxActive()
+      ? DEMO_MAILBOX_PAGE
+      : r.provider === "gmail"
         ? `https://mail.google.com/mail/#all/${encodeURIComponent(r.thread_id)}`
         : "https://outlook.office.com/mail/",
     followups: (r.followups ?? []).map((f) => ({

@@ -60,6 +60,18 @@ Open `http://127.0.0.1:3000` in your browser.
 
 Useful routes: `/` landing, `/audit` company audit, `/catalog` mission catalog, `/pricing` pricing, `/today` workspace.
 
+### Full loop locally, without Composio or a real mailbox
+
+The local stack scripts `pnpm local:up` / `pnpm local:env` start Supabase (Postgres, Auth, Mailpit) in Docker and print the `.env.local` block. They come with `chore/ops-readiness`. The demo mailbox replaces Composio with a fake French small-business mailbox (a painter near Lille), so `/start` works end to end on your machine:
+
+```bash
+pnpm local:up && pnpm local:env   # paste into .env.local, add ORBIS_DEMO_MAILBOX=true and ORBIS_OPERATIONS_MONTHLY_CAP_CENTS=2000
+pnpm demo:reset                    # seed / reset the demo mailbox
+pnpm dev --hostname 127.0.0.1 --port 3000
+```
+
+Open `/start`. Magic links arrive in Mailpit at `http://127.0.0.1:54324`. « Connecter Gmail » goes through a local consent page. Watch the inbox and the drafts Orbis writes at `/dev/demo-mailbox`. Drafting still needs a model key (below). `ORBIS_DEMO_MAILBOX` is refused in production. See [docs/product/demo-mailbox.md](docs/product/demo-mailbox.md).
+
 ### Optional model configuration
 
 The interface and product flows are explorable without a provider key. To run model-backed missions, create an ignored `.env.local` file:

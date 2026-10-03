@@ -1,6 +1,12 @@
 import { z } from "zod";
 import type { Composio } from "@composio/core";
-import { authConfigId, integrationUser, toolkitSlug } from "./composio";
+import {
+  authConfigId,
+  composioConfigured,
+  integrationUser,
+  toolkitSlug,
+} from "./composio";
+import { DEMO_TOOL_VERSIONS, demoMailboxEnabled } from "./demo-mailbox/guard";
 import {
   canonical,
   hash,
@@ -298,9 +304,10 @@ function configuration(provider: MailboxProvider) {
   const config = authConfigId(provider);
   const version =
     process.env[`COMPOSIO_TOOL_VERSION_${provider.toUpperCase()}`]?.trim() ||
-    process.env.COMPOSIO_TOOL_VERSION?.trim();
+    process.env.COMPOSIO_TOOL_VERSION?.trim() ||
+    (demoMailboxEnabled() ? DEMO_TOOL_VERSIONS[provider] : undefined);
   if (
-    !process.env.COMPOSIO_API_KEY?.trim() ||
+    !composioConfigured() ||
     !toolkit ||
     !config ||
     !version ||

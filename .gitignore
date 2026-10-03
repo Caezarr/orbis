@@ -45,3 +45,6 @@ next-env.d.ts
 /data/state.json
 /data/state.json.*.tmp
 .gstack/
+
+# local demo mailbox state (pnpm demo:reset)
+/.orbis-demo/

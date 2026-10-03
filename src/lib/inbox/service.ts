@@ -6,6 +6,7 @@ import {
   workspaceMailboxAccounts,
   type MailboxMode,
 } from "@/lib/integrations/mailbox";
+import { DEMO_MAILBOX_PAGE, demoMailboxActive } from "@/lib/integrations/demo-mailbox/guard";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { INBOX_CONTRACT } from "@/lib/runtime/inbox-replies";
@@ -210,7 +211,9 @@ type MessageRow = {
   drafted_at: Date | null;
 };
 const mailboxLink = (provider: "gmail" | "outlook") =>
-  provider === "gmail"
+  demoMailboxActive()
+    ? DEMO_MAILBOX_PAGE
+    : provider === "gmail"
     ? "https://mail.google.com/mail/u/0/#drafts"
     : "https://outlook.office.com/mail/drafts";
 export function publicMessage(row: MessageRow) {
