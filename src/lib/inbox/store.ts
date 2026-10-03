@@ -37,7 +37,7 @@ export function effectiveMonthlyCap(stored: number | null | undefined) {
 }
 /**
  * Same monthly budget as durable tasks: reserved task quotes + estimated inbox
- * and company-brain model cost this month, against the workspace's effective
+ * company-brain and follow-up/pipeline model cost this month, against the workspace's effective
  * cap. Takes the per-tenant budget lock (held until the caller's transaction
  * ends) so concurrent workers cannot both pass the check; the caller records
  * its reservation in the same transaction.
@@ -64,6 +64,7 @@ export async function workspaceBudgetAllows(
       (SELECT COALESCE(sum(total_cents),0) FROM operational_tasks WHERE workspace_id=$1 AND tenant_id=$2 AND (status IN ('queued','running','needs_review') OR (status='completed' AND completed_at>=date_trunc('month',now()))))
       + (SELECT COALESCE(sum(est_cost_cents),0) FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
       + (SELECT COALESCE(sum(est_cost_cents),0) FROM brain_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+      + (SELECT COALESCE(sum(est_cost_cents),0) FROM pipeline_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
     )::text AS reserved`,
     [ids.workspaceId, ids.tenantId],
   );

@@ -1,4 +1,4 @@
-import { cronAuthorization } from "@/lib/platform/cron";
+import { guardCron } from "@/lib/platform/cron-guard";
 import { isOfflineMode } from "@/lib/platform/context";
 import { dispatchInboxPass } from "@/lib/operations/dispatcher";
 
@@ -15,14 +15,8 @@ const headers = { "Cache-Control": "no-store" };
  * tenant input. Response carries counts only, never ids or content.
  */
 async function handle(request: Request) {
-  const auth = cronAuthorization(request);
-  if (auth === "unconfigured")
-    return Response.json(
-      { error: "Scheduler is not configured." },
-      { status: 503, headers },
-    );
-  if (auth === "unauthorized")
-    return Response.json({ error: "Unauthorized" }, { status: 401, headers });
+  const denied = await guardCron(request);
+  if (denied) return denied;
   if (isOfflineMode())
     return Response.json(
       { stoppedBy: "disabled", reason: "offline" },

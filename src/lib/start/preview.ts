@@ -15,6 +15,7 @@ import {
   type ReplySource,
 } from "@/lib/runtime/inbox-replies";
 import { getModel, providerStatus } from "@/lib/runtime/provider";
+import { contactData, hasContactData, normalizeModelText } from "@/lib/security/untrusted-text";
 import {
   FICTITIOUS_RECIPIENT,
   FICTITIOUS_SENDER,
@@ -25,14 +26,15 @@ import {
   type StartPreview,
   type StartProfile,
 } from "./flow";
-import { createRateLimiter } from "./public-site";
+import { createSharedDailyBudget, createSharedLimiter, type SharedBudget } from "@/lib/platform/limits";
 
 /*
  * /start level 1 — "value before connection". Anonymous, so every model call is
  * gated: server flag + configured provider, same-origin (route), a per-IP rate
  * limit stricter than the site reading, a per-IP and global daily budget in
  * cents, a bounded input, a timeout, and one generation per profile hash.
- * All limits are in this instance's memory only (see docs/product/start-preview.md).
+ * Limits are shared across instances in PostgreSQL (migration 012) with an
+ * in-memory pre-check (see docs/product/launch-hardening.md).
  *
  * Honesty rules enforced in code, not in the prompt:
  *  - an answer is shown only when its quote is a verbatim substring of the
@@ -70,35 +72,7 @@ export function previewBudgetConfig() {
 
 // ------------------------------------------------------------- limits
 
-/** Daily (UTC) budget in cents, global + per key. Reservations are never refunded. */
-export function createDailyBudget(options: { capCents: number; perKeyCapCents: number; maxKeys?: number }) {
-  let day = "";
-  let spent = 0;
-  const perKey = new Map<string, number>();
-  return {
-    reserve(key: string, cents: number, now = Date.now()) {
-      const today = new Date(now).toISOString().slice(0, 10);
-      if (today !== day) {
-        day = today;
-        spent = 0;
-        perKey.clear();
-      }
-      const mine = perKey.get(key) ?? 0;
-      if (spent + cents > options.capCents) return { allowed: false as const, scope: "global" as const };
-      if (mine + cents > options.perKeyCapCents) return { allowed: false as const, scope: "key" as const };
-      spent += cents;
-      perKey.delete(key);
-      perKey.set(key, mine + cents);
-      while (perKey.size > (options.maxKeys ?? 5000)) {
-        const oldest = perKey.keys().next().value;
-        if (oldest === undefined) break;
-        perKey.delete(oldest);
-      }
-      return { allowed: true as const };
-    },
-    spent: () => spent,
-  };
-}
+export { createDailyBudget } from "./budget";
 
 /** Small LRU with TTL. Holds in-flight promises too, so concurrent duplicates share one generation. */
 export function createTtlCache<T>(options: { ttlMs: number; max: number }) {
@@ -176,8 +150,11 @@ const CONTACT = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\bhttps?:\/\/\S+
 const CONTACT_ONE = new RegExp(CONTACT.source, "i");
 const MONEY_IN = /(?:[€$£]\s?\d[\d\s.,]*|\d[\d\s.,]*\s?(?:€|\$|£|(?:eur|euros?|usd|chf|ht|ttc)\b))/gi;
 /** The simulated incoming email carries no contact data and no prices (it is not a real customer). */
-function sanitizeIncoming(text: string) {
-  return text.replace(CONTACT, "[coordonnées retirées]").replace(MONEY_IN, "[montant retiré]");
+function sanitizeIncoming(raw: string) {
+  // Same unicode-aware detection as the draft guard (homoglyphs, "＠", zero-width).
+  let text = normalizeModelText(raw).replace(CONTACT, "[coordonnées retirées]");
+  for (const c of contactData(text)) text = text.split(c.value).join("[coordonnées retirées]");
+  return text.replace(MONEY_IN, "[montant retiré]");
 }
 
 // ------------------------------------------------------------- model
@@ -249,7 +226,7 @@ export function postProcessQuestions(output: PreviewQuestionsOutput, source: Pre
     const question = ws(item.question).slice(0, 200);
     const key = question.toLowerCase();
     if (question.length < 5 || seen.has(key)) continue;
-    if (hasUnsupportedFigure(question, figures) || CONTACT_ONE.test(question) || injectionSignals(question).length)
+    if (hasUnsupportedFigure(question, figures) || CONTACT_ONE.test(question) || hasContactData(question) || injectionSignals(question).length)
       continue;
     seen.add(key);
     const quote = item.quote ? ws(item.quote) : "";
@@ -322,24 +299,31 @@ export type PreviewDeps = {
   enabled?: () => boolean;
   readSite?: typeof readCompanySite;
   model?: PreviewModel;
-  limiter?: ReturnType<typeof createRateLimiter>;
-  budget?: ReturnType<typeof createDailyBudget>;
+  /** Sync (memory) or async (shared, migration 012) limiter. */
+  limiter?: { take(key: string): { allowed: boolean } | Promise<{ allowed: boolean }> };
+  budget?: { reserve(key: string, cents: number): { allowed: boolean } | Promise<{ allowed: boolean }> };
   cache?: ReturnType<typeof createTtlCache<Promise<StartPreview>>>;
   estimateCents?: number;
   concurrency?: { active: number; max: number };
 };
 
 const defaults = (() => {
-  let budget: ReturnType<typeof createDailyBudget> | null = null;
+  let budget: SharedBudget | null = null;
   return {
-    // Stricter than the site reading (6 per 10 min): 3 generations per hour per client key.
-    limiter: createRateLimiter({ limit: 3, windowMs: 60 * 60_000 }),
+    // Stricter than the site reading (6 per 10 min): 3 generations per hour per
+    // client key. Shared across instances (Postgres) with an in-memory pre-check;
+    // fails closed when the shared store is unreachable (paid model call).
+    limiter: createSharedLimiter({ bucket: "start_preview", limit: 3, windowMs: 60 * 60_000, failMode: "closed" }),
     cache: createTtlCache<Promise<StartPreview>>({ ttlMs: CACHE_TTL_MS, max: CACHE_MAX }),
     concurrency: { active: 0, max: 2 },
     budget() {
       if (!budget) {
         const c = previewBudgetConfig();
-        budget = createDailyBudget({ capCents: c.dailyCapCents, perKeyCapCents: c.perKeyDailyCapCents });
+        budget = createSharedDailyBudget({
+          bucket: "start_preview_budget",
+          capCents: c.dailyCapCents,
+          perKeyCapCents: c.perKeyDailyCapCents,
+        });
       }
       return budget;
     },
@@ -404,15 +388,24 @@ export async function buildStartPreview(
   const hash = profileHash(profile);
   const cached = cache.get(hash);
   if (cached) return cached;
-  if (!(deps.limiter ?? defaults.limiter).take(clientKey).allowed) return quotePreview(profile, "rate_limited");
-  const concurrency = deps.concurrency ?? defaults.concurrency;
-  if (concurrency.active >= concurrency.max) return quotePreview(profile, "busy");
-  const estimate = deps.estimateCents ?? previewBudgetConfig().estimateCents;
-  if (!(deps.budget ?? defaults.budget()).reserve(clientKey, estimate).allowed) return quotePreview(profile, "budget");
-  concurrency.active++;
-  const run = generate(profile, deps)
-    .catch(() => quotePreview(profile, "error"))
-    .finally(() => concurrency.active--);
+  // The pending promise is cached BEFORE any await, so concurrent requests for
+  // the same profile share one set of limit checks and one generation.
+  const run = (async (): Promise<StartPreview> => {
+    if (!(await (deps.limiter ?? defaults.limiter).take(clientKey)).allowed) return quotePreview(profile, "rate_limited");
+    const concurrency = deps.concurrency ?? defaults.concurrency;
+    if (concurrency.active >= concurrency.max) return quotePreview(profile, "busy");
+    const estimate = deps.estimateCents ?? previewBudgetConfig().estimateCents;
+    if (!(await (deps.budget ?? defaults.budget()).reserve(clientKey, estimate)).allowed)
+      return quotePreview(profile, "budget");
+    concurrency.active++;
+    try {
+      return await generate(profile, deps);
+    } catch {
+      return quotePreview(profile, "error");
+    } finally {
+      concurrency.active--;
+    }
+  })();
   cache.set(hash, run);
   const result = await run;
   // Only successful generations are kept; a failure may be retried (within limits).

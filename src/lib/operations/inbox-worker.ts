@@ -32,7 +32,10 @@ import {
   trustedProfileText,
 } from "@/lib/brain/worker";
 import { currentEntitlement } from "@/lib/billing/entitlements-store";
-import { blockMessage, type Entitlement } from "@/lib/billing/entitlements";
+import { blockMessage, brainJobBlock, type Entitlement } from "@/lib/billing/entitlements";
+import { providerFollowupModel, type FollowupModel } from "@/lib/followups/model";
+import { postgresFollowupStore, postgresRequestStore } from "@/lib/followups/store";
+import { runFollowups, trackRequest, type FollowupStats } from "@/lib/followups/tracker";
 import { scoped, type Identity } from "./worker";
 
 export { inboxDraftsEnabled };
@@ -68,6 +71,8 @@ export type InboxWorkerDeps = {
   deadline?: number;
   /** Plan entitlement loader (tests); defaults to the PostgreSQL entitlement service. */
   entitlement?: (db: PoolClient, identity: Identity) => Promise<Entitlement>;
+  /** Follow-ups / request pipeline model (levels 6 and 7). */
+  followupModel?: FollowupModel;
 };
 
 /**
@@ -181,6 +186,9 @@ export async function runOneInboxBatch(
   let mailbox: ReturnType<NonNullable<InboxWorkerDeps["mailbox"]>> | null =
     null;
   let trustedText = "";
+  let followups: FollowupStats | undefined;
+  const loadEntitlement = (db: PoolClient) =>
+    (deps.entitlement ?? ((d, i) => currentEntitlement(d, i)))(db, identity);
   try {
     // Workspace snapshot + owner-approved company sheet facts (never candidates).
     const { state, facts } = await run((db) =>
@@ -196,12 +204,34 @@ export async function runOneInboxBatch(
       },
       { mode: claimed.mode },
     );
+    const inboxStore = postgresInboxStore(run, batch, {
+      token: claimed.lease_token,
+    });
+    const followupModel = deps.followupModel ?? providerFollowupModel;
+    const context = replyContext(state, factSources(facts));
+    const requestStore = postgresRequestStore(run, {
+      workspaceId: batch.workspaceId,
+      tenantId: batch.tenantId,
+      provider: batch.provider,
+      connectedAccountId: batch.connectedAccountId,
+    });
     stats = await processMailboxBatch({
       batch,
       mailbox,
       model: deps.model ?? providerInboxModel,
-      store: postgresInboxStore(run, batch, { token: claimed.lease_token }),
-      context: replyContext(state, factSources(facts)),
+      store: inboxStore,
+      context,
+      requests: {
+        track: (input) =>
+          trackRequest(
+            {
+              store: requestStore,
+              model: followupModel,
+              cents: estimatedCents("ORBIS_PIPELINE_EST_CENTS_EXTRACT", 1),
+            },
+            input,
+          ),
+      },
       costs: {
         classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
         draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
@@ -212,6 +242,54 @@ export async function runOneInboxBatch(
           : () => Date.now() >= deps.deadline!,
       draftQuota: entitlement.draftsRemaining,
     });
+    // Levels 6/7 on continuous (incremental) batches that finished cleanly:
+    // read due request threads, update the pipeline, propose follow-up drafts.
+    // Still under this batch's lease; bounded; best effort except policy errors.
+    if (
+      claimed.kind === "incremental" &&
+      !stats.leaseLost &&
+      !stats.yielded &&
+      !stats.budgetExhausted &&
+      (deps.deadline === undefined || deps.deadline - Date.now() > 5_000)
+    ) {
+      try {
+        followups = await runFollowups({
+          ids: {
+            tenantId: batch.tenantId,
+            workspaceId: batch.workspaceId,
+            connectedAccountId: batch.connectedAccountId,
+          },
+          mailbox,
+          model: followupModel,
+          store: postgresFollowupStore(
+            run,
+            {
+              workspaceId: batch.workspaceId,
+              tenantId: batch.tenantId,
+              connectedAccountId: batch.connectedAccountId,
+            },
+            { heartbeat: () => inboxStore.heartbeat() },
+          ),
+          context,
+          // A follow-up draft is a draft: fresh plan + quota check each time.
+          canDraft: async () =>
+            brainJobBlock(await run(loadEntitlement), "regenerate_draft") ===
+            null,
+          costs: {
+            classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
+            draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
+          },
+          shouldYield:
+            deps.deadline === undefined
+              ? undefined
+              : () => Date.now() >= deps.deadline!,
+          maxThreads: estimatedCents("ORBIS_FOLLOWUP_MAX_THREADS", 10),
+        });
+        stats.followups = followups;
+      } catch (error) {
+        if (error instanceof MailboxPolicyError) throw error;
+      }
+    }
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
   }

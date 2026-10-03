@@ -7,6 +7,8 @@ const pages = [
   ["/chat", "New conversation"],
   ["/today", "Today"],
   ["/fiche", "Fiche entreprise"],
+  ["/demandes", "Demandes"],
+  ["/rapport", "Rapport de la semaine"],
   ["/catalog", "Marketplace"],
   ["/connections", "Integrations"],
   ["/knowledge", "Knowledge"],

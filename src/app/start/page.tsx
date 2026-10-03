@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { authenticatedUser } from "@/lib/platform/auth";
+import { authenticatedUser, authOptions } from "@/lib/platform/auth";
 import { isOfflineMode } from "@/lib/platform/context";
 import { StartFlow, type StartSession } from "./StartFlow";
 
@@ -21,5 +21,5 @@ export default async function StartPage() {
     } catch {
       session = "anonymous";
     }
-  return <StartFlow session={session} />;
+  return <StartFlow session={session} authOptions={authOptions()} />;
 }

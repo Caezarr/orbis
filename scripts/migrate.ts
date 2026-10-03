@@ -133,6 +133,52 @@ async function main() {
         );
         await client.query("RESET ROLE");
       }
+      // 011 follow-ups + request pipeline: no DELETE (contact erasure = UPDATE
+      // to NULL; workspace deletion cascades).
+      const pipeline = await client.query(
+        "SELECT to_regclass('public.pipeline_items') AS relation",
+      );
+      if (pipeline.rows[0].relation)
+        for (const table of [
+          "pipeline_settings",
+          "pipeline_items",
+          "followups",
+          "pipeline_usage",
+        ])
+          await client.query(
+            `GRANT SELECT, INSERT, UPDATE ON ${table} TO ${quoted}`,
+          );
+      // 012 launch hardening: shared limiter, tenant erasure and retention purge
+      // only through definer functions; no table privilege on rate_limit_counters
+      // or tenant_erasures.
+      const hardening = await client.query(
+        "SELECT to_regclass('public.rate_limit_counters') AS relation",
+      );
+      if (hardening.rows[0].relation)
+        for (const [owner, fn] of [
+          ["orbis_rate_limiter", "orbis_rate_limit_take(text, text, integer, integer, integer)"],
+          ["orbis_rate_limiter", "orbis_budget_reserve(text, text, integer, integer, integer)"],
+          ["orbis_rate_limiter", "orbis_rate_limit_purge()"],
+          ["orbis_tenant_eraser", "orbis_erase_tenant(text, text, text)"],
+          ["orbis_retention", "orbis_retention_purge()"],
+        ]) {
+          await client.query(`SET LOCAL ROLE ${owner}`);
+          await client.query(`GRANT EXECUTE ON FUNCTION ${fn} TO ${quoted}`);
+          await client.query("RESET ROLE");
+        }
+      const digest = await client.query(
+        "SELECT to_regclass('public.digest_subscriptions') AS relation",
+      );
+      if (digest.rows[0].relation) {
+        await client.query(
+          `GRANT SELECT, INSERT, UPDATE ON digest_subscriptions, digest_deliveries TO ${quoted}`,
+        );
+        await client.query("SET LOCAL ROLE orbis_inbox_dispatch");
+        await client.query(
+          `GRANT EXECUTE ON FUNCTION orbis_digest_due_subscriptions(integer) TO ${quoted}`,
+        );
+        await client.query("RESET ROLE");
+      }
     }
     await client.query("COMMIT");
     console.log("Migrations complete");

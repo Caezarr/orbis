@@ -193,7 +193,11 @@ describe("draft guard: never invent prices, contacts or links", () => {
         "invalid_citation",
       ]),
     );
-    expect(result.questions.some((q) => q.includes("1 250"))).toBe(true);
+    // The unverified figure is never echoed into stored questions (Phase 4 red team).
+    expect(result.questions.some((q) => q.includes("1 250"))).toBe(false);
+    expect(result.questions).toContain(
+      "Montant à confirmer (proposé par le brouillon, non vérifié)",
+    );
   });
   it("highlights open questions in the draft body when the model forgot to", () => {
     const result = guardDraft(

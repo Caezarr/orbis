@@ -1,5 +1,7 @@
 # Orbis — état de livraison et préparation commerciale
 
+> V1 self-serve (octobre 2026) : la liste opérateur à jour est [launch-checklist.md](launch-checklist.md) ; le durcissement Phase 4 est décrit dans [launch-hardening.md](launch-hardening.md).
+
 État vérifié le 14 septembre 2026. Ce document distingue le code livré, les comptes à configurer et le développement encore nécessaire. Un catalogue de connecteurs ne signifie pas que chaque action a été validée avec un compte réel.
 
 ## Livré dans cette tranche

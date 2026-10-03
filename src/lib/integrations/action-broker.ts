@@ -376,3 +376,52 @@ export async function executeAction(
     };
   });
 }
+
+/** Minimal SDK surface used to revoke a workspace's connections (mockable). */
+export type RevokeSdk = {
+  connectedAccounts: {
+    list(
+      query: { userIds: string[]; limit: number; cursor?: string },
+      options: { signal: AbortSignal },
+    ): Promise<{ items: { id: string }[]; nextCursor?: string | null }>;
+    delete(id: string, options: { signal: AbortSignal }): Promise<unknown>;
+  };
+};
+/**
+ * Account deletion: revoke EVERY connected account bound to this workspace's
+ * integration user (all toolkits, all statuses). Composio documents
+ * `connectedAccounts.delete` as permanent and revoking the stored access
+ * tokens; whether the upstream provider grant (Google/Microsoft consent) is
+ * also revoked is not documented — the user can remove it from their account
+ * security page (docs/product/launch-hardening.md). Ids only, never SDK objects.
+ * Throws when the listing or a deletion fails, so the caller can stop before
+ * erasing data and retry.
+ */
+export async function revokeWorkspaceConnections(
+  tenantId: string,
+  workspaceId: string,
+  sdk?: RevokeSdk,
+): Promise<{ status: "revoked" | "not_configured"; revoked: number }> {
+  server();
+  if (!sdk && !process.env.COMPOSIO_API_KEY?.trim()) return { status: "not_configured", revoked: 0 };
+  const client = sdk ?? (sdkClient() as unknown as RevokeSdk);
+  const userId = integrationUser(tenantId, workspaceId);
+  const signal = AbortSignal.timeout(20_000);
+  const ids = new Set<string>();
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < 10; page++) {
+    const result = await client.connectedAccounts.list({ userIds: [userId], limit: 100, cursor }, { signal }).catch(() => {
+      throw new BrokerError("Connection listing failed.");
+    });
+    for (const account of result.items) if (typeof account.id === "string") ids.add(account.id);
+    if (!result.nextCursor || cursors.has(result.nextCursor)) break;
+    cursors.add(result.nextCursor);
+    cursor = result.nextCursor;
+  }
+  for (const id of ids)
+    await client.connectedAccounts.delete(id, { signal }).catch(() => {
+      throw new BrokerError("Connection revocation failed.");
+    });
+  return { status: "revoked", revoked: ids.size };
+}

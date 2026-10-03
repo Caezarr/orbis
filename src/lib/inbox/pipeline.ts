@@ -8,9 +8,11 @@ import {
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import {
   ACTIONABLE,
+  classificationSchema,
   guardDraft,
   injectionSignals,
   replyRecipient,
+  replyDraftSchema,
   replyToDiverges,
   skipReason,
   type Classification,
@@ -90,8 +92,12 @@ export type BatchStats = {
   quotaReached?: boolean;
   /** Mailbox drafts created by this run (quota units), including recipient mismatches. */
   draftsCreated?: number;
+  /** Follow-ups / pipeline pass run after an incremental batch (levels 6/7), counts only. */
+  followups?: Record<string, number | boolean>;
 };
 export class LeaseLostError extends Error {}
+/** Model output failed schema validation (treated like a model failure). */
+class InvalidModelOutput extends Error {}
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set([
   "skipped",
@@ -145,6 +151,17 @@ export async function processMailboxBatch(params: {
   shouldYield?: () => boolean;
   /** Plan drafts remaining (entitlements). Undefined = no plan quota. */
   draftQuota?: number;
+  /**
+   * Request pipeline (level 7): called once per actionable message, before
+   * drafting. Best effort: a failure never blocks the reply draft.
+   */
+  requests?: {
+    track(input: {
+      rowId: string;
+      message: MailMessage;
+      classification: Classification;
+    }): Promise<unknown>;
+  };
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -232,7 +249,10 @@ export async function processMailboxBatch(params: {
         }
         const result = await model.classify(message);
         await store.addUsage(row.rowId, result.usage);
-        classification = result.output.classification;
+        // Model output is untrusted: an off-schema label never reaches storage.
+        const parsedClass = classificationSchema.safeParse(result.output);
+        if (!parsedClass.success) throw new InvalidModelOutput();
+        classification = parsedClass.data.classification;
         await store.update(row.rowId, {
           status: "classified",
           classification,
@@ -242,6 +262,10 @@ export async function processMailboxBatch(params: {
       }
       if (!ACTIONABLE.has(classification)) continue;
       stats.actionable++;
+      if (params.requests)
+        await params.requests
+          .track({ rowId: row.rowId, message, classification })
+          .catch(() => {});
       if (stats.drafted >= batch.maxDrafts) {
         // Stays non-terminal: a later batch with remaining quota drafts it.
         await store.update(row.rowId, {
@@ -286,7 +310,12 @@ export async function processMailboxBatch(params: {
         toneSamples: await toneSamples(),
       });
       await store.addUsage(row.rowId, generated.usage);
-      const guarded = guardDraft(generated.output, { sources, message });
+      // Strict schema check before the guard: wrong shape/oversized → failed,
+      // no draft. Unknown keys (recipient, cc, send…) are stripped by zod and
+      // never read anyway: the recipient is computed by code above.
+      const parsedDraft = replyDraftSchema.safeParse(generated.output);
+      if (!parsedDraft.success) throw new InvalidModelOutput();
+      const guarded = guardDraft(parsedDraft.data, { sources, message });
       const allFlags = [...flags, ...guarded.issues.map((i) => `guard:${i}`)];
       await store.update(row.rowId, {
         status: "drafting",

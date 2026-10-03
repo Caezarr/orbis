@@ -4,13 +4,43 @@ import { cookies } from "next/headers";
 export class PlatformError extends Error {
   constructor(message: string, public status = 500) { super(message); }
 }
+/**
+ * Post-auth destinations: relative paths only, under these top-level app
+ * routes. Anything else (absolute URL, protocol-relative, backslash, control
+ * characters, /api, /login, unknown route) falls back to /today.
+ */
+export const RETURN_TO_ALLOWLIST = [
+  "today", "start", "fiche", "demandes", "rapport", "billing", "settings", "company", "connections",
+  "catalog", "knowledge", "missions", "audit", "onboarding", "analytics", "plans", "pricing", "tasks",
+  "runs", "workflows", "chat", "discover", "legal",
+] as const;
 export function safeReturnTo(value: unknown, fallback = "/today") {
-  if (typeof value !== "string" || value.length > 4096 || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020]/.test(value)) return fallback;
+  if (typeof value !== "string" || value.length > 2048 || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020\u007f-\u009f]/.test(value)) return fallback;
   try {
     const url = new URL(value, "https://orbis.invalid");
-    if (url.origin !== "https://orbis.invalid" || /^\/(api|login)(\/|$)/.test(url.pathname)) return fallback;
+    if (url.origin !== "https://orbis.invalid") return fallback;
+    const top = url.pathname.split("/")[1] ?? "";
+    if (!(RETURN_TO_ALLOWLIST as readonly string[]).includes(top)) return fallback;
     return url.pathname + url.search + url.hash;
   } catch { return fallback; }
+}
+
+/** Current CGU version recorded at account creation (user metadata). */
+export const TERMS_VERSION = "cgu-2026-10-draft";
+
+/**
+ * Sign-in methods offered by the UI. OAuth buttons appear only when an
+ * operator declares the provider configured in Supabase (no fake buttons).
+ * Magic link uses Supabase email OTP (on unless ORBIS_AUTH_MAGIC_LINK=false).
+ */
+export type AuthOptions = { password: boolean; magicLink: boolean; google: boolean; microsoft: boolean };
+export function authOptions(env: Record<string, string | undefined> = process.env): AuthOptions {
+  return {
+    password: env.ORBIS_AUTH_PASSWORD !== "false",
+    magicLink: env.ORBIS_AUTH_MAGIC_LINK !== "false",
+    google: env.ORBIS_AUTH_GOOGLE === "true",
+    microsoft: env.ORBIS_AUTH_MICROSOFT === "true",
+  };
 }
 export function authConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
