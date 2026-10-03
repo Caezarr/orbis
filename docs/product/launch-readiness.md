@@ -1,5 +1,7 @@
 # Orbis — état de livraison et préparation commerciale
 
+> V1 self-serve (octobre 2026) : la liste opérateur à jour est [launch-checklist.md](launch-checklist.md) ; le durcissement Phase 4 est décrit dans [launch-hardening.md](launch-hardening.md).
+
 État vérifié le 14 septembre 2026. Ce document distingue le code livré, les comptes à configurer et le développement encore nécessaire. Un catalogue de connecteurs ne signifie pas que chaque action a été validée avec un compte réel.
 
 ## Livré dans cette tranche
@@ -53,19 +55,18 @@ Ne pas présenter les 68 outils comme 68 connecteurs certifiés. Tester pour cha
 
 ### 4. Stripe
 
-Valider les prix, inclusions, limites et conditions de remboursement. Les barèmes dans `src/lib/billing/rates.ts` sont des propositions. Configurer d’abord **le mode test**, un produit Solo et un produit Business, puis leurs prix mensuels et le prix de siège supplémentaire. Les montants configurés doivent correspondre au barème affiché.
+V1 : voir [billing-v1.md](billing-v1.md) (essai, formules Essentiel/Équipe, quotas, plafonds, étapes Stripe test). Les prix affichés sont lus dans Stripe ; aucun montant n’est codé. Configurer d’abord **le mode test**, un produit Essentiel et un produit Équipe avec chacun un prix mensuel. Les barèmes de `src/lib/billing/rates.ts` concernent la facturation par tâche, désactivée en V1.
 
 ```text
 STRIPE_SECRET_KEY                 # clé restreinte recommandée
 STRIPE_WEBHOOK_SECRET
 STRIPE_PRICE_SOLO_MONTHLY
-STRIPE_PRICE_BUSINESS_BASE_MONTHLY
-STRIPE_PRICE_BUSINESS_EXTRA_SEAT_MONTHLY
+STRIPE_PRICE_EQUIPE_MONTHLY       # à défaut : STRIPE_PRICE_BUSINESS_BASE_MONTHLY
 ```
 
 Utiliser des variables sensibles Vercel ou un coffre de secrets. Vérifier à quel compte et environnement correspondent les IDs de prix déjà présents dans `.env.example` ; ne pas supposer qu’ils conviennent à un autre compte.
 
-Enregistrer `/api/v1/billing/webhook` pour `checkout.session.completed`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`. Configurer le Customer Portal. Tester renouvellement, changement de sièges, annulation, signature invalide, doublon et événements hors ordre avant passage en live.
+Enregistrer `/api/v1/billing/webhook` pour `checkout.session.completed`, `checkout.session.expired`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`. Configurer le Customer Portal. Tester renouvellement, échec de paiement (past_due), annulation, signature invalide, doublon et événements hors ordre avant passage en live.
 
 **TVA/taxes :** faire valider les obligations applicables et les immatriculations actives. `automatic_tax` n’est volontairement pas activé ; l’activer seul, sans immatriculation, ne suffit pas à collecter la taxe.
 

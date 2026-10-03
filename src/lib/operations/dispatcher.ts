@@ -1,7 +1,9 @@
 import { transaction } from "@/lib/platform/db";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
 import { enqueueDueIncremental } from "@/lib/inbox/schedule";
+import { currentEntitlement } from "@/lib/billing/entitlements-store";
 import { runOneInboxBatch, type InboxWorkerDeps } from "./inbox-worker";
+import { runOneBrainJob } from "@/lib/brain/worker";
 import { scoped, type Identity } from "./worker";
 
 /**
@@ -29,6 +31,8 @@ export type DueWorkspace = {
   dueBatches: number;
   pollDue: boolean;
   dueSince: Date | null;
+  /** Company brain jobs due (extraction, regeneration); migration 009. */
+  brainDue?: number;
 };
 export type DispatchOptions = {
   maxBatches?: number;
@@ -43,6 +47,8 @@ export type DispatchResult = {
   workspaces: number;
   enqueued: number;
   processed: number;
+  /** Company brain jobs processed in this pass (counted in maxBatches). */
+  brainProcessed: number;
   yielded: number;
   errors: number;
   stoppedBy: "idle" | "max_batches" | "deadline" | "disabled";
@@ -53,6 +59,7 @@ export type DispatchDeps = {
   discover?: (limit: number) => Promise<DueWorkspace[]>;
   enqueue?: (identity: Identity) => Promise<string | null>;
   runBatch?: (identity: Identity, deadline: number) => Promise<ProcessOutcome>;
+  runBrain?: (identity: Identity, deadline: number) => Promise<ProcessOutcome>;
   inbox?: Omit<InboxWorkerDeps, "deadline">;
   clock?: () => number;
 };
@@ -85,7 +92,7 @@ export async function discoverDueWorkspaces(limit: number) {
       "SELECT tenant_id,workspace_id,worker_user_id,due_batches,poll_due,due_since FROM orbis_inbox_due_workspaces($1)",
       [limit],
     );
-    return rows.map((r): DueWorkspace => ({
+    const due = rows.map((r): DueWorkspace => ({
       tenantId: r.tenant_id,
       workspaceId: r.workspace_id,
       workerUserId: r.worker_user_id,
@@ -93,6 +100,36 @@ export async function discoverDueWorkspaces(limit: number) {
       pollDue: r.poll_due,
       dueSince: r.due_since,
     }));
+    // Brain jobs: same ids-only discovery model (orbis_brain_due_workspaces, 009).
+    const brain = (
+      await db.query<{
+        tenant_id: string;
+        workspace_id: string;
+        worker_user_id: string;
+        due_jobs: number;
+        due_since: Date | null;
+      }>(
+        "SELECT tenant_id,workspace_id,worker_user_id,due_jobs,due_since FROM orbis_brain_due_workspaces($1)",
+        [limit],
+      )
+    ).rows;
+    for (const r of brain) {
+      const known = due.find(
+        (d) => d.workspaceId === r.workspace_id && d.tenantId === r.tenant_id,
+      );
+      if (known) known.brainDue = Number(r.due_jobs);
+      else if (due.length < limit)
+        due.push({
+          tenantId: r.tenant_id,
+          workspaceId: r.workspace_id,
+          workerUserId: r.worker_user_id,
+          dueBatches: 0,
+          pollDue: false,
+          dueSince: r.due_since,
+          brainDue: Number(r.due_jobs),
+        });
+    }
+    return due;
   });
 }
 
@@ -108,6 +145,7 @@ export async function dispatchInboxPass(
     workspaces: 0,
     enqueued: 0,
     processed: 0,
+    brainProcessed: 0,
     yielded: 0,
     errors: 0,
     stoppedBy: "idle",
@@ -123,7 +161,13 @@ export async function dispatchInboxPass(
   const enqueue =
     deps.enqueue ??
     ((identity: Identity) =>
-      scoped(identity, (db) => enqueueDueIncremental(db, identity)));
+      scoped(identity, (db) =>
+        enqueueDueIncremental(db, identity, new Date(), {
+          // No new continuous batch without an active plan and drafts left.
+          allow: async () =>
+            (await currentEntitlement(db, identity)).canProcess,
+        }),
+      ));
   const runBatch =
     deps.runBatch ??
     (async (identity: Identity, batchDeadline: number) => {
@@ -131,6 +175,16 @@ export async function dispatchInboxPass(
         ...deps.inbox,
         deadline: batchDeadline,
       });
+      return {
+        processed: r.processed,
+        yielded: "stats" in r ? !!r.stats?.yielded : false,
+      };
+    });
+
+  const runBrain =
+    deps.runBrain ??
+    (async (identity: Identity, jobDeadline: number) => {
+      const r = await runOneBrainJob(identity, { deadline: jobDeadline });
       return {
         processed: r.processed,
         yielded: "stats" in r ? !!r.stats?.yielded : false,
@@ -154,9 +208,24 @@ export async function dispatchInboxPass(
     let progressed = false;
     for (const entry of active) {
       if (entry.exhausted) continue;
-      if (result.processed >= opts.maxBatches) return finish("max_batches");
+      if (result.processed + result.brainProcessed >= opts.maxBatches)
+        return finish("max_batches");
       if (timeLeft() < opts.reserveMs) return finish("deadline");
       try {
+        if (round === 0 && (entry.ws.brainDue ?? 0) > 0) {
+          // One brain job per workspace per pass, before its inbox batch.
+          const brain = await runBrain(entry.identity, deadline - opts.reserveMs);
+          if (brain.processed) {
+            result.brainProcessed++;
+            if (brain.yielded) {
+              result.yielded++;
+              return finish("deadline");
+            }
+            if (result.processed + result.brainProcessed >= opts.maxBatches)
+              return finish("max_batches");
+            if (timeLeft() < opts.reserveMs) return finish("deadline");
+          }
+        }
         if (round === 0 && entry.ws.pollDue && (await enqueue(entry.identity)))
           result.enqueued++;
         const outcome = await runBatch(

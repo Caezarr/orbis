@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   const result = await context.db.query<{ stripe_customer_id: string }>("SELECT stripe_customer_id FROM stripe_customers WHERE tenant_id = $1", [context.tenantId]);
   const customer = result.rows[0]?.stripe_customer_id;
   if (!customer) return NextResponse.json({ error: "BILLING_CUSTOMER_NOT_FOUND" }, { status: 404 });
-  const session = await stripe().billingPortal.sessions.create({ customer, return_url: `${appUrl()}/settings` });
+  const session = await stripe().billingPortal.sessions.create({ customer, return_url: `${appUrl()}/billing` });
   return NextResponse.json({ url: session.url });
  }, { requireRole: ["owner", "admin"] });
 }

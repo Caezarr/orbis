@@ -6,7 +6,13 @@ import {
   type ContinuousSettings,
 } from "@/app/start/ContinuousToggle";
 import { DraftCard } from "@/app/start/DraftCard";
+import { DigestToggle } from "./DigestToggle";
 import type { InboxMessageView } from "@/lib/start/flow";
+import {
+  OrbiQuestions,
+  type NewInfoView,
+  type QuestionView,
+} from "@/components/brain/OrbiQuestions";
 import s from "@/app/start/start.module.css";
 
 type Digest = {
@@ -19,6 +25,10 @@ type Digest = {
   };
   drafts: InboxMessageView[];
   settings: ContinuousSettings;
+  mode?: "test" | "scoped_autonomy";
+  questions?: { count: number; questions: QuestionView[] };
+  newInfo?: NewInfoView[];
+  canAnswer?: boolean;
 };
 
 const day = (iso: string) =>
@@ -96,6 +106,12 @@ export function InboxToday() {
         <h2>Vos décisions</h2>
         <span className={s.fine}>Depuis {day(digest.since)}</span>
       </div>
+      {digest.mode !== "scoped_autonomy" && (
+        <p className={s.test} role="note">
+          <strong>Mode test.</strong> Les brouillons sont simulés : rien n’est
+          écrit dans votre boîte {mailbox}, et rien n’est jamais envoyé.
+        </p>
+      )}
       <div className={s.tiles}>
         <div className={s.tile}>
           <strong>{counts.draftsReady}</strong>
@@ -134,6 +150,14 @@ export function InboxToday() {
           sont dans le dossier Brouillons de {mailbox}.
         </p>
       )}
+      <OrbiQuestions
+        count={digest.questions?.count ?? 0}
+        questions={digest.questions?.questions ?? []}
+        newInfo={digest.newInfo ?? []}
+        canAnswer={!!digest.canAnswer}
+        mailbox={mailbox}
+        onChange={load}
+      />
       <div className={s.actions}>
         <button
           type="button"
@@ -148,6 +172,7 @@ export function InboxToday() {
         initial={digest.settings}
         onChange={(settings) => setDigest((d) => (d ? { ...d, settings } : d))}
       />
+      <DigestToggle />
     </section>
   );
 }

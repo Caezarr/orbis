@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   decodePending,
+  decodePreviewShown,
+  encodePreviewShown,
+  quotePreview,
   deriveStep,
   encodePending,
   inboxErrorKind,
@@ -31,6 +34,10 @@ describe("deriveStep", () => {
   });
   it("asks for an account once the profile is confirmed, without a session", () => {
     expect(deriveStep({ ...base, pendingProfile: true })).toBe("account");
+  });
+  it("keeps step 1 open while the anonymous instant preview is shown", () => {
+    expect(deriveStep({ ...base, pendingProfile: true, previewing: true })).toBe("company");
+    expect(deriveStep({ ...base, pendingProfile: true, previewing: false })).toBe("account");
   });
   it("keeps the company step open while a pending profile is saved after login", () => {
     expect(deriveStep({ ...base, authenticated: true, pendingProfile: true })).toBe("company");
@@ -187,5 +194,24 @@ describe("results", () => {
     ]);
     expect(splitPlaceholders("Aucun")).toEqual([{ text: "Aucun", placeholder: false }]);
     expect(splitPlaceholders("[[A]][[B]]").filter((p) => p.placeholder)).toHaveLength(2);
+  });
+});
+
+describe("instant preview (client-safe helpers)", () => {
+  const p = profileFromDescription("Menuiserie sur mesure à Lille pour les particuliers.", "Atelier");
+  it("quote-only preview shows only confirmed quotes and unknowns", () => {
+    expect(quotePreview(p, "disabled")).toEqual({
+      mode: "quotes",
+      reason: "disabled",
+      found: p.facts,
+      unknowns: p.unknowns,
+    });
+  });
+  it("round-trips the preview-shown marker and rejects tampered or expired values", () => {
+    const now = 1_000_000;
+    expect(decodePreviewShown(encodePreviewShown(true, now), now)).toEqual({ ai: true });
+    expect(decodePreviewShown(encodePreviewShown(false, now), now + PENDING_TTL_MS + 1)).toBeNull();
+    expect(decodePreviewShown('{"v":1,"ai":"yes","savedAt":1}', now)).toBeNull();
+    expect(decodePreviewShown("{", now)).toBeNull();
   });
 });

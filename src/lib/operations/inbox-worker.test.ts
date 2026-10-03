@@ -251,3 +251,242 @@ describe("inbox worker scheduling behaviour", () => {
     expect(pause[1]).toEqual(["ws-a", "tenant-a", "account"]);
   });
 });
+
+describe("company brain hooks", () => {
+  const inbound = {
+    provider: "gmail" as const,
+    id: "m1",
+    threadId: "t1",
+    from: { address: "client@example.com", name: "Claire Durand" },
+    replyTo: [],
+    to: ["paul@atelier.fr"],
+    receivedAt: "2026-10-02T10:00:00.000Z",
+    subject: "Devis parquet",
+    text: "Bonjour, quel est votre prix de pose ?",
+    labels: [],
+    headers: {},
+    fromOwner: false,
+    isDraft: false,
+  };
+  it("queues ONE sent-mail extraction after the first completed run", async () => {
+    const base = mock.query.getMockImplementation()!;
+    mock.query.mockImplementation(async (sql: string, params: unknown[]) =>
+      sql.startsWith("SELECT 1 FROM brain_jobs")
+        ? { rows: [], rowCount: 0 }
+        : base(sql, params),
+    );
+    await runOneInboxBatch(identity, { mailbox, model });
+    const insert = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("INSERT INTO brain_jobs"),
+    )!;
+    expect(insert[0]).toContain("'extract_sent'");
+    expect(insert[0]).toContain("ON CONFLICT(workspace_id,request_key) DO NOTHING");
+    expect(insert[1]).toEqual(
+      expect.arrayContaining(["ws-a", "tenant-a", "extract:auto:account", "gmail", "account", "test"]),
+    );
+  });
+  it("does not queue an extraction on incremental polls", async () => {
+    claimed = batchRow({ kind: "incremental", since_at: new Date() });
+    await runOneInboxBatch(identity, { mailbox, model });
+    expect(
+      mock.query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO brain_jobs")),
+    ).toBe(false);
+  });
+  it("drafts with APPROVED facts only and registers the draft's open questions", async () => {
+    const base = mock.query.getMockImplementation()!;
+    mock.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.startsWith("SELECT id,category,topic_key"))
+        return {
+          rows: sql.includes("status='approved'")
+            ? [
+                {
+                  id: "fact-1",
+                  category: "pricing",
+                  topic_key: "prix_pose",
+                  statement: "Pose : 45 € HT/m²",
+                  condition: null,
+                  status: "approved",
+                  origin: "question_answer",
+                  quotes: [],
+                  evidence_at: new Date(),
+                  confidence: "1",
+                  valid_until: null,
+                  question_id: "q1",
+                  version: 1,
+                  reviewed_at: new Date(),
+                  created_at: new Date(),
+                },
+              ]
+            : [],
+        };
+      if (sql.startsWith("SELECT id,status,classification FROM inbox_messages"))
+        return { rows: [{ id: "row-1", status: "seen", classification: null }] };
+      if (sql.startsWith("SELECT id,canonical_key,status FROM brain_questions"))
+        return { rows: [] };
+      return base(sql, params);
+    });
+    listInbound.mockResolvedValue([inbound]);
+    const createReplyDraft = vi.fn(async (input: { body: string }) => ({
+      body: input.body,
+      draftId: "simulated:x",
+      threadId: "t1",
+      payloadHash: "h",
+      policyHash: "p",
+      simulated: true,
+      reconciled: false,
+      created: false,
+    }));
+    mailbox.mockImplementation(() => ({
+      listInbound,
+      listSent: vi.fn(async () => []),
+      readThread: vi.fn(async () => []),
+      createReplyDraft,
+    }));
+    model.classify.mockResolvedValue({
+      output: { classification: "quote_request", reason: "" },
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    model.draft.mockResolvedValue({
+      output: {
+        body: "Bonjour,\nLa pose est à 45 € HT/m². Délai : [[À CONFIRMER : délai d’intervention]].",
+        questions: ["Quel est votre délai d’intervention ?"],
+        citations: [],
+      },
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    await runOneInboxBatch(identity, { mailbox, model });
+    const input = model.draft.mock.calls[0][0];
+    expect(input.sources.map((s: { id: string }) => s.id)).toContain("fact:fact-1");
+    // The approved price is trusted text: not replaced by a placeholder.
+    expect(createReplyDraft.mock.calls[0]?.[0].body).toContain("45 € HT/m²");
+    const question = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("INSERT INTO brain_questions"),
+    )!;
+    expect(question[1]).toEqual(
+      expect.arrayContaining(["ws-a", "tenant-a", "delai intervention"]),
+    );
+    const link = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("INSERT INTO brain_question_messages"),
+    )!;
+    expect(link[1]).toEqual(["ws-a", "tenant-a", expect.any(String), "row-1"]);
+  });
+  it("checks earlier real drafts against sent replies after a completed incremental batch", async () => {
+    claimed = batchRow({ kind: "incremental", since_at: new Date() });
+    const base = mock.query.getMockImplementation()!;
+    mock.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.startsWith("SELECT m.id,m.thread_id,m.drafted_at,m.draft_preview"))
+        return {
+          rows: [
+            {
+              id: "row-9",
+              thread_id: "t9",
+              drafted_at: new Date(Date.now() - 3_600_000),
+              draft_preview: "Bonjour, merci.",
+            },
+          ],
+        };
+      return base(sql, params);
+    });
+    const listThreadSent = vi.fn(async () => []);
+    mailbox.mockImplementation(() => ({
+      listInbound,
+      listSent: vi.fn(async () => []),
+      readThread: vi.fn(async () => []),
+      createReplyDraft: vi.fn(),
+      listThreadSent,
+    }));
+    const result = await runOneInboxBatch(identity, { mailbox, model });
+    expect(listThreadSent).toHaveBeenCalledWith("t9");
+    expect(result).toMatchObject({ outcomes: { checked: 1, pending: 1 } });
+    const record = mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("INSERT INTO brain_draft_outcomes"),
+    )!;
+    expect(record[1]).toEqual(
+      expect.arrayContaining(["ws-a", "tenant-a", "row-9", "pending"]),
+    );
+  });
+});
+
+describe("inbox worker plan enforcement", () => {
+  const blocked = (reason: string, plan = "solo") =>
+    vi.fn(async () => ({
+      state: reason === "quota_reached" ? "active" : "past_due",
+      plan,
+      canProcess: false,
+      reason,
+      draftsRemaining: 0,
+    })) as never;
+  const blockedUpdate = () =>
+    mock.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith("UPDATE inbox_batches SET status=$4, error=$5"),
+    );
+  it.each([
+    ["quota_reached", "quota_reached"],
+    ["trial_drafts_used", "quota_reached"],
+    ["trial_expired", "plan_inactive"],
+    ["past_due", "plan_inactive"],
+    ["canceled", "plan_inactive"],
+  ])("%s: ends the batch as %s before any mailbox or model call", async (reason, status) => {
+    const result = await runOneInboxBatch(identity, {
+      mailbox,
+      model,
+      entitlement: blocked(reason),
+    });
+    expect(result).toMatchObject({ processed: true, blocked: status });
+    expect(mailbox).not.toHaveBeenCalled();
+    expect(model.classify).not.toHaveBeenCalled();
+    const [sql, params] = blockedUpdate()!;
+    expect(params.slice(0, 4)).toEqual(["batch-1", "ws-a", "tenant-a", status]);
+    expect(String(params[4])).toMatch(/brouillons passés restent consultables|Quota atteint/);
+    expect(sql).toContain("lease_token=$6");
+    // The cursor is not advanced: messages are listed again once the plan allows.
+    expect(
+      mock.query.mock.calls.some(([q]) => String(q).includes("cursor_at")),
+    ).toBe(false);
+  });
+  it("passes the remaining drafts to the pipeline and maps a mid-batch stop to quota_reached", async () => {
+    listInbound.mockResolvedValue([
+      {
+        provider: "gmail",
+        id: "m1",
+        threadId: "t1",
+        from: { address: "c@example.com" },
+        replyTo: [],
+        to: [],
+        receivedAt: "2026-10-02T10:00:00.000Z",
+        subject: "s",
+        text: "t",
+        labels: [],
+        headers: {},
+        fromOwner: false,
+        isDraft: false,
+      },
+    ]);
+    const result = await runOneInboxBatch(identity, {
+      mailbox,
+      model,
+      entitlement: vi.fn(async () => ({
+        state: "trialing",
+        plan: "trial",
+        canProcess: true,
+        draftsRemaining: 0,
+      })) as never,
+    });
+    expect(result.stats).toMatchObject({ quotaReached: true });
+    expect(model.classify).not.toHaveBeenCalled();
+    const [sql, params] = finalUpdate()!;
+    expect(params[3]).toBe("quota_reached");
+    expect(String(params[5])).toContain("brouillons de l’essai");
+    expect(sql).toContain("'quota_reached'");
+    expect(
+      mock.query.mock.calls.some(([q]) =>
+        String(q).startsWith("SELECT cursor_at"),
+      ),
+    ).toBe(false);
+  });
+  it("loads the entitlement inside the worker's tenant-scoped transaction", async () => {
+    const entitlement = vi.fn(async () => ({ canProcess: true, draftsRemaining: 10 })) as never;
+    await runOneInboxBatch(identity, { mailbox, model, entitlement });
+    expect(entitlement).toHaveBeenCalledWith(expect.anything(), identity);
+  });
+});

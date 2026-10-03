@@ -10,6 +10,12 @@ import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { INBOX_CONTRACT } from "@/lib/runtime/inbox-replies";
 import { monthlyCapCents } from "./store";
+import { blockMessage, entitlementsEnforced } from "@/lib/billing/entitlements";
+import {
+  currentEntitlement,
+  ensureTrialStarted,
+  mailboxesInUse,
+} from "@/lib/billing/entitlements-store";
 
 export const triggerSchema = z
   .object({
@@ -110,6 +116,11 @@ export async function enqueueFirstRun(
       "Configure a monthly budget before enabling inbox drafts",
       503,
     );
+  // Plan gate: no new batch without an active plan/trial and drafts left (402).
+  const ids = { workspaceId: ctx.workspaceId, tenantId: ctx.tenantId };
+  const entitlement = await currentEntitlement(ctx.db, ids);
+  if (!entitlement.canProcess)
+    throw new PlatformError(blockMessage(entitlement.reason!), 402);
   let accounts: string[];
   try {
     accounts = await (deps.accounts ?? workspaceMailboxAccounts)(
@@ -135,7 +146,23 @@ export async function enqueueFirstRun(
         : "Connect your mailbox first.",
       409,
     );
+  if (entitlementsEnforced()) {
+    const inUse = await mailboxesInUse(ctx.db, ids);
+    if (!inUse.includes(account) && inUse.length >= entitlement.mailboxes)
+      throw new PlatformError(
+        `Votre formule couvre ${entitlement.mailboxes} boîte${entitlement.mailboxes > 1 ? "s" : ""} mail. Passez à la formule Équipe pour en ajouter.`,
+        402,
+      );
+  }
   const firstRunDrafts = Number(process.env.ORBIS_INBOX_FIRST_RUN_MAX_DRAFTS);
+  const batchDrafts = Math.min(
+    Number.isSafeInteger(firstRunDrafts) &&
+      firstRunDrafts >= 0 &&
+      firstRunDrafts <= 50
+      ? firstRunDrafts
+      : 5,
+    entitlement.draftsRemaining,
+  );
   const result = await ctx.db.query<BatchRow>(
     `INSERT INTO inbox_batches(id,workspace_id,tenant_id,created_by,request_key,request_hash,kind,provider,connected_account_id,mission_version,mode,window_days,max_messages,max_drafts)
      VALUES($1,$2,$3,$4,$5,$6,'first_run',$7,$8,$9,$10,$11,$12,$13)
@@ -153,14 +180,12 @@ export async function enqueueFirstRun(
       inboxMode(),
       input.windowDays,
       input.maxMessages,
-      Number.isSafeInteger(firstRunDrafts) &&
-      firstRunDrafts >= 0 &&
-      firstRunDrafts <= 50
-        ? firstRunDrafts
-        : 5,
+      batchDrafts,
     ],
   );
   if (!result.rows[0]) return enqueueFirstRun(input, requestKey, deps);
+  // First mailbox batch starts the trial (insert-only, no-op afterwards).
+  if (entitlementsEnforced()) await ensureTrialStarted(ctx.db, ids);
   await track("inbox_batch_queued", { task_id: result.rows[0].id });
   return publicBatch(result.rows[0]);
 }

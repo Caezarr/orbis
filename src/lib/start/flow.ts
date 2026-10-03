@@ -159,7 +159,9 @@ export type BatchStatus =
   | "running"
   | "completed"
   | "failed"
-  | "budget_exhausted";
+  | "budget_exhausted"
+  | "quota_reached"
+  | "plan_inactive";
 
 export type StartFacts = {
   authenticated: boolean;
@@ -169,12 +171,14 @@ export type StartFacts = {
   workspaceProfile: boolean;
   /** The owner chose to edit the saved profile again. */
   editingProfile?: boolean;
+  /** Anonymous: the confirmed profile's instant preview is open (still step 1). */
+  previewing?: boolean;
   mailbox: MailboxStatus;
   batch: BatchStatus | null;
 };
 
 export function deriveStep(f: StartFacts): StartStep {
-  if (!f.authenticated) return f.pendingProfile ? "account" : "company";
+  if (!f.authenticated) return f.pendingProfile && !f.previewing ? "account" : "company";
   if (f.editingProfile || (!f.workspaceProfile && !f.pendingProfile)) return "company";
   // Authenticated with a pending profile: it is being saved (company step stays open).
   if (!f.workspaceProfile) return "company";
@@ -225,11 +229,13 @@ export type BlockerKind =
   | "auth_required"
   | "forbidden"
   | "conflict"
+  | "plan_required"
   | "unknown";
 
 /** Maps an /api/v1/inbox error response to an actionable kind. */
 export function inboxErrorKind(status: number, message = ""): BlockerKind {
   if (status === 401) return "auth_required";
+  if (status === 402) return "plan_required";
   if (status === 403) return "forbidden";
   if (status === 503) {
     if (/not enabled/i.test(message)) return "flag_disabled";
@@ -291,6 +297,10 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
     title: "Une demande différente utilise déjà cet identifiant.",
     action: "Rechargez la page pour repartir du dernier lot.",
   },
+  plan_required: {
+    title: "Votre formule ne permet pas de nouveau traitement pour l’instant.",
+    action: "Vos brouillons passés restent consultables. Choisissez ou régularisez votre formule depuis la page Abonnement.",
+  },
   unknown: {
     title: "Le service n’a pas pu traiter la demande.",
     action: "Réessayez dans un instant. Rien n’a été envoyé.",
@@ -298,7 +308,7 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
 };
 
 /** Phase displayed while a batch is pending — only states the backend reports. */
-export type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget";
+export type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget" | "quota";
 export function progressPhase(
   batch: Pick<InboxBatchView, "status">,
   messages: Pick<InboxMessageView, "status">[],
@@ -312,6 +322,9 @@ export function progressPhase(
       return "done";
     case "budget_exhausted":
       return "budget";
+    case "quota_reached":
+    case "plan_inactive":
+      return "quota";
     default:
       return "failed";
   }
@@ -413,4 +426,72 @@ export function splitPlaceholders(text: string) {
   }
   if (last < text.length) parts.push({ text: text.slice(last), placeholder: false });
   return parts;
+}
+
+// ------------------------------------------------- instant preview (level 1)
+
+/** Shown on the simulated incoming email AND on its example draft. */
+export const SIMULATED_LABEL = "Exemple simulé — pas un vrai mail";
+export const NOT_FOUND_LABEL =
+  "Orbi ne trouve pas la réponse sur votre site → il vous la demandera une seule fois";
+/** Fictitious, code-defined parties of the example emails (never model output). */
+export const FICTITIOUS_SENDER = { name: "Client fictif", address: "client.fictif@exemple.invalid" } as const;
+export const FICTITIOUS_RECIPIENT = "Vous (exemple)";
+
+export type PreviewQuestion = {
+  question: string;
+  /** Verbatim quote of the source, or null: Orbi will ask the owner once. */
+  answer: { quote: string; sourceName: string; sourceUrl?: string } | null;
+};
+export type PreviewExample = {
+  label: typeof SIMULATED_LABEL;
+  incoming: { label: typeof SIMULATED_LABEL; from: string; to: string; subject: string; body: string };
+  draft: {
+    label: typeof SIMULATED_LABEL;
+    body: string;
+    questions: string[];
+    citations: { sourceName: string; excerpt: string }[];
+  };
+};
+export type PreviewFallbackReason = "disabled" | "rate_limited" | "budget" | "busy" | "unavailable" | "error";
+export type StartPreview =
+  | {
+      mode: "ai";
+      questions: PreviewQuestion[];
+      examples: PreviewExample[];
+      /** e.g. "source_instructions_ignored": the page contained instruction-like text. */
+      flags: string[];
+    }
+  | {
+      mode: "quotes";
+      reason: PreviewFallbackReason;
+      found: StartFact[];
+      unknowns: string[];
+    };
+
+/**
+ * Deterministic, model-free preview: only what the owner already confirmed
+ * (verbatim quotes) and what Orbi will not guess. No questions or drafts are
+ * invented from a template.
+ */
+export function quotePreview(profile: StartProfile, reason: PreviewFallbackReason): StartPreview {
+  return { mode: "quotes", reason, found: profile.facts.slice(0, 8), unknowns: profile.unknowns.slice(0, 8) };
+}
+
+/** Browser key: a preview was displayed before the account existed (funnel event). */
+export const PREVIEW_SHOWN_KEY = "orbis:start:preview-shown";
+const previewShownSchema = z.object({ v: z.literal(1), ai: z.boolean(), savedAt: z.number() }).strict();
+export function encodePreviewShown(ai: boolean, now = Date.now()) {
+  return JSON.stringify({ v: 1, ai, savedAt: now });
+}
+export function decodePreviewShown(raw: string | null, now = Date.now()): { ai: boolean } | null {
+  if (!raw || raw.length > 200) return null;
+  try {
+    const parsed = previewShownSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+    const age = now - parsed.data.savedAt;
+    return age < 0 || age > PENDING_TTL_MS ? null : { ai: parsed.data.ai };
+  } catch {
+    return null;
+  }
 }

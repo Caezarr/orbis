@@ -299,3 +299,61 @@ describe("postgres store", () => {
     }
   });
 });
+
+describe("first-run trigger: plan enforcement", () => {
+  const withRows = (rows: Record<string, unknown[]>) => {
+    const base = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, params: unknown[]) => {
+      for (const [prefix, value] of Object.entries(rows))
+        if (sql.startsWith(prefix)) return { rows: value, rowCount: value.length };
+      return base(sql, params);
+    });
+  };
+  const start = (key = "key-plan", accounts = async () => ["acc-a"]) =>
+    inSession(() => enqueueFirstRun(triggerSchema.parse({ provider: "gmail" }), key, { accounts }));
+  it("starts the trial on the first mailbox batch, after the batch insert, in the same transaction", async () => {
+    await start();
+    const sqls = query.mock.calls.map(([sql]) => String(sql));
+    const batch = sqls.findIndex((s) => s.startsWith("INSERT INTO inbox_batches"));
+    const trial = sqls.findIndex((s) => s.startsWith("INSERT INTO billing_trials"));
+    expect(batch).toBeGreaterThanOrEqual(0);
+    expect(trial).toBeGreaterThan(batch);
+  });
+  it.each([
+    ["expired trial", { "SELECT started_at": [{ started_at: new Date("2026-01-01"), ends_at: new Date("2026-01-15"), draft_limit: 50 }] }, "essai est terminé"],
+    ["trial drafts used", { "SELECT started_at": [{ started_at: new Date(Date.now() - 86_400_000), ends_at: new Date(Date.now() + 86_400_000), draft_limit: 50 }], "SELECT count(*)": [{ n: "50" }] }, "tous les brouillons de l’essai"],
+    ["past due", { "SELECT plan,status": [{ plan: "solo", status: "past_due", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] }, "Paiement en attente"],
+    ["canceled", { "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] }, "Abonnement résilié"],
+  ])("%s → 402 with an explicit message, nothing queued", async (_name, rows, message) => {
+    withRows(rows);
+    await expect(start()).rejects.toMatchObject({ status: 402, message: expect.stringContaining(message) });
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO inbox_batches"))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO billing_trials"))).toBe(false);
+  });
+  it("limits the batch's drafts to what the plan has left", async () => {
+    withRows({
+      "SELECT started_at": [{ started_at: new Date(Date.now() - 86_400_000), ends_at: new Date(Date.now() + 86_400_000), draft_limit: 50 }],
+      "SELECT count(*)": [{ n: "48" }],
+    });
+    expect(await start()).toMatchObject({ maxDrafts: 2 });
+  });
+  it("refuses a mailbox beyond the plan's mailbox count", async () => {
+    withRows({ "SELECT DISTINCT connected_account_id": [{ connected_account_id: "acc-old" }] });
+    await expect(start("key-m", async () => ["acc-new"])).rejects.toMatchObject({ status: 402, message: expect.stringContaining("1 boîte mail") });
+  });
+  it("an idempotent replay is served even when the plan is now blocked (read-only access)", async () => {
+    const first = await start("key-replay");
+    const row = query.mock.calls.find(([sql]) => String(sql).startsWith("INSERT INTO inbox_batches"))![1];
+    withRows({
+      "SELECT * FROM inbox_batches": [{ id: first.id, request_hash: row[5], kind: "first_run", provider: "gmail", mode: "test", status: "completed", stats: {}, error: null, window_days: 14, max_messages: 50, max_drafts: 5, created_at: new Date(), completed_at: null }],
+      "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }],
+    });
+    await expect(start("key-replay")).resolves.toMatchObject({ id: first.id });
+  });
+  it("can be disabled explicitly for an internal pilot (no trial row, no gate)", async () => {
+    vi.stubEnv("ORBIS_ENTITLEMENTS_ENFORCED", "false");
+    withRows({ "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] });
+    await start("key-off");
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO billing_trials"))).toBe(false);
+  });
+});
