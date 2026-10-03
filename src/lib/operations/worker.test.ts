@@ -13,6 +13,7 @@ vi.mock("@/lib/platform/db", () => ({
   setTenantContext: vi.fn(),
 }));
 vi.mock("@/lib/runtime/provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }),
   providerStatus: () => ({ configured: mock.configured }),
   getModel: vi.fn(),
 }));

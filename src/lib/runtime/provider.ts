@@ -37,3 +37,31 @@ export function getModel(purpose: "default" | "classifier" = "default") {
     ? createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(model)
     : createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(model);
 }
+
+/**
+ * Claude 5-family models (Sonnet 5.x, Opus 5.x, Fable 5.x) think by default,
+ * and thinking tokens count toward `max_tokens`. Sized for the answer alone, a
+ * call runs out of tokens while thinking and returns no JSON
+ * (`AI_NoObjectGeneratedError`). These calls are short, bounded extractions:
+ * keep effort low and add headroom for the thinking.
+ */
+export function thinksByDefault(model: string) {
+  return /claude-(?:opus|sonnet|fable|mythos)-5/.test(model);
+}
+const THINKING_HEADROOM = { low: 2000, medium: 4000 } as const;
+
+/** `maxOutputTokens` (+ provider options) for one call; `answerTokens` is the size of the answer itself. */
+export function generationSettings(
+  answerTokens: number,
+  options: { purpose?: "default" | "classifier"; effort?: keyof typeof THINKING_HEADROOM } = {},
+) {
+  const config = providerStatus();
+  const model =
+    (options.purpose === "classifier" && process.env.ORBIS_AI_CLASSIFIER_MODEL?.trim()) || config.model;
+  if (config.provider !== "anthropic" || !thinksByDefault(model)) return { maxOutputTokens: answerTokens };
+  const effort = options.effort ?? "low";
+  return {
+    maxOutputTokens: answerTokens + THINKING_HEADROOM[effort],
+    providerOptions: { anthropic: { effort } },
+  };
+}

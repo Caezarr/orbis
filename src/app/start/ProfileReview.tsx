@@ -394,7 +394,7 @@ function Unknowns({ unknowns, onAnswer }: { unknowns: string[]; onAnswer: (unkno
       <ul className={p.unknownList}>
         {unknowns.map((u) => (
           <li key={u}>
-            <mark className={s.placeholder}>À CONFIRMER</mark> {u}
+            <mark className={s.placeholder}>À confirmer</mark> {u}
             {active === u ? (
               <span className={p.edit}>
                 <label htmlFor={inputId} className={s.srOnly}>

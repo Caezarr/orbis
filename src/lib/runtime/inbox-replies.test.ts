@@ -5,6 +5,7 @@ vi.mock("ai", () => ({
   Output: { object: (o: unknown) => o },
 }));
 vi.mock("./provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }),
   getModel: (p?: string) => `model:${p ?? "default"}`,
 }));
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";

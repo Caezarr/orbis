@@ -74,6 +74,7 @@ describe("French artisan (plumber, 3 pages)", () => {
   it("reads the site FAQ and social links, not share buttons", () => {
     expect(values(facts, "faq")).toEqual(["Le devis est-il payant ?", "Intervenez-vous le dimanche ?"]);
     expect(of(facts, "social").map((f) => f.quote)).toEqual(["https://www.facebook.com/martinplomberie"]);
+    expect(of(facts, "social").map((f) => f.value)).toEqual(["facebook.com/martinplomberie"]);
     expect(values(facts, "audience")[0]).toBe("particuliers, professionnels");
   });
   it("lists as unknown only what was not found", () => {
@@ -140,6 +141,15 @@ describe("validators and quoting", () => {
     expect(phoneValid("+33 7 87 30 74 73")).toBe(true);
     expect(phoneValid("+32 475 12 34 56")).toBe(true);
     expect(phoneValid("979 546 850")).toBe(false);
+  });
+  it("drops a list ordinal glued to the quoted item, keeps real figures", () => {
+    const t = "3 Vous recevez le devis Gratuit, détaillé et sans engagement.";
+    const at = t.indexOf("Gratuit");
+    expect(quoteAround(t, at, at + 7)).toBe("Vous recevez le devis Gratuit, détaillé et sans engagement.");
+    const real = "15 ans d’expérience en peinture.";
+    expect(quoteAround(real, real.indexOf("peinture"), real.indexOf("peinture") + 8)).toBe(real);
+    const year = "2020 Création de l’entreprise.";
+    expect(quoteAround(year, 5, 13)).toBe(year);
   });
   it("quotes the sentence around a match, verbatim, bounded", () => {
     const t = "Tél. : 03 21. Nous intervenons de Lille à Tournai. Devis gratuit.";

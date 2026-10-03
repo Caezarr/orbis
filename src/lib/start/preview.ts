@@ -14,7 +14,7 @@ import {
   type ReplyDraft,
   type ReplySource,
 } from "@/lib/runtime/inbox-replies";
-import { getModel, providerStatus } from "@/lib/runtime/provider";
+import { generationSettings, getModel, providerStatus } from "@/lib/runtime/provider";
 import { contactData, hasContactData, normalizeModelText } from "@/lib/security/untrusted-text";
 import {
   FICTITIOUS_RECIPIENT,
@@ -197,7 +197,7 @@ export const providerPreviewModel: PreviewModel = {
       system,
       prompt,
       output: Output.object({ schema: previewQuestionsSchema }),
-      maxOutputTokens: 1600,
+      ...generationSettings(1600),
       maxRetries: 0,
       abortSignal: signal,
     });
@@ -209,7 +209,7 @@ export const providerPreviewModel: PreviewModel = {
       system,
       prompt,
       output: Output.object({ schema: replyDraftSchema }),
-      maxOutputTokens: 1200,
+      ...generationSettings(1200),
       maxRetries: 0,
       abortSignal: signal,
     });
