@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
-import { NOT_FOUND_LABEL, profileFromSite, SIMULATED_LABEL, type StartProfile } from "./flow";
+import { likelyQuestions, NOT_FOUND_LABEL, profileFromSite, SIMULATED_LABEL, type StartProfile } from "./flow";
 import {
   buildStartPreview,
   createDailyBudget,
@@ -77,7 +77,13 @@ describe("buildStartPreview — gating and fallback", () => {
   it("returns the quote-only view without any model call or site read when disabled", async () => {
     const d = deps({ enabled: () => false });
     const preview = await buildStartPreview(profile, "1.1.1.1", d);
-    expect(preview).toEqual({ mode: "quotes", reason: "disabled", found: profile.facts, unknowns: profile.unknowns });
+    expect(preview).toEqual({
+      mode: "quotes",
+      reason: "disabled",
+      questions: likelyQuestions(profile),
+      found: profile.facts,
+      unknowns: profile.unknowns,
+    });
     expect(d.model!.questions).not.toHaveBeenCalled();
     expect(d.readSite).not.toHaveBeenCalled();
   });
@@ -286,7 +292,7 @@ describe("POST /api/v1/start/preview", () => {
       new Request("https://orbis.test/api/v1/start/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json", origin: "https://orbis.test" },
-        body: JSON.stringify({ profile, pad: "x".repeat(20_000) }),
+        body: JSON.stringify({ profile, pad: "x".repeat(80_000) }),
       }),
     );
     expect(response.status).toBe(413);

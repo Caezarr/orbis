@@ -2,6 +2,22 @@
 
 Status: built behind `ORBIS_START_PREVIEW=false`. No live model call has been made. Updated 2026-10-02. Concept: level 1 of `docs/strategy/18-orbi-inbox-concept.md`.
 
+## Step 1 reading (`POST /api/v1/start/site`), updated 2026-10-03
+
+Goal: "il a compris ma boîte" in under 45 s, with or without a model.
+
+**Bounded crawl** (`src/lib/start/site-crawl.ts`): home page + up to 6 same-site pages chosen from links, then the sitemap (contact, prices, services, zone, FAQ, about, legal notice, references; one per kind, two for services, shallow paths first). Every request goes through `fetchPublicResource` (`src/lib/runtime/company-site.ts`): read-only broker decision, HTTPS only, every hop resolved and refused if private/reserved, validated IP pinned, identity encoding, size cap. robots.txt is read once (`OrbisCompanyReader` group, else `*`, longest match, Allow wins ties) and applies to every page Orbi chooses; the home page is the address the owner typed. Limits: 20 s total budget, 12 s home, 7 s per page, 3 concurrent, 800 KB per page, 3 MB total, redirects leaving the site dropped. Nothing is stored.
+
+**Deterministic extractors** (`site-page.ts`, `site-facts.ts`, French/Belgian SMB focus): activity, services, intervention zone (« de X à Y », « jusqu'à », km radius, regions/departments, zone sections), prices and « devis gratuit », delays, opening hours, contact (FR/BE phones, e-mails, tel:/mailto:), address, audience, years in business, certifications and insurance (RGE, Qualibat, décennale…), legal (SIRET/SIREN with Luhn, FR VAT key, BE VAT/BCE mod 97, legal form, RCS, capital), social links, schema.org JSON-LD (LocalBusiness subtypes, Organization, Service, FAQPage, OpeningHoursSpecification, areaServed). Each fact carries an exact quote (a verbatim span of a visible block, the meta description, a schema.org value or a link), the page URL, a confidence (`high`: explicit marker or structured data, `medium`: wording heuristic) and its origin. Hidden elements, template placeholders (« à compléter ») and the web host's identifiers in the legal notice are skipped. `unknowns` are only the categories looked for and not found.
+
+**Untrusted page content**: segments, metadata and JSON-LD strings matching `injectionSignals` are dropped before extraction (flag `source_instructions_ignored`, shown to the owner); nothing from the page reaches a system prompt.
+
+**With `ORBIS_START_AI_PROFILE=true`** (and a provider): the model only rewrites the name and summary from the extracted facts, sent as a delimited data block, and must cite fact ids. Rejected (deterministic fallback) if it cites nothing known, contains a figure absent from the cited facts, contact data, an em dash or instruction-like text; a name absent from the sources is replaced. Facts and unknowns are never model output. Timeout 15 s, no tools, no retries.
+
+**UI** (`src/app/start/ProfileReview.tsx`): facts grouped by category with source page, confidence, « Garder », « Corriger » (owner correction kept beside the original quote) and « Je complète » on each unknown. All local until confirmation; then `toCompanyProfile` stores facts ordered by usefulness, corrections as « (corrigé par vous) », owner answers without source URL.
+
+**Level-1 preview without a model** (mode `quotes`): `likelyQuestions` builds the 10 questions customers most likely ask (site FAQ first, then prices, free quote, zone, delays, services, contact, hours, insurance, address, history, audience, legal), each answered only by a sourced fact or the owner's correction, otherwise highlighted `[[À CONFIRMER]]`.
+
 ## What the visitor sees
 
 After confirming the step-1 profile, still **anonymous**, step 1 stays open and shows a preview before the account step. The CTA "Brancher ma boîte pour de vrai" opens step 2 (account). "Modifier le profil" goes back to the review. The preview is shown once per confirmation; after a reload the visitor lands on step 2 directly.
@@ -51,4 +67,4 @@ Two modes, decided by the server (`POST /api/v1/start/preview`):
 
 - Guards are pattern-based: an invented commitment without a figure ("nous pouvons passer demain") can survive in an example draft; the drafts are clearly labelled simulated examples and every real draft is reviewed by a human.
 - Question quality is unmeasured; no live model run has been done.
-- The page read is one page (the URL given), like step 1.
+- The model preview (mode `ai`) re-reads one page (the URL given); the step-1 crawl below reads more, and its sourced facts top the model questions up to 10.

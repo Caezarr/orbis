@@ -1,7 +1,7 @@
 import type { CompanyProfile, StoreState } from "@/lib/domain/types";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/time";
-import type { StartProfile } from "./flow";
+import { FACT_CATEGORIES, type StartFact, type StartProfile } from "./flow";
 
 const DEFAULT_WORKSPACE_NAME = "My workspace";
 
@@ -21,13 +21,13 @@ export function toCompanyProfile(profile: StartProfile, tenantId: string): Compa
     summary: profile.summary,
     tags: ["Confirmé par vous"],
     claims: [
-      ...profile.facts.map((f) => ({
+      ...orderFacts(profile.facts).map((f) => ({
         id: id("claim"),
         kind: "fact" as const,
         label: f.label,
-        value: f.quote,
-        sourceUrl: f.sourceUrl && website && sameSite(f.sourceUrl, website) ? f.sourceUrl : undefined,
-        confidence: 1,
+        value: claimValue(f),
+        sourceUrl: f.via !== "owner" && f.sourceUrl && website && sameSite(f.sourceUrl, website) ? f.sourceUrl : undefined,
+        confidence: f.corrected || f.via === "owner" || f.confidence !== "medium" ? 1 : 0.8,
       })),
       ...profile.unknowns.map((u) => ({
         id: id("claim"),
@@ -40,6 +40,18 @@ export function toCompanyProfile(profile: StartProfile, tenantId: string): Compa
     input: (website ?? profile.summary).slice(0, 2000),
     completedAt: nowIso(),
   };
+}
+/** Most useful first (the reply context is length-bounded): activity, services, zone, prices… */
+function orderFacts(facts: StartFact[]) {
+  const rank = (f: StartFact) => (f.category ? FACT_CATEGORIES.indexOf(f.category) : FACT_CATEGORIES.length);
+  return facts.map((f, i) => ({ f, i })).sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i).map(({ f }) => f);
+}
+/** The owner's correction wins; otherwise the exact quote, prefixed by its short value when it adds meaning. */
+function claimValue(f: StartFact) {
+  if (f.corrected) return `${f.corrected} (corrigé par vous)`;
+  if (f.via === "owner") return `${f.quote} (indiqué par vous)`;
+  if (f.value && !f.quote.includes(f.value)) return `${f.value} : « ${f.quote} »`;
+  return f.quote;
 }
 function sameSite(a: string, b: string) {
   try {

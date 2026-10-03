@@ -3,6 +3,7 @@ import {
   decodePending,
   decodePreviewShown,
   encodePreviewShown,
+  likelyQuestions,
   quotePreview,
   deriveStep,
   encodePending,
@@ -203,6 +204,7 @@ describe("instant preview (client-safe helpers)", () => {
     expect(quotePreview(p, "disabled")).toEqual({
       mode: "quotes",
       reason: "disabled",
+      questions: likelyQuestions(p),
       found: p.facts,
       unknowns: p.unknowns,
     });

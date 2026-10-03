@@ -19,6 +19,7 @@ import { contactData, hasContactData, normalizeModelText } from "@/lib/security/
 import {
   FICTITIOUS_RECIPIENT,
   FICTITIOUS_SENDER,
+  likelyQuestions,
   quotePreview,
   SIMULATED_LABEL,
   type PreviewExample,
@@ -46,7 +47,7 @@ import { createSharedDailyBudget, createSharedLimiter, type SharedBudget } from 
  */
 
 export const PREVIEW_MAX_SOURCE_CHARS = 8000;
-export const PREVIEW_MAX_BODY_BYTES = 16_000;
+export const PREVIEW_MAX_BODY_BYTES = 64_000;
 const QUESTIONS_TIMEOUT_MS = 20_000;
 const DRAFT_TIMEOUT_MS = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60_000;
@@ -331,6 +332,23 @@ const defaults = (() => {
 })();
 
 /**
+ * Model questions first; then, up to 10, the deterministic questions the
+ * confirmed profile already answers with a sourced fact (never invented ones).
+ */
+export function topUp(questions: PreviewQuestion[], profile: StartProfile, max = 10) {
+  const key = (q: string) => q.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "");
+  const seen = new Set(questions.map((q) => key(q.question)));
+  const out = [...questions];
+  for (const q of likelyQuestions(profile, 20)) {
+    if (out.length >= max) break;
+    if (!q.answer || seen.has(key(q.question))) continue;
+    seen.add(key(q.question));
+    out.push(q);
+  }
+  return out.slice(0, max);
+}
+
+/**
  * Sentences that look like instructions to a model are not facts about the
  * company: they are removed before the model sees the page, so they can neither
  * be quoted nor make an address/link "trusted" for the draft guard. The rest of
@@ -433,7 +451,7 @@ async function generate(profile: StartProfile, deps: PreviewDeps): Promise<Start
   } catch {
     return quotePreview(profile, "unavailable");
   }
-  const questions = postProcessQuestions(output, source);
+  const questions = topUp(postProcessQuestions(output, source), profile);
   if (!questions.length) return quotePreview(profile, "unavailable");
   const examples = (
     await Promise.all(
