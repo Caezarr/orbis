@@ -6,7 +6,7 @@ import s from "./workspace.module.css";
 import flowStyles from "./mission-flow.module.css";
 import { RentalPreview } from "./RentalPreview";
 import { MissionFlow } from "./MissionFlow";
-import { Orbi } from "./Orbi";
+import { OrbiSays } from "./OrbiSays";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import type { StoreState } from "@/lib/domain/types";
 export function WorkflowBlueprint({
@@ -201,13 +201,11 @@ export function WorkflowBlueprint({
               </p>
             )}
             {notice && (
-              <p role="status" className="my-5">
-                <Orbi mood="done" size={64} />
-                {notice}
-              </p>
+              <OrbiSays mood="done" live className="my-5">
+                <p>{notice}</p>
+              </OrbiSays>
             )}
             <button disabled={busy} className={s.primary + " mt-5"}>
-              {busy && <Orbi mood="thinking" size={32} working />}
               {busy ? "Saving…" : "Save implementation brief"}
             </button>
           </form>

@@ -1,0 +1,106 @@
+/* 404 and error pages — landing palette, one Orbi, one way out. */
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 0 16px;
+  background: radial-gradient(circle at 50% 0%, #e9f0ff 0, #f7faff 42%, #fff 100%);
+  color: #182d5b;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+.top {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 0 8px;
+}
+.brand {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  color: #182d5b;
+  text-decoration: none;
+}
+.brand span {
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  border: 5px solid #305ee8;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+.center {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px 0 64px;
+}
+.eyebrow {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #305ee8;
+}
+.center h1 {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -1.4px;
+  font-weight: 500;
+  max-width: 18ch;
+  text-wrap: balance;
+}
+.center p {
+  margin: 0;
+  max-width: 48ch;
+  color: #53627b;
+  line-height: 1.6;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary {
+  border: 0;
+  background: #182d5b;
+  color: #fff;
+}
+.primary:hover {
+  background: #22397a;
+}
+.secondary {
+  border: 1px solid #dce4f0;
+  background: #fff;
+  color: #182d5b;
+}
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid #305ee8;
+  outline-offset: 2px;
+}
+.ref {
+  font-size: 12.5px;
+  color: #6f7f9a;
+}
+.ref code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}

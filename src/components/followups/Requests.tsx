@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RequestsView, type Filters, type RequestAction, type RequestsData } from "./RequestsView";
+import { OrbiEmpty } from "@/components/product/OrbiSays";
 import s from "./followups.module.css";
 
 const DONE: Record<RequestAction["action"], string> = {
@@ -92,8 +94,14 @@ export function Requests() {
       <div className={`${s.root} ${s.page}`}>
         <header className={s.head}>
           <h1>Demandes</h1>
-          <p>Les demandes s’activent avec les brouillons de réponse. Elles ne sont pas encore disponibles sur ce déploiement.</p>
         </header>
+        <OrbiEmpty mood="team" title="Vos demandes clients, suivies sans tableur." actions={<Link href="/start">Reprendre le démarrage</Link>}>
+          <p>
+            Chaque demande de client ou de devis reçue devient une ligne, et je prépare les relances quand un client ne
+            répond pas.
+          </p>
+          <p>Les demandes s’activent avec les brouillons de réponse : elles ne sont pas encore disponibles sur ce déploiement.</p>
+        </OrbiEmpty>
       </div>
     );
   if (!data)
