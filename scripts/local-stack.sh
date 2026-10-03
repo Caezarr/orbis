@@ -55,6 +55,9 @@ ORBIS_RATE_LIMIT_SECRET=local-rate-limit-secret-0123456789abcdef
 ORBIS_INBOX_DRAFTS_ENABLED=true
 ORBIS_INBOX_MODE=test
 ORBIS_DIGEST=true
+ORBIS_OPERATIONS_MONTHLY_CAP_CENTS=2000
+# Fake Gmail/Outlook for local runs (refused in production): pnpm demo:reset, then /dev/demo-mailbox
+ORBIS_DEMO_MAILBOX=true
 ENV
 }
 

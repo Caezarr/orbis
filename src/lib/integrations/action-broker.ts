@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import { Composio } from "@composio/core";
 import { z } from "zod";
-import { authConfigId, integrationUser, toolkitSlug } from "./composio";
+import {
+  authConfigId,
+  composioConfigured,
+  composioSdk,
+  integrationUser,
+  toolkitSlug,
+} from "./composio";
 
 // Server-only worker API. Never expose execute directly as a client-callable action.
 // Tool IDs are operator configuration, not claimed live SDK actions. Every entry
@@ -209,13 +215,9 @@ function configuration(request: ActionRequest) {
     );
   return { toolkit, config, tool, version };
 }
-export function sdkClient() {
-  return new Composio({
-    apiKey: process.env.COMPOSIO_API_KEY!,
-    allowTracking: false,
-    fileUploadDirs: false,
-    dangerouslyAllowAutoUploadDownloadFiles: false,
-  });
+/** Composio SDK client (the local demo mailbox when ORBIS_DEMO_MAILBOX=true, never in production). */
+export function sdkClient(): Composio {
+  return composioSdk();
 }
 /** True only for an ACTIVE, enabled, PRIVATE account bound to this workspace user. */
 export async function verifyPrivateAccount(
@@ -403,7 +405,7 @@ export async function revokeWorkspaceConnections(
   sdk?: RevokeSdk,
 ): Promise<{ status: "revoked" | "not_configured"; revoked: number }> {
   server();
-  if (!sdk && !process.env.COMPOSIO_API_KEY?.trim()) return { status: "not_configured", revoked: 0 };
+  if (!sdk && !composioConfigured()) return { status: "not_configured", revoked: 0 };
   const client = sdk ?? (sdkClient() as unknown as RevokeSdk);
   const userId = integrationUser(tenantId, workspaceId);
   const signal = AbortSignal.timeout(20_000);

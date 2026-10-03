@@ -52,4 +52,11 @@ describe("Public website reader", () => {
     expect(result.title).toBe("ACME");
     expect(result.excerpt).toBe("Business expertise");
   });
+  it("keeps word boundaries across line breaks and blocks", () => {
+    const result = extractCompany(
+      '<body><main><h1><span class="block">Peintre<br/>en bâtiment</span><span class="block">à Allennes</span></h1><p>Devis</p><p>gratuit</p></main></body>',
+      "https://example.com",
+    );
+    expect(result.excerpt).toBe("Peintre en bâtiment à Allennes Devis gratuit");
+  });
 });

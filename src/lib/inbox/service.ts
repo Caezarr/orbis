@@ -6,6 +6,7 @@ import {
   workspaceMailboxAccounts,
   type MailboxMode,
 } from "@/lib/integrations/mailbox";
+import { DEMO_MAILBOX_PAGE, demoMailboxActive } from "@/lib/integrations/demo-mailbox/guard";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { INBOX_CONTRACT } from "@/lib/runtime/inbox-replies";
@@ -212,7 +213,9 @@ type MessageRow = {
   proposed_slots?: { start: string; end: string; label: string }[] | null;
 };
 const mailboxLink = (provider: "gmail" | "outlook") =>
-  provider === "gmail"
+  demoMailboxActive()
+    ? DEMO_MAILBOX_PAGE
+    : provider === "gmail"
     ? "https://mail.google.com/mail/u/0/#drafts"
     : "https://outlook.office.com/mail/drafts";
 export function publicMessage(row: MessageRow) {
@@ -263,7 +266,16 @@ export async function listInboxResults(batchId?: string) {
       [ctx.workspaceId, ctx.tenantId],
     )
   ).rows;
-  const selected = batchId ? batches.find((b) => b.id === batchId) : batches[0];
+  // Default view = the latest FIRST RUN (/start "first drafts"). With continuous
+  // drafting on, newer incremental batches (often empty) would otherwise hide it.
+  const selected = batchId
+    ? batches.find((b) => b.id === batchId)
+    : ((
+        await ctx.db.query<BatchRow>(
+          "SELECT * FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND kind='first_run' ORDER BY created_at DESC LIMIT 1",
+          [ctx.workspaceId, ctx.tenantId],
+        )
+      ).rows[0] ?? batches[0]);
   if (batchId && !selected) throw new PlatformError("Batch not found", 404);
   const messages = selected
     ? (

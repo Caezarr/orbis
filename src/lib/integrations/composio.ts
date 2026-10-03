@@ -1,20 +1,45 @@
 import { Composio } from "@composio/core";
 import { integrations, type IntegrationSlug } from "./catalog";
+import { createDemoComposio } from "./demo-mailbox/fake-sdk";
+import {
+  DEMO_AUTH_CONFIGS,
+  DEMO_CONSENT_PATH,
+  demoMailboxEnabled,
+} from "./demo-mailbox/guard";
 
-// Server-only adapter. Never return SDK account objects: they can contain credentials.
-function client() {
-  if (typeof window !== "undefined")
-    throw new Error("Integration adapter is server-only.");
-  if (!process.env.COMPOSIO_API_KEY)
-    throw new Error("Integration service is not configured.");
+/**
+ * The Composio SDK client every integration path uses. With
+ * ORBIS_DEMO_MAILBOX=true (local dev/tests only; throws on production) it is
+ * the in-process demo mailbox instead. Callers keep running their own policy,
+ * allowlist and ownership checks unchanged: the fake sits below them.
+ */
+export function composioSdk(): Composio {
+  if (demoMailboxEnabled())
+    return createDemoComposio() as unknown as Composio;
   return new Composio({
-    apiKey: process.env.COMPOSIO_API_KEY,
+    apiKey: process.env.COMPOSIO_API_KEY!,
     allowTracking: false,
     fileUploadDirs: false,
     dangerouslyAllowAutoUploadDownloadFiles: false,
   });
 }
+/** Server has a Composio key, or runs the local demo mailbox. */
+export function composioConfigured() {
+  return !!process.env.COMPOSIO_API_KEY?.trim() || demoMailboxEnabled();
+}
+
+// Server-only adapter. Never return SDK account objects: they can contain credentials.
+function client() {
+  if (typeof window !== "undefined")
+    throw new Error("Integration adapter is server-only.");
+  if (!composioConfigured())
+    throw new Error("Integration service is not configured.");
+  return composioSdk();
+}
 export function authConfigId(slug: IntegrationSlug) {
+  // Demo mailbox: Gmail/Outlook always use the fake's own auth configs.
+  if ((slug === "gmail" || slug === "outlook") && demoMailboxEnabled())
+    return DEMO_AUTH_CONFIGS[slug];
   return process.env[`COMPOSIO_AUTH_CONFIG_${slug.toUpperCase()}`]?.trim();
 }
 // Preserve existing six provider mappings. Catalogue IDs are otherwise NOT SDK slugs.
@@ -37,7 +62,7 @@ export function integrationReadiness() {
   return integrations.map((i) => ({
     ...i,
     configured:
-      !!process.env.COMPOSIO_API_KEY?.trim() &&
+      composioConfigured() &&
       !!authConfigId(i.slug) &&
       !!toolkitSlug(i.slug),
     discoverable: true,
@@ -50,7 +75,7 @@ export function integrationUser(tenantId: string, workspaceId: string) {
 export async function connectionStatus(userId: string, slug: IntegrationSlug) {
   const config = authConfigId(slug);
   const toolkit = toolkitSlug(slug);
-  if (!config || !toolkit || !process.env.COMPOSIO_API_KEY?.trim())
+  if (!config || !toolkit || !composioConfigured())
     return { status: "not_configured" };
   const sdk = client();
   await validateAuthConfig(sdk, config, toolkit);
@@ -151,7 +176,23 @@ export async function startConnectionWith(
   } catch {
     throw new Error("Invalid authentication redirect.");
   }
-  if (redirect.protocol !== "https:" || redirect.username || redirect.password)
+  if (
+    !(redirect.protocol === "https:" || isDemoConsent(redirect, callbackUrl)) ||
+    redirect.username ||
+    redirect.password
+  )
     throw new Error("Invalid authentication redirect.");
   return { redirectUrl: link.redirectUrl };
+}
+/** The demo consent page is served by this app (http on localhost): same origin as the callback only. */
+function isDemoConsent(redirect: URL, callbackUrl: string) {
+  try {
+    return (
+      demoMailboxEnabled() &&
+      redirect.origin === new URL(callbackUrl).origin &&
+      redirect.pathname === DEMO_CONSENT_PATH
+    );
+  } catch {
+    return false;
+  }
 }

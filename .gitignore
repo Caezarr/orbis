@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# local demo mailbox state (pnpm demo:reset)
+/.orbis-demo/
