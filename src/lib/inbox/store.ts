@@ -3,39 +3,80 @@ import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { Classification } from "@/lib/runtime/inbox-replies";
+import { recordDraftQuestions } from "@/lib/brain/store";
 import type { InboxBatch, InboxStore, MessageStatus } from "./pipeline";
 
 /** Runs fn in a short tenant-scoped transaction (worker `scoped`). */
 export type Scoped = <T>(fn: (db: PoolClient) => Promise<T>) => Promise<T>;
 export const RECONCILE_INTERVAL = "10 minutes";
 
-export function monthlyCapCents() {
-  const cap = Number(process.env.ORBIS_OPERATIONS_MONTHLY_CAP_CENTS);
+function positiveCents(name: string) {
+  const cap = Number(process.env[name]);
   return Number.isSafeInteger(cap) && cap > 0 ? cap : null;
 }
+/** Hard ceiling per workspace and month (also the activation switch). */
+export function monthlyCapCents() {
+  return positiveCents("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS");
+}
 /**
- * Same monthly cap as durable tasks (ORBIS_OPERATIONS_MONTHLY_CAP_CENTS): reserved
- * task quotes + estimated inbox model cost this month. Serialized per tenant.
+ * Effective monthly cap of one workspace: its stored cap (operator/plan set),
+ * else ORBIS_WORKSPACE_MONTHLY_CAP_CENTS, else the global cap — never above the
+ * global ORBIS_OPERATIONS_MONTHLY_CAP_CENTS ceiling. null = not configured.
  */
+export function effectiveMonthlyCap(stored: number | null | undefined) {
+  const ceiling = monthlyCapCents();
+  if (!ceiling) return null;
+  const chosen =
+    stored !== null &&
+    stored !== undefined &&
+    Number.isSafeInteger(stored) &&
+    stored >= 0
+      ? stored
+      : (positiveCents("ORBIS_WORKSPACE_MONTHLY_CAP_CENTS") ?? ceiling);
+  return Math.min(chosen, ceiling);
+}
+/**
+ * Same monthly budget as durable tasks: reserved task quotes + estimated inbox
+ * company-brain and follow-up/pipeline model cost this month, against the workspace's effective
+ * cap. Takes the per-tenant budget lock (held until the caller's transaction
+ * ends) so concurrent workers cannot both pass the check; the caller records
+ * its reservation in the same transaction.
+ */
+export async function workspaceBudgetAllows(
+  db: PoolClient,
+  ids: { workspaceId: string; tenantId: string },
+  cents: number,
+) {
+  if (!monthlyCapCents()) return false;
+  await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `orbis-budget:${ids.tenantId}`,
+  ]);
+  const stored = (
+    await db.query<{ monthly_cap_cents: number | null }>(
+      "SELECT monthly_cap_cents FROM inbox_settings WHERE workspace_id=$1 AND tenant_id=$2",
+      [ids.workspaceId, ids.tenantId],
+    )
+  ).rows?.[0]?.monthly_cap_cents;
+  const cap = effectiveMonthlyCap(stored);
+  if (cap === null) return false;
+  const spend = await db.query<{ reserved: string }>(
+    `SELECT (
+      (SELECT COALESCE(sum(total_cents),0) FROM operational_tasks WHERE workspace_id=$1 AND tenant_id=$2 AND (status IN ('queued','running','needs_review') OR (status='completed' AND completed_at>=date_trunc('month',now()))))
+      + (SELECT COALESCE(sum(est_cost_cents),0) FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+      + (SELECT COALESCE(sum(est_cost_cents),0) FROM brain_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+      + (SELECT COALESCE(sum(est_cost_cents),0) FROM pipeline_usage WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
+    )::text AS reserved`,
+    [ids.workspaceId, ids.tenantId],
+  );
+  return Number(spend.rows[0]?.reserved ?? 0) + cents <= cap;
+}
 export async function reserveInboxBudget(
   db: PoolClient,
   ids: { workspaceId: string; tenantId: string },
   rowId: string,
   cents: number,
 ) {
-  const cap = monthlyCapCents();
-  if (!cap) return false;
-  await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `orbis-budget:${ids.tenantId}`,
-  ]);
-  const spend = await db.query<{ reserved: string }>(
-    `SELECT (
-      (SELECT COALESCE(sum(total_cents),0) FROM operational_tasks WHERE workspace_id=$1 AND tenant_id=$2 AND (status IN ('queued','running','needs_review') OR (status='completed' AND completed_at>=date_trunc('month',now()))))
-      + (SELECT COALESCE(sum(est_cost_cents),0) FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND created_at>=date_trunc('month',now()))
-    )::text AS reserved`,
-    [ids.workspaceId, ids.tenantId],
-  );
-  if (Number(spend.rows[0]?.reserved ?? 0) + cents > cap) return false;
+  if (!(await workspaceBudgetAllows(db, ids, cents))) return false;
   const updated = await db.query(
     "UPDATE inbox_messages SET est_cost_cents=est_cost_cents+$4, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3",
     [rowId, ids.workspaceId, ids.tenantId, cents],
@@ -220,6 +261,16 @@ export function postgresInboxStore(
       );
     },
     ledger,
+    async recordQuestions(rowId, questions) {
+      return scoped((db) =>
+        recordDraftQuestions(
+          db,
+          { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
+          rowId,
+          questions,
+        ),
+      );
+    },
     async heartbeat() {
       return scoped(async (db) => {
         const result = await db.query(

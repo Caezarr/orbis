@@ -2,6 +2,20 @@ import { randomBytes } from "node:crypto";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
+import {
+  amountSupported,
+  BARE_DOMAIN_RE,
+  EMAIL_RE,
+  hasInvisible,
+  HOMOGLYPH_DOMAIN_RE,
+  isLikelyDomain,
+  MONEY_RE,
+  normalizeModelText,
+  normalizeUntrusted,
+  PHONE_RE,
+  trustedContact,
+  URL_RE as LINK_RE,
+} from "@/lib/security/untrusted-text";
 import { getModel } from "./provider";
 
 /*
@@ -14,8 +28,10 @@ import { getModel } from "./provider";
  *  - The model never receives tools. Its output schema has no recipient, cc,
  *    subject or action field. The recipient is computed by replyRecipient().
  *  - Email content is serialized as JSON inside a per-call random boundary.
- *  - Post-generation guards replace amounts, email addresses, URLs and phone
- *    numbers that do not appear in trusted sources with highlighted placeholders.
+ *  - Post-generation guards replace amounts, email addresses, URLs, bare
+ *    domains and phone numbers that do not appear in trusted sources with
+ *    highlighted placeholders, in the body AND the questions (unicode-aware,
+ *    see src/lib/security/untrusted-text.ts).
  */
 export const INBOX_CONTRACT = {
   slug: "inbox-replies",
@@ -92,8 +108,16 @@ export function skipReason(
   return null;
 }
 
+/** Longest prefix scanned for signals (the model sees at most ~4 300 chars of an email). */
+export const SIGNAL_SCAN_CHARS = 50_000;
 /** Heuristic signal only. Content is untrusted regardless of this result. */
-export function injectionSignals(text: string): string[] {
+export function injectionSignals(raw: string): string[] {
+  // Zero-width / bidi / fullwidth tricks must not hide a signal.
+  // Very long input: head + tail are scanned (bounded cost, end-of-mail payloads seen).
+  const half = SIGNAL_SCAN_CHARS / 2;
+  const text = normalizeModelText(
+    raw.length > SIGNAL_SCAN_CHARS ? `${raw.slice(0, half)}\n${raw.slice(-half)}` : raw,
+  );
   const patterns: [string, RegExp][] = [
     [
       "override_instructions",
@@ -108,13 +132,39 @@ export function injectionSignals(text: string): string[] {
       /\b(you are now|act as|new system prompt|system prompt|developer mode)\b/i,
     ],
     [
+      "role_change_fr",
+      /(\b(tu es|vous êtes) (désormais|maintenant|dorénavant)\b|\bnouvelles? (instructions?|consignes?)\b|\bmode (développeur|developpeur|admin)\b|\bprompt système\b)/i,
+    ],
+    [
       "send_or_forward_command",
-      /\b(send|forward|transfer|bcc|cc|transf[eé]rer?|envoie[rz]?)\b[^.\n]{0,60}\b(to|à|a)\b[^.\n]{0,10}[^\s@]+@[^\s@]+\.[a-z]{2,}/i,
+      /\b(send|forward|transfer|bcc|cc|transf[eé]rer?|envoie[rz]?)\b[^.\n]{0,60}\b(to|à|a)\b[^.\n]{0,10}[^\s@]{1,200}@[^\s@]+\.[a-z]{2,}/i,
+    ],
+    [
+      "recipient_swap",
+      /(\b(reply|respond|answer|write|r[ée]pond(s|ez|re)?|[ée]cri(s|vez|re))\b[^\n]{0,40}\b(to|à)\b[^\n]{0,80}\b(instead|plut[oô]t|à la place)\b|\b(instead|plut[oô]t|à la place)\b[^\n]{0,40}@)/i,
+    ],
+    [
+      "copy_request",
+      /\b(cc|bcc|cci|en copie|copie cachée|add (a |another )?recipient|ajoute[rz]? (un )?destinataire)\b[^\n]{0,60}@/i,
+    ],
+    [
+      "secret_request",
+      /\b(send|share|reveal|give|print|list|envoie[rz]?|donne[rz]?|communique[rz]?|r[ée]v[èe]le[rz]?|affiche[rz]?)\b[^.\n]{0,40}\b(api[_ -]?keys?|passwords?|mots? de passe|tokens?|secrets?|credentials?|identifiants?|system prompt|your instructions|tes instructions|vos instructions|other customers|autres clients)\b/i,
     ],
     [
       "tool_markup",
-      /<\/?(tool|function|system|assistant)[^>]*>|\{\s*"(tool|function_call|recipient)"/i,
+      /<\/?(tool|function|system|assistant)[^>]*>|\{\s*"(tool|tool_call|function_call|recipient|to|cc|bcc|send)"\s*:/i,
     ],
+    ["boundary_spoof", /<\/?\s*ORBIS_DATA|ORBIS_DATA_[0-9a-f]{4,}/i],
+    [
+      "fake_system_message",
+      /(^|\n)\s*(\[|#{1,3}\s*|<\|)?\s*(system|assistant|developer|syst[eè]me)\s*(\]|\|>|:)/i,
+    ],
+    [
+      "exfiltration_markup",
+      /!\[[^\]\n]{0,200}\]\(\s*\S|<\s*img\b[^>]*\bsrc\s*=|<\s*script\b|<!--[\s\S]{0,2000}?\b(ignore|instruction|assistant|system|send|forward|reply|répond|envoie|transf)/i,
+    ],
+    ["fake_placeholder_link", /\[\[[^\]]{0,200}(https?:\/\/|www\.|@)/i],
   ];
   return patterns.filter(([, re]) => re.test(text)).map(([id]) => id);
 }
@@ -153,7 +203,8 @@ export type ReplyDraft = z.infer<typeof replyDraftSchema>;
 export type ReplySource = {
   id: string;
   name: string;
-  kind: "profile" | "knowledge" | "memory" | "instruction";
+  /** "fact" = owner-approved company sheet fact (src/lib/brain). */
+  kind: "profile" | "knowledge" | "memory" | "instruction" | "fact";
   content: string;
 };
 export type DraftInput = {
@@ -232,71 +283,171 @@ Rules:
   };
 }
 
-const MONEY =
-  /(?:[€$£]\s?\d[\d\s.,]*\d|[€$£]\s?\d|\d[\d\s.,]*\s?(?:€|\$|£|(?:eur|euros?|usd|chf|ht|ttc)\b))/gi;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const URL_RE = /\bhttps?:\/\/[^\s<>()"']+|\bwww\.[^\s<>()"']+/gi;
-const PHONE = /(?:\+\d{1,3}[\s.-]?)?(?:\(?\d{1,4}\)?[\s.-]){3,6}\d{2,4}/g;
-const compact = (s: string) => s.toLowerCase().replace(/[\s.,]/g, "");
-
 export type GuardResult = {
   body: string;
   questions: string[];
   citations: ReplyDraft["citations"];
   issues: string[];
 };
+const PLACEHOLDER_SPAN = /\[\[[^\]]{0,400}\]\]/g;
+/** Replace every match of `re`; `fn` knows whether the match sits inside a [[…]] placeholder. */
+function replaceEach(
+  text: string,
+  re: RegExp,
+  fn: (match: string, insidePlaceholder: boolean) => string,
+) {
+  const spans = [...text.matchAll(PLACEHOLDER_SPAN)].map(
+    (m) => [m.index, m.index + m[0].length] as const,
+  );
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const i = m.index;
+    out +=
+      text.slice(last, i) +
+      fn(
+        m[0],
+        spans.some(([a, b]) => i >= a && i < b),
+      );
+    last = i + m[0].length;
+  }
+  return out + text.slice(last);
+}
+/** HTML/markdown that has no place in a plain-text draft (and can carry hidden links). */
+function stripMarkup(text: string, issues: string[]) {
+  let out = text
+    .replace(/<!--[\s\S]*?(-->|$)/g, () => {
+      issues.push("html_markup");
+      return "";
+    })
+    .replace(/<\s*(script|style)\b[\s\S]*?(<\s*\/\s*\1\s*>|$)/gi, () => {
+      issues.push("html_markup");
+      return "";
+    })
+    .replace(/<\s*\/?\s*[a-z][a-z0-9_:-]*(?:\s[^<>]*)?\/?\s*>/gi, () => {
+      issues.push("html_markup");
+      return "";
+    });
+  // Markdown images are fetched automatically by some clients: removed.
+  out = out.replace(/!\[[^\]\n]{0,200}\]\([^)\n]{0,2000}\)/g, () => {
+    issues.push("markdown_image");
+    return "";
+  });
+  // Markdown links: the target becomes visible text, then goes through the link guard.
+  out = out.replace(/\[([^\]\n]{1,200})\]\(([^)\s\n]{1,2000})\)/g, (_m, label: string, href: string) => `${label} (${href})`);
+  return out;
+}
+type Kind = "amount" | "email" | "link" | "phone";
+const LABEL: Record<Kind, { placeholder: string; inline: string; issue: string }> = {
+  amount: { placeholder: "montant", inline: "(montant à confirmer)", issue: "unsupported_amount" },
+  email: { placeholder: "adresse e-mail", inline: "(adresse e-mail retirée)", issue: "unknown_email_address" },
+  link: { placeholder: "lien", inline: "(lien retiré)", issue: "unknown_link" },
+  phone: { placeholder: "téléphone", inline: "(téléphone retiré)", issue: "unknown_phone" },
+};
+/**
+ * Replace links, bare domains, emails, amounts and phones that are not in the
+ * trusted text. `mode` = "placeholder" (draft body: highlighted [[À CONFIRMER]]
+ * outside placeholders, neutral marker inside) or "inline" (questions).
+ */
+function scrub(
+  text: string,
+  ctx: { trusted: string; sender: string },
+  mode: "placeholder" | "inline",
+  issues: string[],
+  amounts: string[],
+) {
+  const sub = (kind: Kind, inside: boolean) => {
+    issues.push(LABEL[kind].issue);
+    return mode === "placeholder" && !inside
+      ? `${PLACEHOLDER_OPEN}À CONFIRMER : ${LABEL[kind].placeholder}${PLACEHOLDER_CLOSE}`
+      : LABEL[kind].inline;
+  };
+  // Sentence punctuation glued to a link is kept outside the replacement.
+  const link = (kind: "link" | "domain") => (m: string, inside: boolean) => {
+    const tail = /[.,;:!?…)]+$/.exec(m)?.[0] ?? "";
+    const core = m.slice(0, m.length - tail.length);
+    if (kind === "domain" && !isLikelyDomain(core)) return m;
+    return trustedContact(kind, core, ctx.trusted) ? m : sub("link", inside) + tail;
+  };
+  let out = replaceEach(text, LINK_RE, link("link"));
+  out = replaceEach(out, EMAIL_RE, (m, inside) =>
+    m.toLowerCase() === ctx.sender || trustedContact("email", m, ctx.trusted)
+      ? m
+      : sub("email", inside),
+  );
+  out = replaceEach(out, BARE_DOMAIN_RE, link("domain"));
+  out = replaceEach(out, HOMOGLYPH_DOMAIN_RE, (m, inside) => sub("link", inside));
+  out = replaceEach(out, MONEY_RE, (m, inside) => {
+    if (amountSupported(m, ctx.trusted)) return m;
+    amounts.push(m.trim());
+    return sub("amount", inside);
+  });
+  out = replaceEach(out, PHONE_RE, (m, inside) =>
+    trustedContact("phone", m, ctx.trusted) ? m : sub("phone", inside),
+  );
+  return out;
+}
+/** Question/placeholder text that tries to instruct the model or the reviewer. */
+const NEUTRAL_QUESTION = "information à confirmer";
 /**
  * Deterministic post-generation guard. Trusted text = company sources + approved
  * rules (+ the original sender address, so the model may greet/quote it).
+ * Applied to the body AND to the model's questions (they can be prepended to the
+ * body and are stored). Model text is compatibility-folded (fullwidth "＠",
+ * math/enclosed letters), stripped of invisible and bidi control characters and
+ * un-defanged ("evil[.]test") before any check; HTML/markdown is removed.
  */
 export function guardDraft(
   draft: ReplyDraft,
   input: Pick<DraftInput, "sources" | "message">,
 ): GuardResult {
-  const trusted = input.sources.map((s) => s.content).join("\n");
-  const trustedCompact = compact(trusted);
-  const sender = input.message.from?.address ?? "";
+  const trusted = normalizeUntrusted(input.sources.map((s) => s.content).join("\n"));
+  const ctx = {
+    trusted,
+    sender: normalizeUntrusted(input.message.from?.address ?? "").toLowerCase(),
+  };
   const issues: string[] = [];
-  const questions = [...draft.questions];
-  let body = draft.body;
-  const placeholder = (what: string) =>
-    `${PLACEHOLDER_OPEN}À CONFIRMER : ${what}${PLACEHOLDER_CLOSE}`;
-  body = body.replace(MONEY, (match) => {
-    if (!/\d/.test(match) || trustedCompact.includes(compact(match)))
-      return match;
-    issues.push("unsupported_amount");
-    questions.push(`Montant à confirmer (proposé : ${match.trim()})`);
-    return placeholder("montant");
+  const amounts: string[] = [];
+  if (hasInvisible(draft.body) || draft.questions.some(hasInvisible))
+    issues.push("invisible_characters");
+  const questions: string[] = [];
+  for (const raw of draft.questions) {
+    const q = normalizeModelText(raw).replace(/\s+/g, " ").trim();
+    if (!q) continue;
+    if (injectionSignals(q).length) {
+      issues.push("question_dropped");
+      continue;
+    }
+    const clean = scrub(stripMarkup(q, issues), ctx, "inline", issues, amounts)
+      .replace(/\[\[|\]\]/g, "")
+      .slice(0, 300);
+    questions.push(clean);
+  }
+  let body = stripMarkup(normalizeModelText(draft.body), issues);
+  // A placeholder whose content is an instruction is neutralised, not echoed.
+  body = body.replace(PLACEHOLDER_SPAN, (span) => {
+    const inner = span.slice(2, -2);
+    if (!injectionSignals(inner).length) return span;
+    issues.push("placeholder_neutralised");
+    return `${PLACEHOLDER_OPEN}À CONFIRMER : ${NEUTRAL_QUESTION}${PLACEHOLDER_CLOSE}`;
   });
-  body = body.replace(EMAIL, (match) => {
-    const lower = match.toLowerCase();
-    if (lower === sender || trusted.toLowerCase().includes(lower)) return match;
-    issues.push("unknown_email_address");
-    return placeholder("adresse e-mail");
-  });
-  body = body.replace(URL_RE, (match) => {
-    if (trusted.includes(match)) return match;
-    issues.push("unknown_link");
-    return placeholder("lien");
-  });
-  body = body.replace(PHONE, (match) => {
-    const digits = match.replace(/\D/g, "");
-    if (digits.length < 8 || trusted.replace(/\D/g, "").includes(digits))
-      return match;
-    issues.push("unknown_phone");
-    return placeholder("téléphone");
-  });
+  body = scrub(body, ctx, "placeholder", issues, amounts);
+  if (amounts.length)
+    // The proposed figure itself is never stored: it is unverified model text.
+    questions.push("Montant à confirmer (proposé par le brouillon, non vérifié)");
+  if (injectionSignals(body).length) issues.push("injection_echo");
   const citations = draft.citations.filter((c) => {
     const source = input.sources.find((s) => s.id === c.sourceId);
     const ok = !!source && source.content.includes(c.excerpt);
     if (!ok) issues.push("invalid_citation");
     return ok;
   });
-  if (questions.length && !body.includes(PLACEHOLDER_OPEN))
-    body = `${placeholder(questions.join(" ; "))}\n\n${body}`;
+  const unique = [...new Set(questions)].slice(0, 10);
+  if (unique.length && !body.includes(PLACEHOLDER_OPEN))
+    body = `${PLACEHOLDER_OPEN}À CONFIRMER : ${unique.join(" ; ")}${PLACEHOLDER_CLOSE}\n\n${body}`;
   return {
     body: body.trim(),
-    questions: [...new Set(questions)].slice(0, 10),
+    questions: unique,
     citations,
     issues: [...new Set(issues)],
   };

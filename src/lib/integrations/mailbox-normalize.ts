@@ -33,6 +33,7 @@ const KEPT_HEADERS = new Set([
   "x-mailer",
   "return-path",
   "reply-to",
+  "in-reply-to",
   "from",
   "subject",
   "to",

@@ -1,16 +1,14 @@
 import { isSameOriginMutation } from "@/lib/platform/auth";
-import {
-  clientKey,
-  createRateLimiter,
-  prepareStartProfile,
-  siteInputSchema,
-} from "@/lib/start/public-site";
+import { createSharedLimiter } from "@/lib/platform/limits";
+import { clientKey, prepareStartProfile, siteInputSchema } from "@/lib/start/public-site";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Public (no account): step 1 of /start. Same-origin only, rate limited, nothing stored.
-const limiter = createRateLimiter({ limit: 6, windowMs: 10 * 60_000 });
+// Public (no account): step 1 of /start. Same-origin only, rate limited
+// (shared across instances, migration 012; fails open to the in-memory limit),
+// nothing stored.
+const limiter = createSharedLimiter({ bucket: "start_site", limit: 6, windowMs: 10 * 60_000 });
 let active = 0;
 const headers = { "Cache-Control": "no-store" };
 const fail = (error: string, status: number, code: string) =>
@@ -26,7 +24,7 @@ export async function POST(request: Request) {
       400,
       "invalid_input",
     );
-  const slot = limiter.take(clientKey(request));
+  const slot = await limiter.take(clientKey(request));
   if (!slot.allowed)
     return fail(
       `Trop de lectures en peu de temps. Réessayez dans ${Math.max(1, Math.ceil(slot.retryAfterMs / 60_000))} min.`,

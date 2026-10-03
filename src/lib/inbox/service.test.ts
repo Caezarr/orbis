@@ -185,6 +185,57 @@ describe("postgres store", () => {
     expect(spend[0]).toContain("inbox_messages");
     expect(spend[1]).toEqual(["ws-a", "tenant-a"]);
   });
+  it("enforces a per-workspace cap below the global ceiling", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: [{ monthly_cap_cents: 100 }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "98" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(true);
+    expect(await reserveInboxBudget(db, ids, "row", 3)).toBe(false);
+    const capRead = query.mock.calls.find(([sql]) =>
+      sql.startsWith("SELECT monthly_cap_cents"),
+    )!;
+    expect(capRead[1]).toEqual(["ws-a", "tenant-a"]);
+    // The cap is read after the per-tenant lock, so it is serialized too.
+    const order = query.mock.calls.map(([sql]) => String(sql).slice(0, 30));
+    expect(order.indexOf("SELECT pg_advisory_xact_lock(h")).toBeLessThan(
+      order.findIndex((q) => q.startsWith("SELECT monthly_cap_cents")),
+    );
+  });
+  it("the global cap stays a hard ceiling over a higher workspace cap", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: [{ monthly_cap_cents: 100_000 }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "499" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(false);
+  });
+  it("defaults each workspace to ORBIS_WORKSPACE_MONTHLY_CAP_CENTS; a stored 0 blocks spend", async () => {
+    vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
+    vi.stubEnv("ORBIS_WORKSPACE_MONTHLY_CAP_CENTS", "50");
+    let stored: number | null = null;
+    query.mockImplementation(async (sql: string) =>
+      sql.startsWith("SELECT monthly_cap_cents")
+        ? { rows: stored === null ? [] : [{ monthly_cap_cents: stored }] }
+        : sql.includes("AS reserved")
+          ? { rows: [{ reserved: "49" }] }
+          : { rows: [], rowCount: 1 },
+    );
+    const db = { query } as unknown as PoolClient;
+    expect(await reserveInboxBudget(db, ids, "row", 1)).toBe(true);
+    expect(await reserveInboxBudget(db, ids, "row", 2)).toBe(false);
+    stored = 0;
+    expect(await reserveInboxBudget(db, ids, "row", 1)).toBe(false);
+  });
   it("ledger claims once, then returns the receipt or an uncertain state, always tenant-scoped", async () => {
     const run = <T>(fn: (db: PoolClient) => Promise<T>) =>
       fn({ query } as unknown as PoolClient);
@@ -246,5 +297,63 @@ describe("postgres store", () => {
       expect(sql).toMatch(/workspace_id=\$\d AND tenant_id=\$\d/);
       expect(params).toEqual(expect.arrayContaining(["ws-a", "tenant-a"]));
     }
+  });
+});
+
+describe("first-run trigger: plan enforcement", () => {
+  const withRows = (rows: Record<string, unknown[]>) => {
+    const base = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, params: unknown[]) => {
+      for (const [prefix, value] of Object.entries(rows))
+        if (sql.startsWith(prefix)) return { rows: value, rowCount: value.length };
+      return base(sql, params);
+    });
+  };
+  const start = (key = "key-plan", accounts = async () => ["acc-a"]) =>
+    inSession(() => enqueueFirstRun(triggerSchema.parse({ provider: "gmail" }), key, { accounts }));
+  it("starts the trial on the first mailbox batch, after the batch insert, in the same transaction", async () => {
+    await start();
+    const sqls = query.mock.calls.map(([sql]) => String(sql));
+    const batch = sqls.findIndex((s) => s.startsWith("INSERT INTO inbox_batches"));
+    const trial = sqls.findIndex((s) => s.startsWith("INSERT INTO billing_trials"));
+    expect(batch).toBeGreaterThanOrEqual(0);
+    expect(trial).toBeGreaterThan(batch);
+  });
+  it.each([
+    ["expired trial", { "SELECT started_at": [{ started_at: new Date("2026-01-01"), ends_at: new Date("2026-01-15"), draft_limit: 50 }] }, "essai est terminé"],
+    ["trial drafts used", { "SELECT started_at": [{ started_at: new Date(Date.now() - 86_400_000), ends_at: new Date(Date.now() + 86_400_000), draft_limit: 50 }], "SELECT count(*)": [{ n: "50" }] }, "tous les brouillons de l’essai"],
+    ["past due", { "SELECT plan,status": [{ plan: "solo", status: "past_due", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] }, "Paiement en attente"],
+    ["canceled", { "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] }, "Abonnement résilié"],
+  ])("%s → 402 with an explicit message, nothing queued", async (_name, rows, message) => {
+    withRows(rows);
+    await expect(start()).rejects.toMatchObject({ status: 402, message: expect.stringContaining(message) });
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO inbox_batches"))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO billing_trials"))).toBe(false);
+  });
+  it("limits the batch's drafts to what the plan has left", async () => {
+    withRows({
+      "SELECT started_at": [{ started_at: new Date(Date.now() - 86_400_000), ends_at: new Date(Date.now() + 86_400_000), draft_limit: 50 }],
+      "SELECT count(*)": [{ n: "48" }],
+    });
+    expect(await start()).toMatchObject({ maxDrafts: 2 });
+  });
+  it("refuses a mailbox beyond the plan's mailbox count", async () => {
+    withRows({ "SELECT DISTINCT connected_account_id": [{ connected_account_id: "acc-old" }] });
+    await expect(start("key-m", async () => ["acc-new"])).rejects.toMatchObject({ status: 402, message: expect.stringContaining("1 boîte mail") });
+  });
+  it("an idempotent replay is served even when the plan is now blocked (read-only access)", async () => {
+    const first = await start("key-replay");
+    const row = query.mock.calls.find(([sql]) => String(sql).startsWith("INSERT INTO inbox_batches"))![1];
+    withRows({
+      "SELECT * FROM inbox_batches": [{ id: first.id, request_hash: row[5], kind: "first_run", provider: "gmail", mode: "test", status: "completed", stats: {}, error: null, window_days: 14, max_messages: 50, max_drafts: 5, created_at: new Date(), completed_at: null }],
+      "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }],
+    });
+    await expect(start("key-replay")).resolves.toMatchObject({ id: first.id });
+  });
+  it("can be disabled explicitly for an internal pilot (no trial row, no gate)", async () => {
+    vi.stubEnv("ORBIS_ENTITLEMENTS_ENFORCED", "false");
+    withRows({ "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] });
+    await start("key-off");
+    expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO billing_trials"))).toBe(false);
   });
 });

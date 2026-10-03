@@ -1,0 +1,87 @@
+.card {
+  margin: 24px;
+  max-width: 760px;
+  border: 1px solid #e2e9f3;
+  border-radius: 16px;
+  background: #fff;
+  padding: 22px 24px;
+  display: grid;
+  gap: 18px;
+}
+.card h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #182d5b;
+}
+.block {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 16px;
+}
+.block h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #182d5b;
+}
+.block p {
+  margin: 0;
+  color: #3d5079;
+  line-height: 1.55;
+  font-size: 14px;
+}
+.form {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+}
+.form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13.5px;
+  color: #3d5079;
+}
+.form input {
+  border: 1px solid #d7e3f4;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+.secondary {
+  justify-self: start;
+  border: 1px solid #d7e3f4;
+  border-radius: 10px;
+  padding: 9px 14px;
+  color: #182d5b;
+  text-decoration: none;
+  font-size: 14px;
+}
+.danger {
+  justify-self: start;
+  border: 0;
+  border-radius: 10px;
+  background: #b3263a;
+  color: #fff;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fine {
+  font-size: 12.5px !important;
+  color: #6f7f9a !important;
+}
+.alert {
+  color: #b3263a !important;
+}
+@media (max-width: 600px) {
+  .card {
+    margin: 16px;
+    padding: 18px 16px;
+  }
+}

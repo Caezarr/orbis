@@ -1,5 +1,7 @@
 # Pricing Orbis — proposition à valider
 
+> **V1 self-serve (octobre 2026) : voir [billing-v1.md](billing-v1.md).** Essai gratuit + abonnement Essentiel / Équipe avec quotas de brouillons et plafonds de coût par workspace ; prix lus dans Stripe (non décidés). Le document ci-dessous reste la réflexion de septembre 2026 (plateforme + consommation) ; ses montants ne sont ni affichés ni appliqués par la V1.
+
 9 septembre 2026. Montants ci-dessous : hypothèses commerciales, pas abonnements activés ni tarifs fournisseurs garantis.
 
 ## Décision proposée

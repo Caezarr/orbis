@@ -180,6 +180,17 @@ describe("Composio argument shapes (docs.composio.dev/toolkits/gmail|outlook)", 
       include_payload: true,
       include_spam_trash: false,
     });
+    // Incremental: absolute lower bound instead of a relative window.
+    expect(
+      buildArguments("gmail", "list_inbound", {
+        windowDays: 1,
+        maxMessages: 50,
+        now,
+        since: new Date("2026-10-01T23:45:00Z"),
+      }).query,
+    ).toBe(
+      `in:inbox -in:chats -in:sent -in:drafts after:${Date.parse("2026-10-01T23:45:00Z") / 1000}`,
+    );
     expect(buildArguments("gmail", "read_thread", { threadId: "t1" })).toEqual({
       user_id: "me",
       thread_id: "t1",
@@ -217,6 +228,14 @@ describe("Composio argument shapes (docs.composio.dev/toolkits/gmail|outlook)", 
       top: 50,
       received_date_time_ge: "2026-09-18T00:00:00.000Z",
     });
+    expect(
+      buildArguments("outlook", "list_inbound", {
+        windowDays: 1,
+        maxMessages: 50,
+        now,
+        since: new Date("2026-10-01T23:45:00Z"),
+      }),
+    ).toMatchObject({ received_date_time_ge: "2026-10-01T23:45:00.000Z" });
     expect(
       buildArguments("outlook", "read_thread", { threadId: "AAQkx=" }),
     ).toMatchObject({

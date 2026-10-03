@@ -6,14 +6,18 @@ import { Orbi } from "@/components/product/Orbi";
 import { ToolLogo } from "@/components/product/ToolLogo";
 import {
   BLOCKER_COPY,
-  CLASSIFICATION_LABELS,
   decodePending,
+  decodePreviewShown,
   deriveStep,
   encodePending,
+  encodePreviewShown,
   flagLabel,
   inboxErrorKind,
   isPending,
+  NOT_FOUND_LABEL,
   PENDING_KEY,
+  PREVIEW_SHOWN_KEY,
+  quotePreview,
   progressPhase,
   splitPlaceholders,
   stepState,
@@ -22,10 +26,17 @@ import {
   type InboxBatchView,
   type InboxMessageView,
   type MailboxStatus,
+  type StartPreview,
   type StartProfile,
   type StartStep,
 } from "@/lib/start/flow";
+import { ContinuousToggle } from "./ContinuousToggle";
+import { PlanBanner } from "@/components/billing/PlanBanner";
+import { DraftCard } from "./DraftCard";
 import s from "./start.module.css";
+import { AuthPanel } from "@/components/auth/AuthPanel";
+import { LegalLinks } from "@/components/legal/LegalLinks";
+import type { AuthOptions } from "@/lib/platform/auth";
 
 export type StartSession = "anonymous" | "authenticated" | "offline";
 type Provider = "gmail" | "outlook";
@@ -69,11 +80,31 @@ function writePending(profile: StartProfile | null) {
     else store?.removeItem(PENDING_KEY);
   } catch {}
 }
+function previewShown(): { ai: boolean } | null {
+  try {
+    return decodePreviewShown(storage("local")?.getItem(PREVIEW_SHOWN_KEY) ?? null);
+  } catch {
+    return null;
+  }
+}
+function writePreviewShown(ai: boolean | null) {
+  try {
+    const store = storage("local");
+    if (ai === null) store?.removeItem(PREVIEW_SHOWN_KEY);
+    else store?.setItem(PREVIEW_SHOWN_KEY, encodePreviewShown(ai));
+  } catch {}
+}
 async function json<T>(response: Response): Promise<T & { error?: string; code?: string }> {
   return (await response.json().catch(() => ({}))) as T & { error?: string; code?: string };
 }
 
-export function StartFlow({ session: initialSession }: { session: StartSession }) {
+export function StartFlow({
+  session: initialSession,
+  authOptions,
+}: {
+  session: StartSession;
+  authOptions: AuthOptions;
+}) {
   const [session, setSession] = useState<StartSession>(initialSession);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -83,6 +114,8 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [editing, setEditing] = useState(false);
+  // Anonymous: the instant preview of the just-confirmed profile is open (still step 1).
+  const [previewing, setPreviewing] = useState(false);
   const [mailbox, setMailbox] = useState<Record<Provider, MailboxStatus>>({ gmail: "unknown", outlook: "unknown" });
   const [batch, setBatch] = useState<InboxBatchView | null>(null);
   const [messages, setMessages] = useState<InboxMessageView[]>([]);
@@ -138,10 +171,11 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
       setSaving(true);
       setSaveError("");
       try {
+        const shown = previewShown();
         const response = await fetch("/api/v1/start/profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile }),
+          body: JSON.stringify({ profile, ...(shown ? { preview: shown } : {}) }),
         });
         const body = await json<object>(response);
         if (response.status === 401) {
@@ -150,6 +184,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
         }
         if (!response.ok) throw new Error(body.error ?? "Enregistrement impossible. Réessayez.");
         writePending(null);
+        writePreviewShown(null);
         setPending(null);
         setEditing(false);
         await loadReadiness();
@@ -195,6 +230,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
     pendingProfile: !!pending,
     workspaceProfile: !!readiness?.profile,
     editingProfile: editing,
+    previewing,
     mailbox: anyConnected,
     batch: batch?.status ?? null,
   });
@@ -277,7 +313,19 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
               </div>
               {state === "current" && (
                 <div className={s.panel}>
-                  {id === "company" && (
+                  {id === "company" && previewing && pending && !authed && (
+                    <PreviewStep
+                      profile={pending}
+                      onContinue={() => setPreviewing(false)}
+                      onEdit={() => {
+                        setLastProfile(pending);
+                        writePending(null);
+                        setPending(null);
+                        setPreviewing(false);
+                      }}
+                    />
+                  )}
+                  {id === "company" && !(previewing && pending && !authed) && (
                     <CompanyStep
                       authed={authed}
                       saving={saving}
@@ -289,12 +337,14 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
                         else {
                           writePending(profile);
                           setPending(profile);
+                          setPreviewing(true);
                         }
                       }}
                     />
                   )}
                   {id === "account" && pending && (
                     <AccountStep
+                      authOptions={authOptions}
                       profileName={pending.name}
                       onEdit={() => {
                         setLastProfile(pending);
@@ -333,6 +383,7 @@ export function StartFlow({ session: initialSession }: { session: StartSession }
           );
         })}
       </ol>
+      <LegalLinks className={s.legal} />
     </main>
   );
 }
@@ -602,56 +653,226 @@ function ProfileReview({
   );
 }
 
+// ------------------------------------------- step 1, confirmed: instant preview
+
+function PreviewStep({
+  profile,
+  onContinue,
+  onEdit,
+}: {
+  profile: StartProfile;
+  onContinue: () => void;
+  onEdit: () => void;
+}) {
+  const [preview, setPreview] = useState<StartPreview | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    // Deferred: a Strict Mode double-mount cancels the first request before it is sent.
+    const timer = setTimeout(async () => {
+      let result: StartPreview;
+      try {
+        const response = await fetch("/api/v1/start/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile }),
+          signal: controller.signal,
+        });
+        const body = await json<{ preview?: StartPreview }>(response);
+        result = response.ok && body.preview ? body.preview : quotePreview(profile, "error");
+      } catch {
+        if (controller.signal.aborted) return;
+        result = quotePreview(profile, "error");
+      }
+      if (controller.signal.aborted) return;
+      setPreview(result);
+      writePreviewShown(result.mode === "ai");
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [profile]);
+
+  // Opened by the confirm click (never on reload): move focus to the result once it exists.
+  useEffect(() => {
+    if (preview) headingRef.current?.focus();
+  }, [preview]);
+
+  const host = profile.website ? new URL(profile.website).hostname : null;
+  return (
+    <div className={s.form}>
+      <p>
+        Profil de <strong>{profile.name}</strong> confirmé.{" "}
+        <button type="button" className={s.link} onClick={onEdit}>
+          Modifier le profil
+        </button>
+      </p>
+      {!preview ? (
+        <div className={s.working} role="status">
+          <Orbi mood="thinking" size={56} working />
+          <span>Orbi prépare ce que vos clients vous demandent probablement…</span>
+        </div>
+      ) : preview.mode === "ai" ? (
+        <section className={s.preview} aria-labelledby="start-preview-title">
+          <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
+            Ce que vos clients vous demandent probablement
+          </h3>
+          <p className={s.fine}>
+            Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
+            n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
+          </p>
+          <ol className={s.likely}>
+            {preview.questions.map((q, i) => (
+              <li key={i}>
+                <strong>{q.question}</strong>
+                {q.answer ? (
+                  <blockquote>
+                    {q.answer.quote}
+                    {q.answer.sourceUrl ? (
+                      <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
+                        Source : {q.answer.sourceName}
+                      </a>
+                    ) : (
+                      <span className={s.source}>Source : {q.answer.sourceName}</span>
+                    )}
+                  </blockquote>
+                ) : (
+                  <p className={s.missing}>{NOT_FOUND_LABEL}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+          {preview.flags.includes("source_instructions_ignored") && (
+            <p className={s.fine}>
+              Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
+              l’exécuter.
+            </p>
+          )}
+          {preview.examples.length > 0 && (
+            <>
+              <h3>À quoi ressemblent ses brouillons</h3>
+              <p className={s.fine}>
+                Deux mails imaginés pour l’exemple, et les brouillons qu’Orbi préparerait avec les mêmes règles que pour
+                votre vraie boîte. Rien n’est lu ni envoyé.
+              </p>
+              {preview.examples.map((ex, i) => (
+                <article key={i} className={s.example} aria-label={`Exemple ${i + 1} : ${ex.label}`}>
+                  <div className={s.incoming}>
+                    <span className={s.simulated}>{ex.incoming.label}</span>
+                    <dl>
+                      <dt>De</dt>
+                      <dd>{ex.incoming.from}</dd>
+                      <dt>À</dt>
+                      <dd>{ex.incoming.to}</dd>
+                      <dt>Objet</dt>
+                      <dd>{ex.incoming.subject}</dd>
+                    </dl>
+                    <p className={s.draftBody}>{ex.incoming.body}</p>
+                  </div>
+                  <div className={s.draft}>
+                    <header>
+                      <span className={s.simulated}>Brouillon d’exemple · {ex.draft.label}</span>
+                    </header>
+                    <p className={s.draftBody}>
+                      {splitPlaceholders(ex.draft.body).map((part, j) =>
+                        part.placeholder ? (
+                          <mark key={j} className={s.placeholder}>
+                            {part.text}
+                          </mark>
+                        ) : (
+                          <span key={j}>{part.text}</span>
+                        ),
+                      )}
+                    </p>
+                    {ex.draft.questions.length > 0 && (
+                      <div className={s.questions}>
+                        <h4>À confirmer avant d’envoyer</h4>
+                        <ul>
+                          {ex.draft.questions.map((q) => (
+                            <li key={q}>{q}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {ex.draft.citations.length > 0 && (
+                      <details className={s.sources}>
+                        <summary>Sources ({ex.draft.citations.length})</summary>
+                        <ul>
+                          {ex.draft.citations.map((c, j) => (
+                            <li key={j}>
+                              <strong>{c.sourceName}</strong>
+                              <blockquote>{c.excerpt}</blockquote>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </>
+          )}
+        </section>
+      ) : (
+        <section className={s.preview} aria-labelledby="start-preview-title">
+          <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
+            Ce qu’Orbi peut déjà citer dans une réponse
+          </h3>
+          <p className={s.fine}>
+            {preview.reason === "disabled"
+              ? "Lecture directe : uniquement des citations exactes de vos sources, sans interprétation."
+              : "L’aperçu détaillé n’est pas disponible pour le moment. Voici uniquement des citations exactes de vos sources."}{" "}
+            Les brouillons d’exemple apparaîtront avec vos vrais mails.
+          </p>
+          {preview.found.length > 0 ? (
+            <ul className={s.likely}>
+              {preview.found.map((f, i) => (
+                <li key={i}>
+                  <blockquote>
+                    <span className={s.factLabel}>{f.label}</span>
+                    {f.quote}
+                  </blockquote>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
+          )}
+          <div className={s.unknowns}>
+            <h3>Ce qu’Orbi ne devine pas</h3>
+            <ul>
+              {preview.unknowns.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
+            <p className={s.fine}>Orbi vous posera chacune de ces questions une seule fois, au lieu d’inventer.</p>
+          </div>
+        </section>
+      )}
+      <div className={s.actions}>
+        <button type="button" className={s.primary} onClick={onContinue}>
+          Brancher ma boîte pour de vrai
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ step 2
 
-function AccountStep({ profileName, onEdit }: { profileName: string; onEdit: () => void }) {
-  const [mode, setMode] = useState<"sign-up" | "sign-in">("sign-up");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [confirmation, setConfirmation] = useState(false);
-  const signup = mode === "sign-up";
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch(`/api/auth/${mode}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.get("email"), password: form.get("password"), returnTo: "/start" }),
-      });
-      const result = await json<{ confirmationRequired?: boolean }>(response);
-      if (!response.ok)
-        setMessage(
-          response.status === 503
-            ? "La création de compte n’est pas disponible sur ce déploiement."
-            : signup
-              ? "Création impossible. Vérifiez l’adresse et un mot de passe de 12 caractères minimum, ou connectez-vous."
-              : "Connexion impossible. Vérifiez vos identifiants et la confirmation de votre adresse.",
-        );
-      else if (result.confirmationRequired) setConfirmation(true);
-      // Full reload: the server page must re-render with the new session cookies.
-      else window.location.reload();
-    } catch {
-      setMessage("Connexion au service impossible. Réessayez.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (confirmation)
-    return (
-      <div className={s.form} role="status">
-        <p>
-          <strong>Confirmez votre adresse.</strong> Ouvrez l’e-mail reçu : le lien vous ramène ici, à l’étape suivante.
-        </p>
-        <p className={s.fine}>
-          Le profil de {profileName} reste enregistré sur cet appareil pendant 24 heures, jamais dans un lien.
-        </p>
-      </div>
-    );
+function AccountStep({
+  profileName,
+  onEdit,
+  authOptions,
+}: {
+  profileName: string;
+  onEdit: () => void;
+  authOptions: AuthOptions;
+}) {
   return (
-    <form onSubmit={submit} className={s.form}>
+    <div className={s.form}>
       <p>
         Le profil de <strong>{profileName}</strong> est prêt. Il sera enregistré dans votre espace dès que votre compte
         existe.{" "}
@@ -659,47 +880,14 @@ function AccountStep({ profileName, onEdit }: { profileName: string; onEdit: () 
           Modifier le profil
         </button>
       </p>
-      <div className={s.switch} role="group" aria-label="Type d’accès">
-        <button type="button" aria-pressed={signup} onClick={() => setMode("sign-up")}>
-          Créer un compte
-        </button>
-        <button type="button" aria-pressed={!signup} onClick={() => setMode("sign-in")}>
-          J’ai déjà un compte
-        </button>
-      </div>
-      <label>
-        E-mail professionnel
-        <input name="email" type="email" autoComplete="email" required maxLength={254} />
-      </label>
-      <label>
-        Mot de passe
-        <input
-          name="password"
-          type="password"
-          autoComplete={signup ? "new-password" : "current-password"}
-          required
-          minLength={signup ? 12 : 1}
-          maxLength={1024}
-          aria-describedby={signup ? "start-password-hint" : undefined}
-        />
-        {signup && (
-          <span id="start-password-hint" className={s.fine}>
-            12 caractères minimum.
-          </span>
-        )}
-      </label>
-      {message && (
-        <p className={s.alert} role="alert">
-          {message}
-        </p>
-      )}
-      <div className={s.actions}>
-        <button className={s.primary} disabled={busy}>
-          {busy ? "Un instant…" : signup ? "Créer mon compte" : "Me connecter"}
-        </button>
-      </div>
-      <p className={s.fine}>Le profil est conservé sur cet appareil pendant 24 heures au plus, jamais dans un lien.</p>
-    </form>
+      {/* Full reload after a password sign-in: the server page must re-render with the new session cookies.
+          Magic link and Google/Microsoft come back through /api/auth/callback → /start. */}
+      <AuthPanel options={authOptions} returnTo="/start" initialMode="sign-up" onSignedIn={() => window.location.reload()} />
+      <p className={s.fine}>
+        Le profil est conservé sur cet appareil pendant 24 heures au plus, jamais dans un lien. Un lien de connexion doit être
+        ouvert dans ce même navigateur.
+      </p>
+    </div>
   );
 }
 
@@ -954,6 +1142,7 @@ function DraftsStep({
     return (
       <div className={s.form}>
         {testBanner}
+        <PlanBanner />
         <p>
           Orbi lit les messages reçus ces 14 derniers jours, écarte les newsletters et notifications, puis prépare des
           brouillons pour les demandes de clients et de devis. Le nombre de brouillons du premier passage est limité.
@@ -1039,6 +1228,17 @@ function Results({
   return (
     <div className={s.form}>
       {testBanner}
+      <PlanBanner refreshKey={`${batch.id}:${batch.status}`} />
+      {(batch.status === "quota_reached" || batch.status === "plan_inactive") && (
+        <div className={s.blocker} role="alert">
+          <strong>{batch.status === "quota_reached" ? "Quota atteint." : "Aucun nouveau traitement avec votre formule actuelle."}</strong>
+          <p>
+            {batch.error ??
+              "Orbi s’est arrêté avant tout nouvel appel au modèle. Les résultats ci-dessous sont conservés."}{" "}
+            <Link href="/billing">Voir les formules</Link>
+          </p>
+        </div>
+      )}
       {batch.status === "budget_exhausted" && (
         <div className={s.blocker} role="alert">
           <strong>Plafond de dépense atteint.</strong>
@@ -1078,62 +1278,7 @@ function Results({
         )
       )}
       {summary.drafts.map((m) => (
-        <article key={m.id} className={s.draft}>
-          <header>
-            <span className={s.badge}>{CLASSIFICATION_LABELS[m.classification ?? ""] ?? "Demande"}</span>
-            {m.subjectPreview && <h3>{m.subjectPreview}</h3>}
-          </header>
-          <p className={s.draftBody}>
-            {splitPlaceholders(m.draftPreview ?? "").map((part, i) =>
-              part.placeholder ? (
-                <mark key={i} className={s.placeholder}>
-                  {part.text}
-                </mark>
-              ) : (
-                <span key={i}>{part.text}</span>
-              ),
-            )}
-          </p>
-          {m.questions.length > 0 && (
-            <div className={s.questions}>
-              <h4>À confirmer avant d’envoyer</h4>
-              <ul>
-                {m.questions.map((q) => (
-                  <li key={q}>{q}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {m.flags.map(flagLabel).filter(Boolean).length > 0 && (
-            <ul className={s.flags}>
-              {[...new Set(m.flags.map(flagLabel).filter(Boolean))].map((label) => (
-                <li key={label}>{label}</li>
-              ))}
-            </ul>
-          )}
-          <div className={s.draftActions}>
-            {m.draft?.openUrl ? (
-              <a href={m.draft.openUrl} target="_blank" rel="noreferrer noopener" className={s.primary}>
-                Ouvrir dans {mailbox}
-              </a>
-            ) : (
-              m.draft?.simulated && <span className={s.muted}>Brouillon simulé : non écrit dans {mailbox}.</span>
-            )}
-          </div>
-          {m.citations.length > 0 && (
-            <details className={s.sources}>
-              <summary>Sources ({m.citations.length})</summary>
-              <ul>
-                {m.citations.map((c, i) => (
-                  <li key={`${c.sourceId}-${i}`}>
-                    <strong>{c.sourceName}</strong>
-                    <blockquote>{c.excerpt}</blockquote>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </article>
+        <DraftCard key={m.id} message={m} mailbox={mailbox} />
       ))}
       {summary.review.length > 0 && (
         <section className={`${s.aside} ${s.reviewList}`} aria-label="À vérifier par vous">
@@ -1184,6 +1329,7 @@ function Results({
           </ul>
         </section>
       )}
+      {batch.status === "completed" && <ContinuousToggle />}
       <div className={s.actions}>
         <Link href="/today" className={s.secondary}>
           Aller à mon espace

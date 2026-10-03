@@ -8,15 +8,18 @@ import {
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import {
   ACTIONABLE,
+  classificationSchema,
   guardDraft,
   injectionSignals,
   replyRecipient,
+  replyDraftSchema,
   replyToDiverges,
   skipReason,
   type Classification,
   type InboxModel,
   type ModelUsage,
 } from "@/lib/runtime/inbox-replies";
+import { draftQuestions } from "@/lib/brain/questions";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -29,6 +32,8 @@ export type InboxBatch = {
   windowDays: number;
   maxMessages: number;
   maxDrafts: number;
+  /** Incremental batches: list only messages received at or after this ISO instant. */
+  since?: string;
 };
 export type MessageStatus =
   | "seen"
@@ -63,6 +68,11 @@ export type InboxStore = {
   ledger(rowId: string): DraftLedger;
   /** Renew the batch lease; false means another worker owns it now. */
   heartbeat(): Promise<boolean>;
+  /** Company brain: register this draft's open questions (deduplicated per workspace). */
+  recordQuestions?(
+    rowId: string,
+    questions: { canonicalKey: string; label: string }[],
+  ): Promise<unknown>;
 };
 export type BatchStats = {
   listed: number;
@@ -76,8 +86,18 @@ export type BatchStats = {
   failed: number;
   budgetExhausted: boolean;
   leaseLost: boolean;
+  /** Stopped between messages because the caller's time budget ran out. */
+  yielded?: boolean;
+  /** Stopped before any further model call: the plan's draft quota is used up. */
+  quotaReached?: boolean;
+  /** Mailbox drafts created by this run (quota units), including recipient mismatches. */
+  draftsCreated?: number;
+  /** Follow-ups / pipeline pass run after an incremental batch (levels 6/7), counts only. */
+  followups?: Record<string, number | boolean>;
 };
 export class LeaseLostError extends Error {}
+/** Model output failed schema validation (treated like a model failure). */
+class InvalidModelOutput extends Error {}
 
 const TERMINAL: ReadonlySet<MessageStatus> = new Set([
   "skipped",
@@ -127,6 +147,21 @@ export async function processMailboxBatch(params: {
   context: ReplyContext;
   costs: { classifyCents: number; draftCents: number };
   now?: Date;
+  /** Checked before each message; true = stop cleanly, the batch is resumed later. */
+  shouldYield?: () => boolean;
+  /** Plan drafts remaining (entitlements). Undefined = no plan quota. */
+  draftQuota?: number;
+  /**
+   * Request pipeline (level 7): called once per actionable message, before
+   * drafting. Best effort: a failure never blocks the reply draft.
+   */
+  requests?: {
+    track(input: {
+      rowId: string;
+      message: MailMessage;
+      classification: Classification;
+    }): Promise<unknown>;
+  };
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -141,14 +176,24 @@ export async function processMailboxBatch(params: {
     failed: 0,
     budgetExhausted: false,
     leaseLost: false,
+    draftsCreated: 0,
   };
+  const quotaUsed = () =>
+    params.draftQuota !== undefined &&
+    (stats.draftsCreated ?? 0) >= params.draftQuota;
+  const since = batch.since ? new Date(batch.since) : undefined;
   const messages = (
     await mailbox.listInbound({
       windowDays: batch.windowDays,
       maxMessages: batch.maxMessages,
       now: params.now,
+      ...(since ? { since } : {}),
     })
-  ).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  )
+    // Defensive: providers filter by date, but never process older mail in an
+    // incremental batch even if a provider ignores the bound.
+    .filter((m) => !batch.since || !m.receivedAt || m.receivedAt >= batch.since)
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   stats.listed = messages.length;
   let tone: string[] | undefined;
   const toneSamples = async () => {
@@ -163,6 +208,15 @@ export async function processMailboxBatch(params: {
     return tone;
   };
   for (const message of messages) {
+    if (quotaUsed()) {
+      // Graceful stop: results so far are kept, nothing else costs a model call.
+      stats.quotaReached = true;
+      break;
+    }
+    if (params.shouldYield?.()) {
+      stats.yielded = true;
+      break;
+    }
     if (!(await store.heartbeat())) {
       stats.leaseLost = true;
       break;
@@ -195,7 +249,10 @@ export async function processMailboxBatch(params: {
         }
         const result = await model.classify(message);
         await store.addUsage(row.rowId, result.usage);
-        classification = result.output.classification;
+        // Model output is untrusted: an off-schema label never reaches storage.
+        const parsedClass = classificationSchema.safeParse(result.output);
+        if (!parsedClass.success) throw new InvalidModelOutput();
+        classification = parsedClass.data.classification;
         await store.update(row.rowId, {
           status: "classified",
           classification,
@@ -205,6 +262,10 @@ export async function processMailboxBatch(params: {
       }
       if (!ACTIONABLE.has(classification)) continue;
       stats.actionable++;
+      if (params.requests)
+        await params.requests
+          .track({ rowId: row.rowId, message, classification })
+          .catch(() => {});
       if (stats.drafted >= batch.maxDrafts) {
         // Stays non-terminal: a later batch with remaining quota drafts it.
         await store.update(row.rowId, {
@@ -249,7 +310,12 @@ export async function processMailboxBatch(params: {
         toneSamples: await toneSamples(),
       });
       await store.addUsage(row.rowId, generated.usage);
-      const guarded = guardDraft(generated.output, { sources, message });
+      // Strict schema check before the guard: wrong shape/oversized → failed,
+      // no draft. Unknown keys (recipient, cc, send…) are stripped by zod and
+      // never read anyway: the recipient is computed by code above.
+      const parsedDraft = replyDraftSchema.safeParse(generated.output);
+      if (!parsedDraft.success) throw new InvalidModelOutput();
+      const guarded = guardDraft(parsedDraft.data, { sources, message });
       const allFlags = [...flags, ...guarded.issues.map((i) => `guard:${i}`)];
       await store.update(row.rowId, {
         status: "drafting",
@@ -276,6 +342,7 @@ export async function processMailboxBatch(params: {
         },
         store.ledger(row.rowId),
       );
+      stats.draftsCreated = (stats.draftsCreated ?? 0) + 1;
       const mismatch =
         receipt.recipients !== undefined &&
         (receipt.recipients.length !== 1 ||
@@ -286,6 +353,17 @@ export async function processMailboxBatch(params: {
       });
       if (mismatch) stats.needsReview++;
       else stats.drafted++;
+      if (store.recordQuestions) {
+        const questions = draftQuestions(guarded.body, guarded.questions, {
+          thirdParties: [
+            recipient,
+            ...(message.from?.name ? [message.from.name] : []),
+          ],
+        });
+        // Best effort: a question bookkeeping failure never undoes a draft.
+        if (questions.length)
+          await store.recordQuestions(row.rowId, questions).catch(() => {});
+      }
     } catch (error) {
       if (error instanceof MailboxPolicyError) throw error;
       if (error instanceof MailboxUncertainError) {
