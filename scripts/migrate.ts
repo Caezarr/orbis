@@ -3,6 +3,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { Pool } from "pg";
 
+// Name of the migration being applied, for the failure message.
+let current = "";
+
 async function main() {
   const connectionString =
     process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -33,7 +36,9 @@ async function main() {
           throw new Error(`Applied migration changed: ${name}`);
         continue;
       }
+      current = name;
       await client.query(sql);
+      current = "";
       await client.query(
         "INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)",
         [name, checksum],
@@ -199,9 +204,15 @@ async function main() {
     await db.end();
   }
 }
-main().catch(() => {
+main().catch((error: unknown) => {
+  // Never print the error object as-is: connection errors can echo the URL.
+  // Postgres code, a password-free message and the migration name are enough.
+  const e = error as { code?: string; message?: string };
+  const message = (e?.message ?? "").replace(/postgres(ql)?:\/\/\S+/gi, "<url>").slice(0, 300);
   console.error(
     "Migration failed; verify connectivity, privileges, migration checksums and SQL.",
   );
+  console.error(`  code: ${e?.code ?? "none"}${current ? `  migration: ${current}` : ""}`);
+  if (message) console.error(`  detail: ${message}`);
   process.exitCode = 1;
 });
