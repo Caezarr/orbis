@@ -60,7 +60,7 @@ export function WeekCardView({ data }: { data: WeekSummary }) {
         <p className={s.notice}>
           {data.followupsReady > 0 && (
             <>
-              <Link href="/demandes">
+              <Link href="/relances">
                 {data.followupsReady} relance{data.followupsReady > 1 ? "s" : ""} à relire
               </Link>
               {" · "}

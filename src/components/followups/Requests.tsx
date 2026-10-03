@@ -16,9 +16,10 @@ const DONE: Record<RequestAction["action"], string> = {
   erase_contact: "Contact effacé. Les brouillons déjà dans votre boîte mail n’ont pas été modifiés.",
 };
 
-export function Requests() {
+/** `view="relances"` opens the same pipeline on the follow-ups waiting for review. */
+export function Requests({ view = "demandes" }: { view?: "demandes" | "relances" }) {
   const [data, setData] = useState<RequestsData | null>(null);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>(view === "relances" ? { followup: "ready" } : {});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -93,9 +94,9 @@ export function Requests() {
     return (
       <div className={`${s.root} ${s.page}`}>
         <header className={s.head}>
-          <h1>Demandes</h1>
+          <h1>{view === "relances" ? "Relances" : "Demandes"}</h1>
         </header>
-        <OrbiEmpty mood="team" title="Vos demandes clients, suivies sans tableur." actions={<Link href="/start">Reprendre le démarrage</Link>}>
+        <OrbiEmpty mood="team" title={view === "relances" ? "Vos relances, préparées avant que le client oublie." : "Vos demandes clients, suivies sans tableur."} actions={<Link href="/start">Reprendre le démarrage</Link>}>
           <p>
             Chaque demande de client ou de devis reçue devient une ligne, et je prépare les relances quand un client ne
             répond pas.
@@ -112,12 +113,13 @@ export function Requests() {
             {error}
           </p>
         ) : (
-          <p role="status">Chargement des demandes…</p>
+          <p role="status">{view === "relances" ? "Chargement des relances…" : "Chargement des demandes…"}</p>
         )}
       </div>
     );
   return (
     <RequestsView
+      view={view}
       data={data}
       filters={filters}
       busy={busy}

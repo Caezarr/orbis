@@ -12,14 +12,14 @@ export function weekLabel(week: WeeklyReport["week"]) {
   return `Semaine du ${dayFr(week.start)} au ${dayFr(last)}`;
 }
 export function durationFr(minutes: number | null) {
-  if (minutes === null) return "—";
+  if (minutes === null) return "non mesuré";
   if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h < 48) return m ? `${h} h ${String(m).padStart(2, "0")}` : `${h} h`;
   return `${Math.round(h / 24)} j`;
 }
-const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)} %`);
+const pct = (v: number | null) => (v === null ? "non mesuré" : `${Math.round(v * 100)} %`);
 
 function Tile({ label, value, previous, note }: { label: string; value: number | string; previous?: number | string; note?: string }) {
   return (

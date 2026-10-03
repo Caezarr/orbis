@@ -15,8 +15,9 @@ type DigestSettings = {
  * Daily digest opt-in for the signed-in user. Off by default; hidden when the
  * deployment has not enabled the digest (the settings route answers 503).
  */
-export function DigestToggle() {
+export function DigestToggle({ unavailableText }: { unavailableText?: string } = {}) {
   const [settings, setSettings] = useState<DigestSettings | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,15 +26,22 @@ export function DigestToggle() {
     fetch("/api/v1/digest/settings", { cache: "no-store" })
       .then(async (r) => (r.ok ? ((await r.json()) as DigestSettings) : null))
       .then((value) => {
-        if (active && value) setSettings(value);
+        if (!active) return;
+        if (value) setSettings(value);
+        else setUnavailable(true);
       })
-      .catch(() => undefined);
+      .catch(() => active && setUnavailable(true));
     return () => {
       active = false;
     };
   }, []);
 
-  if (!settings) return null;
+  if (!settings)
+    return unavailable && unavailableText ? (
+      <section className={s.aside} aria-label="Résumé quotidien par e-mail">
+        <p className={s.fine}>{unavailableText}</p>
+      </section>
+    ) : null;
   const on = settings.enabled;
 
   async function toggle() {
@@ -88,7 +96,7 @@ export function DigestToggle() {
           disabled={saving || (!on && !settings.canSubscribe)}
           onClick={() => void toggle()}
         >
-          {saving ? "Enregistrement…" : on ? "Activé — désactiver" : "Activer"}
+          {saving ? "Enregistrement…" : on ? "Activé · désactiver" : "Activer"}
         </button>
       </div>
       {error && (

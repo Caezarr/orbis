@@ -6,13 +6,13 @@ Doc 17, Phase 2: « Digest quotidien par email : brouillons prêts, questions en
 
 | Part | Status |
 |---|---|
-| Per-user opt-in on Today (`ORBIS_DIGEST=true`) | built, off by default |
+| Per-user opt-in on Réglages › Résumé quotidien (`ORBIS_DIGEST=true`) | built, off by default |
 | Counts-only content, fixed French text, one link to `/today` | built |
 | Once per Europe/Paris day, from 07:00, ledger claim before delivery | built (migration 013) |
 | Broker step `orbis.digest.send` with policy hash + idempotency key | built |
 | **Real e-mail transport** | **not built.** `ORBIS_DIGEST_DELIVERY` only accepts `simulated`. The digest is composed and recorded, nothing leaves the server. Any other value is refused. |
 
-The Today toggle says so on screen: « L’envoi n’est pas encore branché sur ce déploiement… ». Do not enable `ORBIS_DIGEST` in production before a transport exists, unless that sentence is acceptable to users.
+The Réglages toggle says so on screen: « L’envoi n’est pas encore branché sur ce déploiement… ». Do not enable `ORBIS_DIGEST` in production before a transport exists, unless that sentence is acceptable to users.
 
 ## What the e-mail contains
 
@@ -58,7 +58,7 @@ Per subscriber, in one transaction under their RLS context: lock the subscriptio
 1. Choose a provider (EU region), a sending domain, and set SPF/DKIM/DMARC.
 2. Add the mode in `src/lib/digest/delivery.ts`, behind the same policy hash, passing the ledger idempotency key as the provider's idempotency key (the send happens inside the DB transaction: a rollback after a send must not resend).
 3. Add the provider to the subprocessor list and the privacy policy.
-4. Replace the « pas encore branché » sentence in `DigestToggle.tsx` for that mode.
+4. Replace the « pas encore branché » sentence in `src/components/settings/DigestToggle.tsx` for that mode.
 
 ## Verification (2026-10-02)
 

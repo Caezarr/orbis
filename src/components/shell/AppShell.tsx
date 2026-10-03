@@ -1,74 +1,110 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Compass,
-  FolderOpen,
-  KeyRound,
-  Settings,
-  Sun,
   BarChart3,
   BookOpenCheck,
+  Compass,
+  FolderOpen,
   Inbox,
+  KeyRound,
   LineChart,
+  MessageSquare,
+  Repeat2,
+  Settings,
+  Sun,
+  type LucideIcon,
 } from "lucide-react";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { cn } from "@/lib/cn";
-import { OrbiMark } from "@/components/product/OrbiMark";
+import { FOCUSED_NAV, FROZEN_NAV, isActive, navItems, type NavKey } from "@/lib/product/surfaces";
 
-/** Orbi's own entry point carries Orbi's mark (mono, follows the nav text colour). */
-function OrbiIcon({ size = 16 }: { size?: number; "aria-hidden"?: boolean }) {
-  // The ring takes the full width: draw slightly larger so the head matches the stroke icons.
-  return <OrbiMark size={size + 2} mono className="-mx-px" />;
-}
+const ICONS: Record<NavKey, LucideIcon> = {
+  today: Sun,
+  demandes: Inbox,
+  relances: Repeat2,
+  fiche: BookOpenCheck,
+  rapport: LineChart,
+  settings: Settings,
+  chat: MessageSquare,
+  catalog: Compass,
+  connections: KeyRound,
+  knowledge: FolderOpen,
+  analytics: BarChart3,
+};
 
-const NAV = [
-  { href: "/chat", label: "Ask Orbi", icon: OrbiIcon },
-  { href: "/today", label: "Today", icon: Sun },
-  { href: "/fiche", label: "Fiche entreprise", icon: BookOpenCheck },
-  { href: "/demandes", label: "Demandes", icon: Inbox },
-  { href: "/rapport", label: "Rapport", icon: LineChart },
-  { href: "/catalog", label: "Marketplace", icon: Compass },
-  { href: "/connections", label: "Integrations", icon: KeyRound },
-  { href: "/knowledge", label: "Knowledge", icon: FolderOpen },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-];
+/** Today announces how many decisions wait (drafts + questions); the shell keeps the last value. */
+export const DECISIONS_EVENT = "orbis:decisions";
 
 export function AppShell({
   children,
-  workspaceName = "Acme",
-  userName = "Gabriel",
-  decisionCount = 0,
+  workspaceName = "Mon espace",
+  userName = "Vous",
+  decisionCount,
+  full = false,
 }: {
   children: React.ReactNode;
   workspaceName?: string;
   userName?: string;
+  /** Forced count (frozen surfaces mode); otherwise taken from Today's event. */
   decisionCount?: number;
+  full?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [announced, setAnnounced] = useState(0);
+  useEffect(() => {
+    const listen = (e: Event) => {
+      const n = (e as CustomEvent<number>).detail;
+      if (Number.isInteger(n) && n >= 0) setAnnounced(n);
+    };
+    window.addEventListener(DECISIONS_EVENT, listen);
+    return () => window.removeEventListener(DECISIONS_EVENT, listen);
+  }, []);
+  const decisions = decisionCount ?? announced;
+  const items = navItems(full);
+  const current = items.find((item) => isActive(item, pathname))?.href ?? "";
+  const link = (item: (typeof items)[number]) => {
+    const active = isActive(item, pathname);
+    const Icon = ICONS[item.key];
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex items-center gap-2 rounded-[8px] px-3 py-2 text-sm",
+          active ? "bg-blue-50 text-blue-700" : "text-muted hover:text-ink",
+        )}
+      >
+        <Icon size={16} aria-hidden />
+        {item.label}
+        {item.key === "today" && decisions > 0 ? (
+          <span className="ml-auto rounded-full bg-amber-soft px-2 text-xs text-amber" aria-label={`${decisions} à relire`}>
+            {decisions}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
   return (
-    <div className="orbis-workspace min-h-screen bg-white">
-      <CommandPalette />
+    <div className="orbis-workspace min-h-screen bg-white" lang="fr">
+      <CommandPalette full={full} />
       <header className="flex h-16 items-center justify-between border-b border-[#dce4f0] bg-white px-5">
-        <div className="flex items-center gap-6">
-          <Link href="/chat" aria-label="Orbis home">
+        <div className="flex min-w-0 items-center gap-6">
+          <Link href="/today" aria-label="Orbis, aller à Aujourd’hui">
             <span className="flex items-center gap-2 text-xl font-medium tracking-tight">
-              <Image
-                src="/brand/orbis-mark.svg"
-                alt=""
-                width={28}
-                height={28}
-              />
+              <Image src="/brand/orbis-mark.svg" alt="" width={28} height={28} />
               Orbis
             </span>
           </Link>
           <Link
-            href="/company"
-            className="rounded-[8px] border border-line bg-surface px-3 py-1.5 text-sm"
+            href={full ? "/company" : "/fiche"}
+            className="hidden truncate rounded-[8px] border border-line bg-surface px-3 py-1.5 text-sm sm:block"
           >
             {workspaceName}
           </Link>
@@ -78,45 +114,36 @@ export function AppShell({
           onClick={() => window.dispatchEvent(new Event("orbis:palette"))}
           className="hidden h-9 items-center gap-3 rounded-[8px] border border-line bg-surface px-3 text-sm text-muted md:flex"
         >
-          Search workspace
+          Aller à…
           <kbd className="rounded bg-canvas px-1.5 py-0.5 text-[10px]">⌘K</kbd>
         </button>
         <div className="flex items-center gap-3 text-sm text-muted">
-          {decisionCount > 0 ? (
-            <Link
-              href="/today"
-              className="rounded-full bg-amber-soft px-3 py-1 text-xs text-amber"
-            >
-              {decisionCount} need you
+          {decisions > 0 ? (
+            <Link href="/today" className="rounded-full bg-amber-soft px-3 py-1 text-xs text-amber">
+              {decisions} à relire
             </Link>
           ) : null}
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs text-canvas">
-            {userName.slice(0, 1)}
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs text-canvas"
+            title={userName}
+          >
+            {userName.slice(0, 1).toUpperCase()}
           </span>
         </div>
       </header>
-      <nav
-        aria-label="Mobile workspace navigation"
-        className="border-b border-[#dce4f0] bg-white px-4 py-3 md:hidden"
-      >
+      <nav aria-label="Navigation de l’espace (mobile)" className="border-b border-[#dce4f0] bg-white px-4 py-3 md:hidden">
         <label className="flex items-center gap-4 text-sm text-muted">
-          Go to
+          Aller à
           <select
-            aria-label="Workspace page"
-            value={
-              pathname.startsWith("/workflows/")
-                ? "/catalog"
-                : ([...NAV, { href: "/settings" }].find((item) =>
-                    pathname.startsWith(item.href),
-                  )?.href ?? "")
-            }
+            aria-label="Page de l’espace"
+            value={current}
             onChange={(e) => router.push(e.target.value)}
             className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-base text-ink"
           >
             <option value="" disabled>
-              Workspace
+              Choisir une page
             </option>
-            {[...NAV, { href: "/settings", label: "Settings" }].map((item) => (
+            {items.map((item) => (
               <option key={item.href} value={item.href}>
                 {item.label}
               </option>
@@ -126,46 +153,14 @@ export function AppShell({
       </nav>
       <div className="flex min-h-[calc(100vh-64px)]">
         <aside className="hidden w-[230px] shrink-0 flex-col border-r border-[#e2e9f3] bg-[#f8faff] md:flex">
-          <nav className="flex flex-col gap-1 p-3">
-            {NAV.map((item) => {
-              const active =
-                pathname === item.href ||
-                pathname.startsWith(`${item.href}/`) ||
-                (item.href === "/catalog" &&
-                  pathname.startsWith("/workflows/"));
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex items-center gap-2 rounded-[8px] px-3 py-2 text-sm",
-                    active
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-muted hover:text-ink",
-                  )}
-                >
-                  <Icon size={16} aria-hidden />
-                  {item.label}
-                  {item.href === "/today" && decisionCount > 0 ? (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber pulse-dot" />
-                  ) : null}
-                </Link>
-              );
-            })}
-            <Link
-              href="/settings"
-              className={cn(
-                "mt-4 flex items-center gap-2 rounded-[8px] px-3 py-2 text-sm",
-                pathname.startsWith("/settings")
-                  ? "bg-surface text-ink"
-                  : "text-muted hover:text-ink",
-              )}
-            >
-              <Settings size={16} aria-hidden />
-              Settings
-            </Link>
+          <nav aria-label="Navigation de l’espace" className="flex flex-col gap-1 p-3">
+            {FOCUSED_NAV.map(link)}
+            {full ? (
+              <>
+                <p className="mt-5 px-3 text-xs uppercase tracking-wide text-muted">Gelé en V1</p>
+                {FROZEN_NAV.map(link)}
+              </>
+            ) : null}
           </nav>
           <LegalLinks className="mt-auto px-6 pb-4 pt-6" />
         </aside>

@@ -1,0 +1,155 @@
+/* Réglages: one page, stacked sections. Same palette as the wedge pages. */
+.page {
+  --marine: #182d5b;
+  --cobalt: #305ee8;
+  --ciel: #edf3ff;
+  --text: #53627b;
+  --border: #dce4f0;
+  --amber: #8a5300;
+  --amber-soft: #fff4dc;
+  --green: #16845b;
+  --green-soft: #e9f7f0;
+  --red: #b4323f;
+  --red-soft: #fff0f1;
+  color: var(--marine);
+  max-width: 880px;
+  margin: 0 auto;
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+.head h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.head p {
+  margin: 8px 0 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+.jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.jump a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--marine);
+  text-decoration: none;
+  font-size: 14px;
+  background: #fff;
+}
+.jump a:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+.section {
+  display: grid;
+  gap: 12px;
+  scroll-margin-top: 24px;
+  min-width: 0;
+}
+/* Embedded panels (Équipe, Vos données) bring their own page margins: align them. */
+.page .section > * {
+  margin: 0;
+  max-width: none;
+}
+.section > h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.section > p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+.stack {
+  display: grid;
+  gap: 12px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px 18px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.card p {
+  margin: 0;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.ok,
+.warn,
+.muted {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+.ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.warn {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+.muted {
+  background: var(--ciel);
+  color: var(--text);
+}
+.primary {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  background: var(--cobalt);
+  color: #fff;
+}
+.fine {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.alert {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 14px;
+}
