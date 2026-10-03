@@ -470,7 +470,7 @@ function CompanyStep({
         ) : mode === "site" ? (
           <>
             <p>Bonjour, je suis Orbi.</p>
-            <p>Donnez-moi l’adresse de votre site : je lis la page publique et je vous dis ce que j’ai compris.</p>
+            <p>Donnez-moi l’adresse de votre site : je lis vos pages publiques et je vous dis ce que j’ai compris.</p>
           </>
         ) : (
           <p>Deux phrases suffisent : ce que vous faites, et pour qui.</p>
