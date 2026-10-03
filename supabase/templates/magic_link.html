@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;background:#f4f7fc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0d1b3a">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;padding:32px">
+            <tr><td style="font-size:15px;font-weight:600;color:#1f5cff">Orbis</td></tr>
+            <tr><td style="padding-top:20px;font-size:22px;font-weight:600;line-height:1.3">Votre lien de connexion</td></tr>
+            <tr>
+              <td style="padding-top:12px;font-size:15px;line-height:1.5;color:#3b4a6b">
+                Cliquez sur le bouton pour ouvrir votre espace Orbis. Le lien est valable une heure et ne fonctionne qu'une fois, dans le navigateur où vous l'avez demandé.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:24px">
+                <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#0d1b3a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:10px">Ouvrir Orbis</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top:24px;font-size:13px;line-height:1.5;color:#6b7896">
+                Vous n'avez rien demandé ? Ignorez ce message, aucun compte ne sera ouvert. Orbis n'envoie jamais de mail depuis votre boîte.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

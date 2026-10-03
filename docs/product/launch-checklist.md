@@ -126,8 +126,8 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 
 | Step | Status |
 |---|---|
-| **Vercel Pro**: function `maxDuration` 60 s and crons more frequent than daily (Hobby allows daily crons only) | À faire |
-| Add `vercel.json` crons: `{"crons":[{"path":"/api/cron/inbox","schedule":"*/5 * * * *"},{"path":"/api/cron/retention","schedule":"17 3 * * *"},{"path":"/api/cron/digest","schedule":"5 6 * * *"}]}` (digest: 06:05 UTC = 07:05 or 08:05 Paris; it is a no-op until `ORBIS_DIGEST=true`). Not committed, so current deploys stay unchanged | À faire |
+| Vercel Pro: not required for scheduling any more (see next row). Still worth it for function limits and team features | Décision |
+| Scheduling is committed: `vercel.json` runs retention (03:17 UTC) and digest (06:05 UTC) daily, which Hobby allows; `.github/workflows/inbox-scheduler.yml` triggers `/api/cron/inbox` every 5 min. It stays a no-op until the repo secret `CRON_SECRET` (same value as Vercel) and repo variable `ORBIS_APP_URL` are set. On Vercel Pro, the inbox cron can move into `vercel.json` instead | À faire (secrets) |
 | Own domain replacing `orbis-omega-ashen.vercel.app`; DNS A/CNAME; HTTPS; set `APP_ORIGIN`/`ORBIS_APP_URL`; update Supabase redirect URLs and the Stripe webhook URL | Bloquant |
 | Email DNS for the auth sender (SPF, DKIM, DMARC) | Bloquant |
 | HSTS is sent automatically on HTTPS; add `preload` only once the domain is final | Décision |
@@ -170,3 +170,11 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Error monitoring + PostHog funnel | Sentry transport ✅ (DSN À faire); funnel events ✅, PostHog export À faire | À faire |
 | Prompt-injection red team | `src/lib/security/redteam` suite green; re-run against the real model on staging with the same corpus | Code ✅ · live À faire |
 | Retention purge runs | `/api/cron/retention` scheduled daily; check the response counts | À faire |
+
+## Local production-like stack
+
+`pnpm local:up` starts Supabase in Docker (Postgres 17, Auth, Mailpit), creates a runtime role without BYPASSRLS, and applies every migration as the owner. `pnpm local:env` prints the `.env.local` block. Verified 2026-10-03: all 13 migrations apply, `check-platform.ts --database` passes (cross-tenant RLS), and `/start` runs through account creation by magic link (read the link in Mailpit, http://127.0.0.1:54324).
+
+## Auth e-mails in French
+
+Supabase sends English e-mails by default. The French template lives in `supabase/templates/magic_link.html` (used locally by `supabase/config.toml`). In the production project, paste it in Authentication → Email Templates for « Magic Link » and « Confirm signup », subjects « Votre lien de connexion Orbis » / « Confirmez votre adresse pour Orbis ». For deliverability, configure custom SMTP on the Orbis domain (Supabase's built-in sender is rate limited and not meant for production).
