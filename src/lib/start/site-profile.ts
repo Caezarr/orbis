@@ -14,7 +14,7 @@ export function profileFromCrawl(crawl: Pick<CrawlResult, "pages" | "website" | 
   const home = crawl.pages[0];
   const host = new URL(crawl.website).hostname;
   const ex = extractFacts(crawl.pages);
-  const facts: StartFact[] = ex.facts;
+  const facts: StartFact[] = collapseEchoes(ex.facts);
   const name = (ex.name || home?.siteName || siteName(home?.title ?? "", host)).slice(0, 120);
   const firstSentence = crawl.pages.flatMap((p) => quotableSentences(p.segments.filter((s) => !s.nav && s.tag === "p").map((s) => s.text).join(" "), 1))[0];
   const summary = (ex.summary || firstSentence || `Site public ${host}. Décrivez votre activité en une ou deux phrases.`).slice(0, 1800);
@@ -31,6 +31,37 @@ export function profileFromCrawl(crawl: Pick<CrawlResult, "pages" | "website" | 
   };
 }
 const sourceTitle = (url: string) => new URL(url).pathname;
+
+const words = (v: string) =>
+  new Set(
+    v
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2),
+  );
+
+/**
+ * A site repeats itself (meta description, hero, footer). Within one category,
+ * drop a fact whose value words are all contained in another kept fact's value,
+ * so "métropole lilloise, jusqu'à Tournai" does not sit under its longer twin.
+ * Structured data and facts without a value are never dropped.
+ */
+export function collapseEchoes(facts: StartFact[]): StartFact[] {
+  const sets = facts.map((f) => (f.value && f.via !== "structured" ? words(f.value) : null));
+  return facts.filter((f, i) => {
+    const mine = sets[i];
+    if (!mine || mine.size === 0) return true;
+    return !facts.some((other, j) => {
+      if (j === i || other.category !== f.category || !other.value) return false;
+      const theirs = words(other.value);
+      if (theirs.size < mine.size || (theirs.size === mine.size && j > i)) return false;
+      for (const w of mine) if (!theirs.has(w)) return false;
+      return true;
+    });
+  });
+}
 
 // ------------------------------------------------------------------ model synthesis
 
