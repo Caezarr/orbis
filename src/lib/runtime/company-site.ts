@@ -35,6 +35,11 @@ export function extractCompany(html: string, url: string) {
     $("meta[name='description']").attr("content") ||
     $("meta[property='og:description']").attr("content") ||
     "";
+  // cheerio's text() joins adjacent nodes with no separator: "Peintre<br/>en
+  // bâtiment</span><span>à Allennes" became "Peintreen bâtimentà Allennes".
+  // Line breaks and block-ish elements are word boundaries.
+  $("br").replaceWith(" ");
+  $("p,div,li,dt,dd,h1,h2,h3,h4,h5,h6,section,article,aside,blockquote,td,th,tr,span,figcaption").after(" ");
   const text = $("main").text() || $("body").text();
   return {
     website: url,
