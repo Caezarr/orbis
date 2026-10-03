@@ -67,6 +67,17 @@ const SECTIONS: { name: string; table: string; sql: string }[] = [
     sql: "SELECT continuous_enabled, provider, interval_minutes, next_run_at, enabled_at, updated_at FROM inbox_settings WHERE workspace_id=$1 AND tenant_id=$2",
   },
   {
+    // User-private (RLS): only the exporting user's own subscription and deliveries.
+    name: "digest_subscription",
+    table: "digest_subscriptions",
+    sql: "SELECT enabled, recipient, last_day, enabled_at, updated_at FROM digest_subscriptions WHERE workspace_id=$1 AND tenant_id=$2",
+  },
+  {
+    name: "digest_deliveries",
+    table: "digest_deliveries",
+    sql: "SELECT day, outcome, window_start, window_end, counts, created_at FROM digest_deliveries WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY day",
+  },
+  {
     name: "billing_trial",
     table: "billing_trials",
     sql: "SELECT started_at, ends_at, draft_limit, config_version FROM billing_trials WHERE workspace_id=$1 AND tenant_id=$2",

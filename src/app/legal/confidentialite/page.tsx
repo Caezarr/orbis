@@ -146,8 +146,9 @@ export default function Page() {
           outil est activé.
         </li>
         <li>
-          Si le suivi des erreurs (Sentry) est activé, les adresses e-mail, le contenu des e-mails et les jetons sont
-          filtrés avant envoi.
+          Si le suivi des erreurs (Sentry) est activé, les erreurs techniques du serveur et du navigateur sont transmises
+          (type d’erreur, message, pile d’appels, modèle de la page sans identifiants ni paramètres). Les adresses
+          e-mail, le contenu des e-mails et les jetons sont filtrés avant envoi.
         </li>
       </ul>
 
