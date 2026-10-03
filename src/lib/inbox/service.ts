@@ -257,7 +257,16 @@ export async function listInboxResults(batchId?: string) {
       [ctx.workspaceId, ctx.tenantId],
     )
   ).rows;
-  const selected = batchId ? batches.find((b) => b.id === batchId) : batches[0];
+  // Default view = the latest FIRST RUN (/start "first drafts"). With continuous
+  // drafting on, newer incremental batches (often empty) would otherwise hide it.
+  const selected = batchId
+    ? batches.find((b) => b.id === batchId)
+    : ((
+        await ctx.db.query<BatchRow>(
+          "SELECT * FROM inbox_batches WHERE workspace_id=$1 AND tenant_id=$2 AND kind='first_run' ORDER BY created_at DESC LIMIT 1",
+          [ctx.workspaceId, ctx.tenantId],
+        )
+      ).rows[0] ?? batches[0]);
   if (batchId && !selected) throw new PlatformError("Batch not found", 404);
   const messages = selected
     ? (
