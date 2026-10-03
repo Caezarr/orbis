@@ -26,6 +26,7 @@ import {
   type InboxBatchView,
   type InboxMessageView,
   type MailboxStatus,
+  type PreviewQuestion,
   type StartPreview,
   type StartProfile,
   type StartStep,
@@ -33,6 +34,7 @@ import {
 import { ContinuousToggle } from "./ContinuousToggle";
 import { PlanBanner } from "@/components/billing/PlanBanner";
 import { DraftCard } from "./DraftCard";
+import { ProfileReview } from "./ProfileReview";
 import s from "./start.module.css";
 import { AuthPanel } from "@/components/auth/AuthPanel";
 import { LegalLinks } from "@/components/legal/LegalLinks";
@@ -459,7 +461,7 @@ function CompanyStep({
     <form onSubmit={read} className={s.form} aria-busy={busy}>
       <OrbiSays mood={busy || error ? "thinking" : "welcome"} working={busy} live>
         {busy ? (
-          <p>{mode === "site" ? "Je lis votre page publique…" : "Je prépare votre profil…"}</p>
+          <p>{mode === "site" ? "Je lis votre site : zone, prestations, prix, délais, contact…" : "Je prépare votre profil…"}</p>
         ) : error ? (
           <>
             <p>Je n’ai pas pu aller au bout.</p>
@@ -495,7 +497,7 @@ function CompanyStep({
             minLength={4}
             maxLength={2000}
           />
-          <span className={s.fine}>Orbi lit uniquement la page publique. Aucun compte requis pour cette étape.</span>
+          <span className={s.fine}>Orbi lit votre page d’accueil et quelques pages publiques utiles (contact, prestations, tarifs, mentions légales), dans le respect des règles du site. Aucun compte requis, rien n’est conservé.</span>
         </label>
       ) : (
         <>
@@ -540,122 +542,6 @@ function CompanyStep({
         )}
         <button className={s.primary} disabled={busy}>
           {busy ? "Lecture en cours…" : mode === "site" ? "Lire mon site" : "Préparer mon profil"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ProfileReview({
-  profile,
-  kept,
-  setKept,
-  setProfile,
-  saving,
-  saveError,
-  authed,
-  onRestart,
-  onConfirm,
-}: {
-  profile: StartProfile;
-  kept: boolean[];
-  setKept: (v: boolean[]) => void;
-  setProfile: (p: StartProfile) => void;
-  saving: boolean;
-  saveError: string;
-  authed: boolean;
-  onRestart: () => void;
-  onConfirm: () => void;
-}) {
-  const origin = {
-    ai: "Je l’ai rédigé à partir de votre page ; chaque citation a été vérifiée mot pour mot dans la source.",
-    site: "Lecture directe de votre page : des citations exactes, sans interprétation.",
-    description: "À partir de vos propres mots.",
-  }[profile.origin];
-  const valid = profile.name.trim().length >= 2 && profile.summary.trim().length >= 10;
-  return (
-    <form
-      className={s.form}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (valid && !saving) onConfirm();
-      }}
-    >
-      <OrbiSays mood="done">
-        <p>Voici ce que j’ai compris. Corrigez ce qui ne va pas.</p>
-        <p>{origin}</p>
-      </OrbiSays>
-      <label>
-        Nom de l’entreprise
-        <input
-          value={profile.name}
-          onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-          required
-          minLength={2}
-          maxLength={120}
-        />
-      </label>
-      <label>
-        <span>
-          Résumé proposé <span className={s.optional}>— corrigez-le si besoin</span>
-        </span>
-        <textarea
-          value={profile.summary}
-          onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
-          required
-          minLength={10}
-          maxLength={1800}
-          rows={4}
-        />
-      </label>
-      {profile.facts.length > 0 && (
-        <fieldset className={s.facts}>
-          <legend>Ce que disent vos sources</legend>
-          {profile.facts.map((fact, i) => (
-            <div key={i} className={s.fact} data-kept={kept[i]}>
-              <blockquote>
-                <span className={s.factLabel}>{fact.label}</span>
-                {fact.quote}
-                {fact.sourceUrl && (
-                  <a href={fact.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
-                    Source : {new URL(fact.sourceUrl).hostname}
-                  </a>
-                )}
-              </blockquote>
-              <label className={s.check}>
-                <input
-                  type="checkbox"
-                  checked={kept[i] ?? true}
-                  onChange={(e) => setKept(kept.map((k, j) => (j === i ? e.target.checked : k)))}
-                />
-                Garder
-              </label>
-            </div>
-          ))}
-        </fieldset>
-      )}
-      <section className={s.unknowns} aria-label="Ce qu’Orbi ne devine pas">
-        <h3>Ce qu’Orbi ne devine pas</h3>
-        <ul>
-          {profile.unknowns.map((u) => (
-            <li key={u}>{u}</li>
-          ))}
-        </ul>
-        <p className={s.fine}>
-          Dans vos brouillons, ces points apparaîtront comme des questions surlignées, jamais comme des réponses inventées.
-        </p>
-      </section>
-      {saveError && (
-        <p className={s.alert} role="alert">
-          {saveError}
-        </p>
-      )}
-      <div className={s.actions}>
-        <button type="button" className={s.secondary} onClick={onRestart} disabled={saving}>
-          Recommencer
-        </button>
-        <button className={s.primary} disabled={!valid || saving}>
-          {saving ? "Enregistrement…" : authed ? "C’est bien mon entreprise" : "C’est bien mon entreprise, continuer"}
         </button>
       </div>
     </form>
@@ -736,33 +622,13 @@ function PreviewStep({
       {!preview ? null : preview.mode === "ai" ? (
         <section className={s.preview} aria-labelledby="start-preview-title">
           <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
-            Ce que vos clients vous demandent probablement
+            {questionsTitle(preview.questions.length)}
           </h3>
           <p className={s.fine}>
             Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
             n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
           </p>
-          <ol className={s.likely}>
-            {preview.questions.map((q, i) => (
-              <li key={i}>
-                <strong>{q.question}</strong>
-                {q.answer ? (
-                  <blockquote>
-                    {q.answer.quote}
-                    {q.answer.sourceUrl ? (
-                      <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
-                        Source : {q.answer.sourceName}
-                      </a>
-                    ) : (
-                      <span className={s.source}>Source : {q.answer.sourceName}</span>
-                    )}
-                  </blockquote>
-                ) : (
-                  <p className={s.missing}>{NOT_FOUND_LABEL}</p>
-                )}
-              </li>
-            ))}
-          </ol>
+          <LikelyQuestions questions={preview.questions} />
           {preview.flags.includes("source_instructions_ignored") && (
             <p className={s.fine}>
               Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
@@ -837,37 +703,21 @@ function PreviewStep({
       ) : (
         <section className={s.preview} aria-labelledby="start-preview-title">
           <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
-            Ce qu’Orbi peut déjà citer dans une réponse
+            {questionsTitle(preview.questions.length)}
           </h3>
           <p className={s.fine}>
             {preview.reason === "disabled"
-              ? "Lecture directe : uniquement des citations exactes de vos sources, sans interprétation."
-              : "L’aperçu détaillé n’est pas disponible pour le moment. Voici uniquement des citations exactes de vos sources."}{" "}
-            Les brouillons d’exemple apparaîtront avec vos vrais mails.
+              ? ""
+              : "L’aperçu avec brouillons d’exemple n’est pas disponible pour le moment. "}
+            Chaque réponse est une citation exacte de {host ? "votre site" : "vos mots"}, avec sa source. Sans réponse
+            sourcée, la question reste à confirmer : Orbi vous la posera une seule fois, au lieu d’inventer. Les
+            brouillons apparaîtront avec vos vrais mails.
           </p>
-          {preview.found.length > 0 ? (
-            <ul className={s.likely}>
-              {preview.found.map((f, i) => (
-                <li key={i}>
-                  <blockquote>
-                    <span className={s.factLabel}>{f.label}</span>
-                    {f.quote}
-                  </blockquote>
-                </li>
-              ))}
-            </ul>
+          {preview.questions.length > 0 ? (
+            <LikelyQuestions questions={preview.questions} />
           ) : (
             <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
           )}
-          <div className={s.unknowns}>
-            <h3>Ce qu’Orbi ne devine pas</h3>
-            <ul>
-              {preview.unknowns.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-            <p className={s.fine}>Orbi vous posera chacune de ces questions une seule fois, au lieu d’inventer.</p>
-          </div>
         </section>
       )}
       <div className={s.actions}>
@@ -876,6 +726,39 @@ function PreviewStep({
         </button>
       </div>
     </div>
+  );
+}
+
+function questionsTitle(n: number) {
+  return n >= 2 ? `${n} questions que vos clients vous posent probablement` : "Ce que vos clients vous demandent probablement";
+}
+
+/** Each answer is a sourced quote; a question without one is highlighted « À CONFIRMER ». */
+function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
+  return (
+    <ol className={s.likely}>
+      {questions.map((q, i) => (
+        <li key={i}>
+          <strong>{q.question}</strong>
+          {q.answer ? (
+            <blockquote>
+              {q.answer.quote}
+              {q.answer.sourceUrl ? (
+                <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
+                  Source : {q.answer.sourceName}
+                </a>
+              ) : (
+                <span className={s.source}>Source : {q.answer.sourceName}</span>
+              )}
+            </blockquote>
+          ) : (
+            <p className={s.missing}>
+              <mark className={s.placeholder}>[[À CONFIRMER]]</mark> {NOT_FOUND_LABEL}
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 

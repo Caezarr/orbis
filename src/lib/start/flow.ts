@@ -17,11 +17,57 @@ export const START_STEPS: readonly StartStep[] = [
 
 // ---------------------------------------------------------------- profile
 
+/** What the step-1 reading looks for, in display order. */
+export const FACT_CATEGORIES = [
+  "activity",
+  "services",
+  "zone",
+  "prices",
+  "delays",
+  "hours",
+  "contact",
+  "address",
+  "audience",
+  "history",
+  "certifications",
+  "faq",
+  "legal",
+  "social",
+] as const;
+export type FactCategory = (typeof FACT_CATEGORIES)[number];
+export const CATEGORY_LABELS: Record<FactCategory, string> = {
+  activity: "Activité",
+  services: "Prestations",
+  zone: "Zone d’intervention",
+  prices: "Prix et devis",
+  delays: "Délais",
+  hours: "Horaires",
+  contact: "Contact",
+  address: "Adresse",
+  audience: "Clientèle",
+  history: "Ancienneté",
+  certifications: "Assurances, labels et certifications",
+  faq: "Questions déjà traitées sur votre site",
+  legal: "Informations légales",
+  social: "Réseaux et avis",
+};
+
 export const startFactSchema = z
   .object({
     label: z.string().trim().min(1).max(80),
     quote: z.string().trim().min(2).max(600),
     sourceUrl: z.url().max(2000).optional(),
+    /** Stable within one reading (citations of the summary point to it). */
+    id: z.string().trim().min(1).max(24).optional(),
+    category: z.enum(FACT_CATEGORIES).optional(),
+    /** Short normalised value read from the quote ("de Lille à Tournai", a phone…). */
+    value: z.string().trim().min(1).max(300).optional(),
+    /** high: explicit marker or structured data; medium: wording heuristic. */
+    confidence: z.enum(["high", "medium"]).optional(),
+    /** Where the quote comes from: visible text, page metadata, schema.org data, a link, or the owner. */
+    via: z.enum(["text", "meta", "structured", "link", "owner"]).optional(),
+    /** Owner correction: replaces `value` in the workspace profile, the quote stays as provenance. */
+    corrected: z.string().trim().min(1).max(600).optional(),
   })
   .strict();
 export const startProfileSchema = z
@@ -29,9 +75,19 @@ export const startProfileSchema = z
     name: z.string().trim().min(2).max(120),
     summary: z.string().trim().min(10).max(1800),
     website: z.url().max(2000).optional(),
-    facts: z.array(startFactSchema).max(8),
-    unknowns: z.array(z.string().trim().min(2).max(200)).max(8),
+    facts: z.array(startFactSchema).max(60),
+    unknowns: z.array(z.string().trim().min(2).max(200)).max(10),
     origin: z.enum(["ai", "site", "description"]),
+    /** Pages actually read (same site), for the "sources" line. */
+    pages: z
+      .array(z.object({ url: z.url().max(2000), title: z.string().max(200) }).strict())
+      .max(10)
+      .optional(),
+    readMs: z.number().int().min(0).max(120_000).optional(),
+    /** e.g. "source_instructions_ignored". */
+    flags: z.array(z.string().max(60)).max(8).optional(),
+    /** Fact ids the (model-written) summary relies on. */
+    summarySources: z.array(z.string().max(24)).max(12).optional(),
   })
   .strict();
 export type StartFact = z.infer<typeof startFactSchema>;
@@ -43,6 +99,103 @@ export const DEFAULT_UNKNOWNS = [
   "Vos délais et disponibilités",
   "Votre zone d’intervention",
 ] as const;
+
+/** What a missing category becomes in "Ce qu'Orbi ne devine pas" (only when really not found). */
+export const UNKNOWN_BY_CATEGORY: Partial<Record<FactCategory, string>> = {
+  prices: "Vos tarifs ou fourchettes de prix",
+  delays: "Vos délais et disponibilités",
+  zone: "Votre zone d’intervention",
+  services: "Le détail de vos prestations",
+  hours: "Vos horaires ou jours de disponibilité",
+  contact: "Le téléphone ou l’e-mail à donner aux clients",
+  audience: "Vos clients principaux",
+};
+
+/** Unknowns = the categories Orbi looked for and did not find, nothing else. */
+export function unknownsFor(facts: Pick<StartFact, "category">[]) {
+  const found = new Set(facts.map((f) => f.category).filter(Boolean));
+  return (Object.keys(UNKNOWN_BY_CATEGORY) as FactCategory[])
+    .filter((c) => !found.has(c))
+    .map((c) => UNKNOWN_BY_CATEGORY[c] as string);
+}
+
+/** Human label of a source page: "mdkpeinture.com/mentions-legales". */
+export function sourceName(url?: string) {
+  if (!url) return "Vous";
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/$/, "");
+    return `${u.hostname.replace(/^www\./, "")}${path}`.slice(0, 120);
+  } catch {
+    return "Votre site";
+  }
+}
+
+const QUOTE_FREE = /devis|gratuit|engagement/i;
+const QUESTION_BANK: { category: FactCategory; question: string; match?: (f: StartFact) => boolean }[] = [
+  {
+    category: "prices",
+    question: "Quels sont vos tarifs ?",
+    match: (f) => /\d/.test(f.corrected ?? f.value ?? f.quote) && !QUOTE_FREE.test(f.value ?? ""),
+  },
+  { category: "prices", question: "Le devis est-il gratuit ?", match: (f) => QUOTE_FREE.test(f.corrected ?? f.value ?? f.quote) },
+  { category: "zone", question: "Intervenez-vous dans mon secteur ?" },
+  { category: "delays", question: "Sous quel délai pouvez-vous commencer ?" },
+  { category: "services", question: "Quelles prestations proposez-vous exactement ?" },
+  { category: "contact", question: "Comment vous joindre rapidement ?" },
+  { category: "hours", question: "Quels sont vos horaires ?" },
+  { category: "certifications", question: "Êtes-vous assuré, et avez-vous des certifications ?" },
+  { category: "address", question: "Où êtes-vous situé ?" },
+  { category: "history", question: "Depuis combien de temps exercez-vous ?" },
+  { category: "audience", question: "Travaillez-vous pour les particuliers comme pour les professionnels ?" },
+  { category: "legal", question: "Pouvez-vous me communiquer votre numéro SIRET ou de TVA ?" },
+];
+
+/**
+ * Level-1 preview without a model: the 10 questions customers most likely ask,
+ * answered ONLY by a sourced fact of the profile (or the owner's correction).
+ * Questions the site actually answers in its own FAQ come first. A question
+ * without a fact has `answer: null` and is shown as "à confirmer".
+ */
+export function likelyQuestions(profile: Pick<StartProfile, "facts">, max = 10): PreviewQuestion[] {
+  const answerOf = (f: StartFact): NonNullable<PreviewQuestion["answer"]> =>
+    f.corrected
+      ? { quote: f.corrected, sourceName: "Corrigé par vous" }
+      : f.via === "owner"
+        ? { quote: f.quote, sourceName: "Indiqué par vous" }
+        : { quote: f.quote, sourceName: sourceName(f.sourceUrl), ...(f.sourceUrl ? { sourceUrl: f.sourceUrl } : {}) };
+  // Readable answers first: owner words, then visible text, then links, then schema.org data.
+  const rank = (f: StartFact) =>
+    (f.corrected || f.via === "owner" ? 0 : f.via === "text" || f.via === "meta" ? 1 : f.via === "link" ? 2 : 3) +
+    (f.confidence === "medium" ? 4 : 0) +
+    (f.quote.length > 160 ? 0.5 : 0) +
+    (/[.!?]$/.test(f.quote) ? 0 : 0.25);
+  const out: PreviewQuestion[] = [];
+  for (const f of profile.facts.filter((f) => f.category === "faq" && f.value).slice(0, 4))
+    out.push({ question: f.value as string, answer: answerOf(f), category: "faq" });
+  for (const { category, question, match } of QUESTION_BANK) {
+    if (out.length >= max) break;
+    const facts = profile.facts.filter((f) => f.category === category && (!match || match(f)));
+    const services = facts.filter((f) => f.value && !f.corrected && f.via !== "owner");
+    if (category === "services" && services.length >= 2) {
+      // Several services: list their names as written on the site (each one verbatim).
+      const url = services[0].sourceUrl;
+      out.push({
+        question,
+        answer: {
+          quote: services.map((f) => f.value).join(" · ").slice(0, 600),
+          sourceName: sourceName(url),
+          ...(url ? { sourceUrl: url } : {}),
+        },
+        category,
+      });
+      continue;
+    }
+    const best = [...facts].sort((a, b) => rank(a) - rank(b))[0];
+    out.push({ question, answer: best ? answerOf(best) : null, category });
+  }
+  return out.slice(0, max);
+}
 
 const clean = (v: string) => v.replace(/\s+/g, " ").trim();
 
@@ -133,7 +286,7 @@ export function encodePending(profile: StartProfile, now = Date.now()) {
 }
 /** Returns null for missing, malformed, tampered-shape or expired values. */
 export function decodePending(raw: string | null, now = Date.now()): StartProfile | null {
-  if (!raw || raw.length > 20_000) return null;
+  if (!raw || raw.length > 80_000) return null;
   try {
     const parsed = pendingSchema.safeParse(JSON.parse(raw));
     if (!parsed.success) return null;
@@ -460,6 +613,8 @@ export const FICTITIOUS_RECIPIENT = "Vous (exemple)";
 
 export type PreviewQuestion = {
   question: string;
+  /** Deterministic questions only: which profile category answers it. */
+  category?: FactCategory;
   /** Verbatim quote of the source, or null: Orbi will ask the owner once. */
   answer: { quote: string; sourceName: string; sourceUrl?: string } | null;
 };
@@ -485,6 +640,8 @@ export type StartPreview =
   | {
       mode: "quotes";
       reason: PreviewFallbackReason;
+      /** Likely customer questions answered only from sourced facts (null: à confirmer). */
+      questions: PreviewQuestion[];
       found: StartFact[];
       unknowns: string[];
     };
@@ -495,7 +652,13 @@ export type StartPreview =
  * invented from a template.
  */
 export function quotePreview(profile: StartProfile, reason: PreviewFallbackReason): StartPreview {
-  return { mode: "quotes", reason, found: profile.facts.slice(0, 8), unknowns: profile.unknowns.slice(0, 8) };
+  return {
+    mode: "quotes",
+    reason,
+    questions: likelyQuestions(profile),
+    found: profile.facts.slice(0, 8),
+    unknowns: profile.unknowns.slice(0, 10),
+  };
 }
 
 /** Browser key: a preview was displayed before the account existed (funnel event). */
