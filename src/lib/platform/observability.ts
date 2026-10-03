@@ -6,7 +6,9 @@ import { randomBytes } from "node:crypto";
  * Sentry: optional, enabled only when SENTRY_DSN is set. Events are sent to
  * Sentry's documented envelope ingestion endpoint by this small server-side
  * transport (no @sentry/nextjs dependency, so the Vercel/webpack build is
- * unchanged). Every event goes through `beforeSend` = `scrubEvent`, which
+ * unchanged). Browser errors reach the same transport through the same-origin
+ * relay /api/client-errors (src/lib/platform/client-errors.ts), so the DSN
+ * never ships to the browser. Every event goes through `beforeSend` = `scrubEvent`, which
  * keeps only the error type, a scrubbed message, stack frames (file/function/
  * line), the route template and the HTTP method. No request body, headers,
  * cookies, query strings, user, email, mail content or token is ever sent.
@@ -43,7 +45,7 @@ export type SentryFrame = { filename?: string; function?: string; lineno?: numbe
 export type SentryEvent = {
   event_id: string;
   timestamp: number;
-  platform: "node";
+  platform: "node" | "javascript";
   level: "error" | "warning";
   environment?: string;
   release?: string;
@@ -58,7 +60,7 @@ export type SentryEvent = {
   breadcrumbs?: unknown;
 };
 
-const TAG_KEYS = new Set(["route", "method", "routeType", "runtime", "digest"]);
+const TAG_KEYS = new Set(["route", "method", "routeType", "runtime", "digest", "source"]);
 /** Sentry beforeSend: allowlist rebuild of the event. Never throws. */
 export function scrubEvent(event: SentryEvent): SentryEvent {
   const tags: Record<string, string> = {};
@@ -67,7 +69,7 @@ export function scrubEvent(event: SentryEvent): SentryEvent {
   return {
     event_id: event.event_id,
     timestamp: event.timestamp,
-    platform: "node",
+    platform: event.platform === "javascript" ? "javascript" : "node",
     level: event.level,
     ...(event.environment ? { environment: scrubText(event.environment, 40) } : {}),
     ...(event.release ? { release: scrubText(event.release, 64) } : {}),
@@ -150,14 +152,31 @@ export async function reportError(
   deps: { fetch?: typeof fetch; env?: Record<string, string | undefined> } = {},
 ): Promise<boolean> {
   const env = deps.env ?? process.env;
-  const dsn = parseDsn(env.SENTRY_DSN);
+  if (!parseDsn(env.SENTRY_DSN)) return false;
+  try {
+    return await sendEvent(buildEvent(error, tags, env), deps);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends one already-built event through scrubEvent to the DSN's envelope
+ * endpoint. Shared by server errors (reportError) and browser errors relayed by
+ * /api/client-errors. Never throws, never blocks more than 2 s.
+ */
+export async function sendEvent(
+  event: SentryEvent,
+  deps: { fetch?: typeof fetch; env?: Record<string, string | undefined> } = {},
+): Promise<boolean> {
+  const dsn = parseDsn((deps.env ?? process.env).SENTRY_DSN);
   if (!dsn) return false;
   try {
-    const event = scrubEvent(buildEvent(error, tags, env));
+    const clean = scrubEvent(event);
     const body = [
-      JSON.stringify({ event_id: event.event_id, sent_at: new Date().toISOString() }),
+      JSON.stringify({ event_id: clean.event_id, sent_at: new Date().toISOString() }),
       JSON.stringify({ type: "event" }),
-      JSON.stringify(event),
+      JSON.stringify(clean),
     ].join("\n");
     const response = await (deps.fetch ?? fetch)(dsn.envelope, {
       method: "POST",

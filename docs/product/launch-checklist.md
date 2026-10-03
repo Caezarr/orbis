@@ -28,7 +28,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | `ORBIS_SHARED_LIMITS` | default true | `false` = memory-only limits (local work only) | Code ✅ |
 | `ORBIS_RATE_LIMIT_SECRET` | recommended | random ≥32 chars; HMAC for limiter key hashes | À faire |
 | `CRON_SECRET` | yes | ≥32 chars; `/api/cron/inbox`, `/api/cron/retention`, detailed `/api/health` | À faire |
-| `SENTRY_DSN` | recommended | server errors, scrubbed; `NEXT_PUBLIC_SENTRY_DSN` is only read by the CSP (no browser SDK) | À faire |
+| `SENTRY_DSN` | recommended | server errors and browser errors (relayed same-origin by `/api/client-errors`), scrubbed; no browser SDK, the DSN stays server-side | À faire |
 | `ORBIS_OFFLINE` | never in prod | local demo only | — |
 
 ### Model
@@ -134,7 +134,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Edge/WAF rate limit on `/api/v1/start/*` and `/api/auth/*` (in addition to the shared limits) | À faire |
 | Preview deployments use test Stripe, a separate Supabase project and `ORBIS_INBOX_MODE=test` | À faire |
 | Uptime monitor on `GET /api/health` (expects 200 `{"status":"ok"}`) | À faire |
-| Sentry project in the EU region, `SENTRY_DSN` set; trigger a test error and check that no PII appears | À faire |
+| Sentry project in the EU region, `SENTRY_DSN` set; trigger a server error and a browser error (e.g. `setTimeout(() => { throw new Error("test a@b.test") })` in the console) and check that no PII appears | À faire |
 
 ## 6. Legal
 
