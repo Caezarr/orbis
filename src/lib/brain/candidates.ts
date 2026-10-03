@@ -7,6 +7,12 @@ import {
   type FactOrigin,
   type FactQuote,
 } from "./facts";
+import { injectionSignals } from "@/lib/runtime/inbox-replies";
+import {
+  contactsSupported,
+  normalizeModelText,
+  unsupportedNumbers,
+} from "@/lib/security/untrusted-text";
 import {
   redactThirdParty,
   topicKey,
@@ -51,8 +57,13 @@ export function buildCandidate(
 ): CandidateFact | null {
   const quotes: FactQuote[] = [];
   let redaction: RedactionContext = {};
+  const verified: string[] = [];
   for (const q of raw.quotes) {
     if (!q.evidence || !verifyQuote(q.quote, q.evidence.text)) continue;
+    // A fact is never an instruction, even when the owner's text contains one
+    // (e.g. forwarded content pasted without quote headers).
+    if (injectionSignals(q.quote).length) continue;
+    verified.push(q.quote);
     redaction = mergeRedaction(redaction, q.evidence.redaction);
     quotes.push({
       quote: redactThirdParty(q.quote.trim(), q.evidence.redaction).slice(0, QUOTE_MAX),
@@ -61,6 +72,17 @@ export function buildCandidate(
     });
   }
   if (!quotes.length) return null;
+  // The statement is model text: it may not add contact data (links, bare
+  // domains, emails, phones), figures or instructions that its verified quotes
+  // do not contain. Such a candidate is dropped, never "fixed".
+  const support = verified.join("\n");
+  const rawStatement = normalizeModelText(raw.statement);
+  if (
+    injectionSignals(rawStatement).length ||
+    !contactsSupported(rawStatement, support) ||
+    unsupportedNumbers(rawStatement, support).length
+  )
+    return null;
   const statement = redactThirdParty(raw.statement.trim(), redaction)
     .replace(/\s+/g, " ")
     .slice(0, 400);

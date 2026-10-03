@@ -6,6 +6,7 @@ import {
   type ContinuousSettings,
 } from "@/app/start/ContinuousToggle";
 import { DraftCard } from "@/app/start/DraftCard";
+import { DigestToggle } from "./DigestToggle";
 import type { InboxMessageView } from "@/lib/start/flow";
 import {
   OrbiQuestions,
@@ -171,6 +172,7 @@ export function InboxToday() {
         initial={digest.settings}
         onChange={(settings) => setDigest((d) => (d ? { ...d, settings } : d))}
       />
+      <DigestToggle />
     </section>
   );
 }

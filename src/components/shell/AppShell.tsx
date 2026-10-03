@@ -16,6 +16,7 @@ import {
   LineChart,
 } from "lucide-react";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { LegalLinks } from "@/components/legal/LegalLinks";
 import { cn } from "@/lib/cn";
 
 const NAV = [
@@ -118,7 +119,7 @@ export function AppShell({
         </label>
       </nav>
       <div className="flex min-h-[calc(100vh-64px)]">
-        <aside className="hidden w-[230px] shrink-0 border-r border-[#e2e9f3] bg-[#f8faff] md:block">
+        <aside className="hidden w-[230px] shrink-0 flex-col border-r border-[#e2e9f3] bg-[#f8faff] md:flex">
           <nav className="flex flex-col gap-1 p-3">
             {NAV.map((item) => {
               const active =
@@ -160,9 +161,11 @@ export function AppShell({
               Settings
             </Link>
           </nav>
+          <LegalLinks className="mt-auto px-6 pb-4 pt-6" />
         </aside>
         <main className="min-w-0 flex-1 px-4 py-6 md:px-7 md:py-8">
           {children}
+          <LegalLinks className="mt-10 border-t border-line pt-4 md:hidden" />
         </main>
       </div>
     </div>

@@ -1,40 +1,52 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { authClient, isSameOriginMutation, PlatformError, safeReturnTo } from "@/lib/platform/auth";
+import { authClient, authConfig, isSameOriginMutation, PlatformError } from "@/lib/platform/auth";
+import { MESSAGES, runAuthAction } from "@/lib/platform/auth-actions";
+import { createSharedLimiter } from "@/lib/platform/limits";
+import { clientKey } from "@/lib/start/public-site";
 
 export const runtime = "nodejs";
+
+// Shared across instances (migration 012), in-memory pre-check; fail open to
+// the in-memory layer (Supabase applies its own auth rate limits as well).
+const ipLimiter = createSharedLimiter({ bucket: "auth_ip", limit: 30, windowMs: 10 * 60_000 });
+const emailLimiter = createSharedLimiter({ bucket: "auth_email", limit: 8, windowMs: 10 * 60_000 });
+const otpLimiter = createSharedLimiter({ bucket: "auth_otp", limit: 3, windowMs: 15 * 60_000 });
+const headers = { "Cache-Control": "no-store" };
+
 export async function POST(request: Request, context: { params: Promise<{ action: string }> }) {
-  if (!isSameOriginMutation(request)) return NextResponse.json({ error: "Same-origin request required" }, { status: 403 });
+  if (!isSameOriginMutation(request)) return NextResponse.json({ error: "Same-origin request required" }, { status: 403, headers });
   const { action } = await context.params;
-  if (!["sign-in", "sign-up", "sign-out"].includes(action)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!["sign-in", "sign-up", "sign-out", "magic-link", "oauth"].includes(action))
+    return NextResponse.json({ error: "Not found" }, { status: 404, headers });
   try {
     const client = await authClient();
+    const jar = await cookies();
     if (action === "sign-out") {
       const { error } = await client.auth.signOut();
-      if (error) return NextResponse.json({ error: "Sign-out failed. Please retry." }, { status: 503 });
-      (await cookies()).delete("orbis_workspace");
-      return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+      if (error) return NextResponse.json({ error: "Déconnexion impossible. Réessayez." }, { status: 503, headers });
+      jar.delete("orbis_workspace");
+      return NextResponse.json({ ok: true }, { headers });
     }
-    let body: { email?: unknown; password?: unknown; returnTo?: unknown };
-    try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request" }, { status: 400 }); }
-    if (!body || typeof body.email !== "string" || typeof body.password !== "string" || body.email.length > 254 || body.password.length > 1024 || !body.email.includes("@") || body.password.length < (action === "sign-up" ? 12 : 1)) {
-      return NextResponse.json({ error: "Enter a valid email and password (12 characters minimum when signing up)." }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: MESSAGES.invalid }, { status: 400, headers });
     }
-    if (action === "sign-in") {
-      const { error } = await client.auth.signInWithPassword({ email: body.email, password: body.password });
-      if (error) return NextResponse.json({ error: "Sign-in failed. Check your credentials and email confirmation." }, { status: error.status === 429 ? 429 : 401 });
-      return NextResponse.json({ ok: true, redirectTo: safeReturnTo(body.returnTo) }, { headers: { "Cache-Control": "no-store" } });
-    }
-    const redirectTo = safeReturnTo(body.returnTo);
-    (await cookies()).set("orbis_auth_return_to", redirectTo, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 3600 });
-    const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
-    const { data, error } = await client.auth.signUp({
-      email: body.email, password: body.password,
-      options: { emailRedirectTo: new URL("/api/auth/callback", origin).toString() },
+    const result = await runAuthAction(action, body, {
+      auth: client.auth,
+      origin: process.env.APP_ORIGIN ?? new URL(request.url).origin,
+      clientKey: clientKey(request),
+      ipLimiter,
+      emailLimiter,
+      otpLimiter,
+      providerOrigin: new URL(authConfig().url).origin,
+      setCookie: (name, value, maxAge) =>
+        jar.set(name, value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge }),
     });
-    if (error) return NextResponse.json({ error: "Unable to create account. Please retry later or sign in." }, { status: error.status === 429 ? 429 : 400 });
-    return NextResponse.json({ ok: true, redirectTo, confirmationRequired: !data.session }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(result.body, { status: result.status, headers });
   } catch (error) {
-    return NextResponse.json({ error: "Authentication service unavailable" }, { status: error instanceof PlatformError ? error.status : 503 });
+    return NextResponse.json({ error: MESSAGES.unavailable }, { status: error instanceof PlatformError ? error.status : 503, headers });
   }
 }

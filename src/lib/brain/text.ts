@@ -19,7 +19,9 @@ export function fold(text: string) {
 const QUOTE_HEADER = [
   // French / English / German reply headers ("Le 2 oct. 2026 à 10:00, X a écrit :").
   /^\s*(le|on|am)\b.{0,200}\b(a écrit|wrote|schrieb)\s*:?\s*$/im,
-  /^\s*-{2,}\s*(original message|message d'origine|message original|ursprüngliche nachricht)\s*-{2,}/im,
+  /^\s*-{2,}\s*(original message|message d'origine|message original|ursprüngliche nachricht|forwarded message|message transféré|message transfere|weitergeleitete nachricht)\s*-{2,}/im,
+  // Apple Mail / Outlook forward markers.
+  /^\s*(begin forwarded message|début du message réexpédié|debut du message reexpedie)\s*:/im,
   /^\s*(de|from)\s*:.+\n\s*(envoyé|sent|date)\s*:/im,
   /^_{8,}\s*$/m,
 ];
