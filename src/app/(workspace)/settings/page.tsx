@@ -4,6 +4,7 @@ import { PlanBanner } from "@/components/billing/PlanBanner";
 import { TeamSettings } from "@/components/product/TeamSettings";
 import { DigestToggle } from "@/components/settings/DigestToggle";
 import { MailboxSettings } from "@/components/settings/MailboxSettings";
+import { InboxFeatureSettings } from "@/components/account/InboxFeatureSettings";
 import { getRequestStore } from "@/lib/platform/request";
 import { frozenSurfacesEnabled } from "@/lib/product/surfaces";
 import s from "@/components/settings/settings.module.css";
@@ -40,6 +41,7 @@ export default async function Page() {
       <section id="boite" className={s.section} aria-labelledby="boite-title">
         <h2 id="boite-title">Boîte mail</h2>
         <MailboxSettings />
+        <InboxFeatureSettings />
       </section>
 
       <section id="resume" className={s.section} aria-labelledby="resume-title">

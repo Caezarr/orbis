@@ -76,7 +76,18 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 |---|---|---|
 | `COMPOSIO_API_KEY` | server-only | À faire |
 | `COMPOSIO_AUTH_CONFIG_GMAIL`, `COMPOSIO_TOOLKIT_GMAIL=gmail`, `COMPOSIO_TOOL_VERSION_GMAIL` | scopes exactly `gmail.readonly` + `gmail.compose` | À faire |
-| `COMPOSIO_AUTH_CONFIG_OUTLOOK`, `COMPOSIO_TOOLKIT_OUTLOOK=outlook`, `COMPOSIO_TOOL_VERSION_OUTLOOK` | delegated `Mail.ReadWrite`, `User.Read`, `offline_access`; **not** `Mail.Send` | À faire |
+| `COMPOSIO_AUTH_CONFIG_OUTLOOK`, `COMPOSIO_TOOLKIT_OUTLOOK=outlook`, `COMPOSIO_TOOL_VERSION_OUTLOOK` | delegated `Mail.ReadWrite`, `User.Read`, `offline_access`; **not** `Mail.Send`. Also covers Outlook categories (visible triage): no new scope | À faire |
+
+### Calendar-aware drafts and visible triage ([inbox-calendar-labels.md](inbox-calendar-labels.md), migration 014)
+
+| Variable | Notes | Status |
+|---|---|---|
+| `ORBIS_INBOX_CALENDAR=true` | meeting requests get 2–3 code-computed slots (or ask the customer); off = unchanged drafts | Décision |
+| `COMPOSIO_AUTH_CONFIG_GOOGLECALENDAR`, `COMPOSIO_TOOLKIT_GOOGLECALENDAR=googlecalendar`, `COMPOSIO_TOOL_VERSION_GOOGLECALENDAR=20261001_00` | scope exactly `https://www.googleapis.com/auth/calendar.freebusy` (non-sensitive). Not `calendar.readonly`, not `calendar`/`calendar.events` | À faire |
+| `COMPOSIO_AUTH_CONFIG_OUTLOOK_CALENDAR`, optional `COMPOSIO_TOOLKIT_OUTLOOK_CALENDAR=outlook`, `COMPOSIO_TOOL_VERSION_OUTLOOK_CALENDAR` | **separate** Outlook auth config with delegated `Calendars.ReadBasic`, `User.Read`, `offline_access`. Not `Calendars.Read`/`ReadWrite`. Version falls back to `COMPOSIO_TOOL_VERSION_OUTLOOK`; check `OUTLOOK_GET_CALENDAR_VIEW` exists in the pinned version | À faire |
+| `ORBIS_CALENDAR_VISIT_MINUTES` / `_CALL_MINUTES` / `_BUFFER_MINUTES` / `_MIN_LEAD_HOURS` / `_HORIZON_DAYS` | defaults 60 / 30 / 30 / 18 / 10 | Code ✅ |
+| `ORBIS_INBOX_LABELS=true` | Orbis categories on Outlook messages (opt-in per workspace, removable) | Décision |
+| `ORBIS_INBOX_LABELS_GMAIL=true` | Gmail labels too. **Requires adding `https://www.googleapis.com/auth/gmail.modify` (restricted) to the Gmail auth config**; `gmail.labels` cannot label messages. Only after our own Gmail OAuth app is verified with it (CASA) | Décision (après CASA) |
 
 ### Analytics and pilot-only
 
@@ -91,7 +102,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 |---|---|
 | Project in an **EU region**; record the region in `/legal/sous-traitants` | À faire |
 | Roles: migration owner (CREATEROLE, owns `public`), runtime role (LOGIN, no superuser, **NOBYPASSRLS**); connect the runtime through the pooler with that role | À faire |
-| `node --import tsx scripts/migrate.ts` (001–012) then `node --import tsx scripts/check-platform.ts --database` → **PASS** | Bloquant |
+| `node --import tsx scripts/migrate.ts` (001–014) then `node --import tsx scripts/check-platform.ts --database` → **PASS** | Bloquant |
 | Auth → URL config: Site URL = `APP_ORIGIN`; redirect allowlist = `APP_ORIGIN/api/auth/callback` (exact) | À faire |
 | Auth → Email: keep « Confirm email » ON (anti-enumeration relies on it); enable email OTP / magic link; set link expiry (≤1 h) | À faire |
 | Custom SMTP sender on your domain (SPF/DKIM/DMARC); the default Supabase sender is rate-limited and not for production. Translate the email templates to French | Bloquant |
@@ -111,6 +122,8 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Revocation **during a run**: revoke mid-batch and check the batch fails cleanly and continuous drafting pauses | À faire |
 | **Google CASA question**: ask Composio support in writing whether their managed Gmail app is verified for `gmail.readonly` + `gmail.compose` and whether using it removes the restricted-scope security assessment on our side. If not, either launch **Outlook only + Gmail « en vérification »** (allowed by the definition of done) and start the Google verification/CASA with our own OAuth app, or budget the assessment | Bloquant (Gmail) |
 | Production: switch to our own OAuth credentials in Composio, so the consent screen shows Orbis, not Composio | À faire |
+| Calendar (optional): Google Calendar auth config with `calendar.freebusy` only; Outlook calendar auth config with `Calendars.ReadBasic` only; validate `GOOGLECALENDAR_FREE_BUSY_QUERY` / `OUTLOOK_GET_CALENDAR_VIEW` response shapes with test accounts; confirm no event is ever created | À faire |
+| Visible triage: validate `OUTLOOK_GET_MESSAGE` / `OUTLOOK_UPDATE_EMAIL` (categories only) on a test mailbox, then cleanup. Gmail labels only after `gmail.modify` is in the verified app (CASA scope list) | À faire |
 | Microsoft publisher verification for the Outlook app; expect admin consent in some tenants | À faire |
 
 ## 4. Stripe test → live

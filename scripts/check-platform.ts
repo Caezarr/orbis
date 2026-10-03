@@ -298,6 +298,34 @@ async function databaseChecks() {
         if (parisHour >= 7) assert.ok(digestDue.rows.some(r => r.workspace_id === ids[1]) || digestDue.rowCount === 500, "tenant B subscription discovered");
         assert.equal((await db.query("SELECT * FROM digest_subscriptions WHERE tenant_id=$1", [ids[1]])).rowCount, 0, "digest discovery grants no content access");
       }
+      // Calendar-aware drafts + visible triage (migration 014): tenant-scoped opt-ins and label ledger.
+      if ((await db.query("SELECT to_regclass('public.inbox_labels') AS r")).rows[0].r) {
+        await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
+        await db.query("INSERT INTO inbox_features(workspace_id,tenant_id,calendar_enabled,labels_enabled) VALUES($1,$1,true,true) ON CONFLICT(workspace_id) DO NOTHING", [ids[1]]);
+        await db.query("INSERT INTO inbox_labels(id,workspace_id,tenant_id,provider,connected_account_id,message_id,label_keys,mode,state,idempotency_key,payload_hash,policy_hash) VALUES($1,$2,$2,'outlook','acc','m1','[\"client\"]','test','simulated',repeat('e',64),repeat('e',64),repeat('e',64))", [randomUUID(), ids[1]]);
+        for (const [label, sql] of [
+          ["timezone outside Paris/Brussels", "UPDATE inbox_features SET timezone='America/New_York' WHERE workspace_id=$1"],
+          ["unknown label state", "UPDATE inbox_labels SET state='sent' WHERE workspace_id=$1"],
+          ["duplicate message label row", "INSERT INTO inbox_labels(id,workspace_id,tenant_id,provider,connected_account_id,message_id,mode,state,idempotency_key,payload_hash,policy_hash) VALUES(gen_random_uuid()::text,$1,$1,'outlook','acc','m1','test','simulated',repeat('f',64),repeat('f',64),repeat('f',64))"],
+        ] as const) {
+          await db.query("SAVEPOINT labels_check");
+          await assert.rejects(db.query(sql, [ids[1]]), Error, label);
+          await db.query("ROLLBACK TO SAVEPOINT labels_check");
+        }
+        await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
+        for (const table of ["inbox_features", "inbox_labels"]) {
+          assert.equal((await db.query(`SELECT * FROM ${table} WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, `cross-tenant read ${table}`);
+          assert.equal((await db.query(`UPDATE ${table} SET updated_at=updated_at WHERE tenant_id=$1`, [ids[1]])).rowCount, 0, `cross-tenant update ${table}`);
+          assert.equal((await db.query("SELECT has_table_privilege(current_user,$1,'DELETE') AS p", [table])).rows[0].p, false, `no DELETE on ${table}`);
+          for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE"])
+            assert.equal((await db.query("SELECT has_table_privilege('orbis_inbox_dispatch',$1,$2) AS p", [table, privilege])).rows[0].p, false, `dispatch must not ${privilege} ${table}`);
+        }
+        await db.query("SAVEPOINT features_forgery");
+        await assert.rejects(db.query("INSERT INTO inbox_features(workspace_id,tenant_id,labels_enabled) VALUES($1,$1,true)", [ids[1]]), Error, "features for another tenant");
+        await db.query("ROLLBACK TO SAVEPOINT features_forgery");
+        const eraseSrc = String((await db.query("SELECT prosrc FROM pg_proc WHERE proname='orbis_tenant_tables'")).rows[0]?.prosrc ?? "");
+        for (const table of ["inbox_features", "inbox_labels"]) assert.ok(eraseSrc.includes(`'${table}'`), `${table} erased with the tenant`);
+      }
       // Launch hardening (migration 012): shared limiter, retention purge, tenant erasure.
       if ((await db.query("SELECT to_regclass('public.rate_limit_counters') AS r")).rows[0].r) {
         await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });

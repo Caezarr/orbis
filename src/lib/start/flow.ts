@@ -215,6 +215,8 @@ export type InboxMessageView = {
   questions: string[];
   citations: { sourceId: string; sourceName: string; excerpt: string }[];
   draft?: { id: string; simulated: boolean; openUrl?: string };
+  /** Meeting slots computed from the calendar (inbox-calendar-labels.md). */
+  proposedSlots?: { start: string; end: string; label: string }[];
 };
 
 export type BlockerKind =
@@ -349,11 +351,29 @@ export const CLASSIFICATION_LABELS: Record<string, string> = {
   admin: "Administratif",
   noise: "Sans suite",
 };
+/** Meeting flags (calendar-aware drafts). No em-dashes, vouvoiement. */
+export function meetingFlagLabel(flag: string): string | null {
+  if (flag === "meeting:slots:simulated")
+    return "Créneaux simulés (mode test) : votre agenda n’a pas été consulté.";
+  if (flag === "meeting:ask_availability:calendar_not_connected")
+    return "Agenda non connecté : le brouillon demande ses disponibilités au client.";
+  if (flag === "meeting:ask_availability:calendar_unavailable")
+    return "Agenda illisible pour le moment : le brouillon demande ses disponibilités au client.";
+  if (flag === "meeting:ask_availability:no_free_slot")
+    return "Aucun créneau libre trouvé : le brouillon demande ses disponibilités au client.";
+  if (flag === "meeting:slot_unlisted" || flag === "meeting:slot_invented")
+    return "Une date ou une heure non vérifiée a été remplacée par une question.";
+  if (flag === "meeting:hours_assumed")
+    return "Horaires par défaut utilisés : confirmez vos horaires dans la fiche entreprise.";
+  return null;
+}
+
 export function flagLabel(flag: string) {
   if (flag.startsWith("injection_suspected:"))
     return "Le mail contient des instructions suspectes : elles ont été ignorées.";
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
+  if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
   return (
     {
       reply_to_diverges: "L’adresse de réponse diffère de l’expéditeur : à vérifier avant tout brouillon.",

@@ -208,6 +208,8 @@ type MessageRow = {
   draft_id: string | null;
   received_at: Date | null;
   drafted_at: Date | null;
+  /** Migration 014: code-computed meeting slots offered in the draft. */
+  proposed_slots?: { start: string; end: string; label: string }[] | null;
 };
 const mailboxLink = (provider: "gmail" | "outlook") =>
   provider === "gmail"
@@ -242,6 +244,13 @@ export function publicMessage(row: MessageRow) {
         : undefined,
     receivedAt: row.received_at?.toISOString(),
     draftedAt: row.drafted_at?.toISOString(),
+    proposedSlots: Array.isArray(row.proposed_slots)
+      ? row.proposed_slots.slice(0, 3).map((s) => ({
+          start: String(s.start),
+          end: String(s.end),
+          label: String(s.label).slice(0, 120),
+        }))
+      : undefined,
   };
 }
 export type InboxResult = ReturnType<typeof publicMessage>;
@@ -260,7 +269,7 @@ export async function listInboxResults(batchId?: string) {
     ? (
         await ctx.db.query<MessageRow>(
           `SELECT id,batch_id,provider,message_id,thread_id,status,classification,skip_reason,flags,subject_preview,draft_preview,
-           questions,citations,draft_state,draft_id,received_at,drafted_at FROM inbox_messages
+           questions,citations,draft_state,draft_id,received_at,drafted_at,proposed_slots FROM inbox_messages
            WHERE workspace_id=$1 AND tenant_id=$2 AND batch_id=$3 ORDER BY received_at DESC NULLS LAST LIMIT 100`,
           [ctx.workspaceId, ctx.tenantId, selected.id],
         )

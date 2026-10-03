@@ -37,6 +37,23 @@ import { providerFollowupModel, type FollowupModel } from "@/lib/followups/model
 import { postgresFollowupStore, postgresRequestStore } from "@/lib/followups/store";
 import { runFollowups, trackRequest, type FollowupStats } from "@/lib/followups/tracker";
 import { scoped, type Identity } from "./worker";
+import {
+  calendarClient,
+  calendarFor,
+  workspaceCalendarAccounts,
+} from "@/lib/integrations/calendar";
+import { labelClient } from "@/lib/integrations/mailbox-labels";
+import { isActive } from "@/lib/brain/facts";
+import { workingHours } from "@/lib/calendar/slots";
+import {
+  calendarFeatureEnabled,
+  DEFAULT_FEATURES,
+  labelsFeatureEnabled,
+  loadFeatures,
+  type InboxFeatures,
+} from "@/lib/inbox/features";
+import { heldSlots, meetingPlanner } from "@/lib/inbox/meetings";
+import { applyLabels, postgresLabelStore } from "@/lib/inbox/labels";
 
 export { inboxDraftsEnabled };
 function estimatedCents(name: string, fallback: number) {
@@ -73,6 +90,11 @@ export type InboxWorkerDeps = {
   entitlement?: (db: PoolClient, identity: Identity) => Promise<Entitlement>;
   /** Follow-ups / request pipeline model (levels 6 and 7). */
   followupModel?: FollowupModel;
+  /** Calendar broker (tests): account discovery and free/busy client. */
+  calendarAccounts?: typeof workspaceCalendarAccounts;
+  calendar?: typeof calendarClient;
+  /** Label broker (tests). */
+  labels?: typeof labelClient;
 };
 
 /**
@@ -209,6 +231,45 @@ export async function runOneInboxBatch(
     });
     const followupModel = deps.followupModel ?? providerFollowupModel;
     const context = replyContext(state, factSources(facts));
+    // Opt-ins (migration 014). Deployment flags off → nothing changes.
+    let features: InboxFeatures = DEFAULT_FEATURES;
+    if (calendarFeatureEnabled() || labelsFeatureEnabled(batch.provider))
+      features = await run((db) => loadFeatures(db, identity));
+    const ids = {
+      tenantId: batch.tenantId,
+      workspaceId: batch.workspaceId,
+    };
+    const meetings = calendarFeatureEnabled()
+      ? meetingPlanner({
+          calendarEnabled: features.calendarEnabled,
+          mode: claimed.mode,
+          timezone: features.timezone,
+          // Owner-approved hours only (company sheet); defaults are flagged.
+          hours: workingHours(
+            facts
+              .filter((f) => f.category === "hours" && isActive(f))
+              .map((f) => f.statement),
+          ),
+          calendar:
+            features.calendarEnabled && claimed.mode !== "test"
+              ? async () => {
+                  const provider = calendarFor(batch.provider);
+                  const accounts = await (
+                    deps.calendarAccounts ?? workspaceCalendarAccounts
+                  )(provider, ids.tenantId, ids.workspaceId);
+                  return accounts[0]
+                    ? (deps.calendar ?? calendarClient)(provider, {
+                        ...ids,
+                        connectedAccountId: accounts[0],
+                      })
+                    : null;
+                }
+              : null,
+          held: features.calendarEnabled
+            ? await run((db) => heldSlots(db, identity))
+            : [],
+        })
+      : undefined;
     const requestStore = postgresRequestStore(run, {
       workspaceId: batch.workspaceId,
       tenantId: batch.tenantId,
@@ -241,7 +302,35 @@ export async function runOneInboxBatch(
           ? undefined
           : () => Date.now() >= deps.deadline!,
       draftQuota: entitlement.draftsRemaining,
+      ...(meetings ? { meetings } : {}),
     });
+    // Visible triage (opt-in): label what this account's runs classified.
+    // Best effort, never fails or re-queues the batch.
+    if (
+      labelsFeatureEnabled(batch.provider) &&
+      features.labelsEnabled &&
+      !stats.leaseLost &&
+      (deps.deadline === undefined || deps.deadline - Date.now() > 5_000)
+    )
+      stats.labels = await applyLabels({
+        ids: { ...ids, connectedAccountId: batch.connectedAccountId },
+        mode: claimed.mode,
+        client: () =>
+          (deps.labels ?? labelClient)(batch.provider, {
+            ...ids,
+            connectedAccountId: batch.connectedAccountId,
+          }),
+        store: postgresLabelStore(run, {
+          ...ids,
+          provider: batch.provider,
+          connectedAccountId: batch.connectedAccountId,
+          mode: claimed.mode,
+        }),
+        shouldYield:
+          deps.deadline === undefined
+            ? undefined
+            : () => Date.now() >= deps.deadline!,
+      }).catch(() => ({ failed: true }));
     // Levels 6/7 on continuous (incremental) batches that finished cleanly:
     // read due request threads, update the pipeline, propose follow-up drafts.
     // Still under this batch's lease; bounded; best effort except policy errors.

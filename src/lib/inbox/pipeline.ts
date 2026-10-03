@@ -20,6 +20,13 @@ import {
   type ModelUsage,
 } from "@/lib/runtime/inbox-replies";
 import { draftQuestions } from "@/lib/brain/questions";
+import {
+  detectMeetingRequest,
+  validateMeetingDraft,
+  type MeetingKind,
+  type MeetingPlan,
+  type Slot,
+} from "@/lib/calendar/slots";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -57,7 +64,17 @@ export type MessageUpdate = Partial<{
   draftPreview: string;
   questions: string[];
   citations: { sourceId: string; sourceName: string; excerpt: string }[];
+  /** Code-computed meeting slots offered in the draft (no event is created). */
+  proposedSlots: Slot[];
 }>;
+/**
+ * Calendar-aware drafting (src/lib/inbox/meetings.ts). Returns slots computed
+ * by code from the owner's free/busy, or "ask the client". Should degrade to
+ * ask_availability on calendar problems; a throw is treated the same way.
+ */
+export type MeetingPlanner = {
+  plan(kind: MeetingKind): Promise<MeetingPlan>;
+};
 /** Durable per-message state. Implemented by ./store.ts on PostgreSQL. */
 export type InboxStore = {
   upsertMessage(message: MailMessage, contentHash: string): Promise<MessageRow>;
@@ -94,6 +111,8 @@ export type BatchStats = {
   draftsCreated?: number;
   /** Follow-ups / pipeline pass run after an incremental batch (levels 6/7), counts only. */
   followups?: Record<string, number | boolean>;
+  /** Visible triage pass (labels/categories), counts only. */
+  labels?: Record<string, number | boolean>;
 };
 export class LeaseLostError extends Error {}
 /** Model output failed schema validation (treated like a model failure). */
@@ -162,6 +181,8 @@ export async function processMailboxBatch(params: {
       classification: Classification;
     }): Promise<unknown>;
   };
+  /** Meeting requests: code-computed slots (calendar) or ask for availabilities. */
+  meetings?: MeetingPlanner;
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -302,12 +323,26 @@ export async function processMailboxBatch(params: {
       const sources = context.sourcesFor(
         `${message.subject}\n${message.text}`.slice(0, 2000),
       );
+      // Meeting detection is deterministic; the plan (slots or "ask") is code.
+      const meetingKind = params.meetings
+        ? detectMeetingRequest(message.subject, message.text)
+        : null;
+      let meeting: MeetingPlan | undefined;
+      if (meetingKind && params.meetings)
+        meeting = await params.meetings.plan(meetingKind).catch(
+          (): MeetingPlan => ({
+            mode: "ask_availability",
+            kind: meetingKind,
+            reason: "calendar_unavailable",
+          }),
+        );
       const generated = await model.draft({
         message,
         thread,
         company: context.company,
         sources,
         toneSamples: await toneSamples(),
+        ...(meeting ? { meeting } : {}),
       });
       await store.addUsage(row.rowId, generated.usage);
       // Strict schema check before the guard: wrong shape/oversized → failed,
@@ -317,11 +352,26 @@ export async function processMailboxBatch(params: {
       if (!parsedDraft.success) throw new InvalidModelOutput();
       const guarded = guardDraft(parsedDraft.data, { sources, message });
       const allFlags = [...flags, ...guarded.issues.map((i) => `guard:${i}`)];
+      if (meeting) {
+        // Critique step for meetings: only code-computed slots may appear.
+        const check = validateMeetingDraft(guarded.body, meeting);
+        guarded.body = check.body;
+        guarded.questions = [
+          ...new Set([...guarded.questions, ...check.questions]),
+        ].slice(0, 10);
+        allFlags.push(
+          meeting.mode === "slots"
+            ? `meeting:slots${meeting.simulated ? ":simulated" : ""}`
+            : `meeting:ask_availability:${meeting.reason}`,
+          ...check.issues.map((i) => `meeting:${i}`),
+        );
+      }
       await store.update(row.rowId, {
         status: "drafting",
         flags: allFlags,
         draftPreview: guarded.body.slice(0, 1200),
         questions: guarded.questions,
+        ...(meeting?.mode === "slots" ? { proposedSlots: meeting.slots } : {}),
         citations: guarded.citations.map((c) => ({
           sourceId: c.sourceId,
           sourceName: sources.find((s) => s.id === c.sourceId)?.name ?? "",

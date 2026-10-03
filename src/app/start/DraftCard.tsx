@@ -38,6 +38,19 @@ export function DraftCard({
           ),
         )}
       </p>
+      {m.proposedSlots && m.proposedSlots.length > 0 && (
+        <div className={s.questions}>
+          <h4>Créneaux proposés depuis votre agenda</h4>
+          <ul>
+            {m.proposedSlots.map((slot) => (
+              <li key={slot.start}>{slot.label}</li>
+            ))}
+          </ul>
+          <p className={s.muted}>
+            Aucun rendez-vous n’est créé : vous confirmez vous-même le créneau choisi.
+          </p>
+        </div>
+      )}
       {m.questions.length > 0 && (
         <div className={s.questions}>
           <h4>À confirmer avant d’envoyer</h4>
