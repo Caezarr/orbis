@@ -289,6 +289,16 @@ function configuration(provider: MailboxProvider) {
   return { toolkit, config, version };
 }
 
+/** Server configuration presence only (key, auth config, toolkit, pinned version) — not a verified connection. */
+export function mailboxConfigured(provider: MailboxProvider) {
+  try {
+    configuration(provider);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * One client per batch. Account ownership and tool/version are verified once for
  * reads and again before every draft creation.
