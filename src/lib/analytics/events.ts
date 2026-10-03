@@ -16,7 +16,14 @@ export type EventName =
   | "knowledge_selected"
   | "memory_reviewed"
   | "connection_started"
-  | "workflow_installed";
+  | "workflow_installed"
+  | "inbox_batch_queued"
+  | "inbox_batch_completed"
+  | "first_draft_ready"
+  | "site_analyzed"
+  | "account_created"
+  | "mailbox_connected"
+  | "preview_shown";
 type Properties = {
   task_id?: string;
   workflow_id?: string;
@@ -25,6 +32,8 @@ type Properties = {
   attempt?: number;
   baseline_minutes?: number;
   success?: boolean;
+  /** preview_shown: true when the model preview was shown, false for quote-only. */
+  ai?: boolean;
 };
 export type EventIdentity = {
   workspaceId: string;
@@ -47,6 +56,7 @@ export async function recordEvent(
     "attempt",
     "baseline_minutes",
     "success",
+    "ai",
   ] as const) {
     const value = properties[key];
     if (value !== undefined) Object.assign(safe, { [key]: value });
@@ -66,6 +76,21 @@ export async function recordEvent(
 export async function track(event: EventName, properties: Properties = {}) {
   const ctx = workspaceContext();
   if (ctx?.db && !ctx.closed) await recordEvent(ctx.db, ctx, event, properties);
+}
+/**
+ * Records a funnel milestone at most once per workspace. Requests of one user
+ * are serialized by the provisioning advisory lock, so check-then-insert holds.
+ */
+export async function trackOnce(event: EventName, properties: Properties = {}) {
+  const ctx = workspaceContext();
+  if (!ctx?.db || ctx.closed) return false;
+  const { rows } = await ctx.db.query(
+    "SELECT 1 FROM product_events WHERE workspace_id=$1 AND tenant_id=$2 AND event=$3 LIMIT 1",
+    [ctx.workspaceId, ctx.tenantId, event],
+  );
+  if (rows.length) return false;
+  await recordEvent(ctx.db, ctx, event, properties);
+  return true;
 }
 export function pseudonym(value: string) {
   return createHash("sha256")

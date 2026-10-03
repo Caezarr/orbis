@@ -13,8 +13,12 @@ import {
 import type { TaskInput, TaskOutput, TaskRow } from "./domain";
 import type { StoreState } from "@/lib/domain/types";
 import { contextSnapshot } from "@/lib/runtime/agent-engine";
-type Identity = { userId: string; workspaceId: string; tenantId: string };
-async function scoped<T>(
+export type Identity = {
+  userId: string;
+  workspaceId: string;
+  tenantId: string;
+};
+export async function scoped<T>(
   identity: Identity,
   fn: (db: PoolClient) => Promise<T>,
 ) {

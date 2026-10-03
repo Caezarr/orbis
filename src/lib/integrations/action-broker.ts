@@ -43,7 +43,7 @@ function refuse(message: string): never {
 function server() {
   if (typeof window !== "undefined") refuse("Action broker is server-only.");
 }
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (value === null || typeof value === "string" || typeof value === "boolean")
     return JSON.stringify(value);
   if (typeof value === "number" && Number.isFinite(value))
@@ -63,7 +63,7 @@ function canonical(value: unknown): string {
       .join(",")}}`;
   return refuse("Action arguments must be plain JSON.");
 }
-function hash(value: unknown) {
+export function hash(value: unknown) {
   return createHash("sha256").update(canonical(value)).digest("hex");
 }
 // Deliberately finite JSON Schema boundary. Unknown validation keywords, refs,
@@ -209,13 +209,56 @@ function configuration(request: ActionRequest) {
     );
   return { toolkit, config, tool, version };
 }
-function sdkClient() {
+export function sdkClient() {
   return new Composio({
     apiKey: process.env.COMPOSIO_API_KEY!,
     allowTracking: false,
     fileUploadDirs: false,
     dangerouslyAllowAutoUploadDownloadFiles: false,
   });
+}
+/** True only for an ACTIVE, enabled, PRIVATE account bound to this workspace user. */
+export async function verifyPrivateAccount(
+  sdk: Composio,
+  target: {
+    userId: string;
+    accountId: string;
+    config: string;
+    toolkit: string;
+  },
+  options: { signal: AbortSignal },
+) {
+  let cursor: string | undefined;
+  const cursors = new Set<string>();
+  for (let page = 0; page < 10; page++) {
+    const accounts = await sdk.connectedAccounts.list(
+      {
+        userIds: [target.userId],
+        authConfigIds: [target.config],
+        toolkitSlugs: [target.toolkit],
+        accountType: "PRIVATE",
+        limit: 100,
+        cursor,
+      },
+      options,
+    );
+    if (
+      accounts.items.some(
+        (a) =>
+          a.id === target.accountId &&
+          a.status === "ACTIVE" &&
+          !a.isDisabled &&
+          a.authConfig.id === target.config &&
+          !a.authConfig.isDisabled &&
+          a.toolkit.slug === target.toolkit,
+      )
+    )
+      return true;
+    if (!accounts.nextCursor || cursors.has(accounts.nextCursor)) return false;
+    cursor = accounts.nextCursor;
+    cursors.add(cursor);
+  }
+  return false;
 }
 async function prepare(request: ActionRequest) {
   const config = configuration(request);
@@ -228,35 +271,16 @@ async function prepare(request: ActionRequest) {
   const auth = await sdk.authConfigs.get(config.config, options);
   if (auth.status !== "ENABLED" || auth.toolkit.slug !== config.toolkit)
     refuse("Action authentication configuration is invalid.");
-  let cursor: string | undefined;
-  let matched = false;
-  const cursors = new Set<string>();
-  for (let page = 0; page < 10; page++) {
-    const accounts = await sdk.connectedAccounts.list(
-      {
-        userIds: [snapshot.userId],
-        authConfigIds: [config.config],
-        toolkitSlugs: [config.toolkit],
-        accountType: "PRIVATE",
-        limit: 100,
-        cursor,
-      },
-      options,
-    );
-    matched = accounts.items.some(
-      (a) =>
-        a.id === snapshot.connectedAccountId &&
-        a.status === "ACTIVE" &&
-        !a.isDisabled &&
-        a.authConfig.id === config.config &&
-        !a.authConfig.isDisabled &&
-        a.toolkit.slug === config.toolkit,
-    );
-    if (matched || !accounts.nextCursor || cursors.has(accounts.nextCursor))
-      break;
-    cursor = accounts.nextCursor;
-    cursors.add(cursor);
-  }
+  const matched = await verifyPrivateAccount(
+    sdk,
+    {
+      userId: snapshot.userId,
+      accountId: snapshot.connectedAccountId,
+      config: config.config,
+      toolkit: config.toolkit,
+    },
+    options,
+  );
   if (!matched)
     refuse("An active account owned by this workspace is required.");
   const tool = await sdk.tools.getRawComposioToolBySlug(
@@ -351,4 +375,53 @@ export async function executeAction(
       data: result.data,
     };
   });
+}
+
+/** Minimal SDK surface used to revoke a workspace's connections (mockable). */
+export type RevokeSdk = {
+  connectedAccounts: {
+    list(
+      query: { userIds: string[]; limit: number; cursor?: string },
+      options: { signal: AbortSignal },
+    ): Promise<{ items: { id: string }[]; nextCursor?: string | null }>;
+    delete(id: string, options: { signal: AbortSignal }): Promise<unknown>;
+  };
+};
+/**
+ * Account deletion: revoke EVERY connected account bound to this workspace's
+ * integration user (all toolkits, all statuses). Composio documents
+ * `connectedAccounts.delete` as permanent and revoking the stored access
+ * tokens; whether the upstream provider grant (Google/Microsoft consent) is
+ * also revoked is not documented — the user can remove it from their account
+ * security page (docs/product/launch-hardening.md). Ids only, never SDK objects.
+ * Throws when the listing or a deletion fails, so the caller can stop before
+ * erasing data and retry.
+ */
+export async function revokeWorkspaceConnections(
+  tenantId: string,
+  workspaceId: string,
+  sdk?: RevokeSdk,
+): Promise<{ status: "revoked" | "not_configured"; revoked: number }> {
+  server();
+  if (!sdk && !process.env.COMPOSIO_API_KEY?.trim()) return { status: "not_configured", revoked: 0 };
+  const client = sdk ?? (sdkClient() as unknown as RevokeSdk);
+  const userId = integrationUser(tenantId, workspaceId);
+  const signal = AbortSignal.timeout(20_000);
+  const ids = new Set<string>();
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < 10; page++) {
+    const result = await client.connectedAccounts.list({ userIds: [userId], limit: 100, cursor }, { signal }).catch(() => {
+      throw new BrokerError("Connection listing failed.");
+    });
+    for (const account of result.items) if (typeof account.id === "string") ids.add(account.id);
+    if (!result.nextCursor || cursors.has(result.nextCursor)) break;
+    cursors.add(result.nextCursor);
+    cursor = result.nextCursor;
+  }
+  for (const id of ids)
+    await client.connectedAccounts.delete(id, { signal }).catch(() => {
+      throw new BrokerError("Connection revocation failed.");
+    });
+  return { status: "revoked", revoked: ids.size };
 }

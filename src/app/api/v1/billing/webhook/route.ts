@@ -1,5 +1,8 @@
 import type Stripe from "stripe";
-import { stripe, stripePrices } from "@/lib/billing/stripe";
+import { stripe } from "@/lib/billing/stripe";
+import { planCatalog, planForPriceId, type PaidPlanKey } from "@/lib/billing/plans";
+import { capForSubscription } from "@/lib/billing/entitlements";
+import { syncPlanCap } from "@/lib/billing/entitlements-store";
 import { transaction } from "@/lib/platform/db";
 
 export const runtime = "nodejs";
@@ -107,41 +110,13 @@ export async function POST(request: Request) {
       const subscription = await stripe().subscriptions.retrieve(delivered.id);
       if (idOf(subscription.customer) !== customer)
         throw new Error("Customer mismatch");
-      const soloId = stripePrices.Solo(),
-        businessId = stripePrices.BusinessBase(),
-        extraId = stripePrices.BusinessExtraSeat();
+      // Exactly one V1 plan price, quantity 1, nothing else (no seat add-ons in V1).
       const items = subscription.items.data;
-      const solo = soloId && items.find((item) => item.price.id === soloId);
-      const business =
-        businessId && items.find((item) => item.price.id === businessId);
-      if ((!solo && !business) || (solo && business))
+      const plans = items.map((item) => planForPriceId(item.price.id));
+      if (items.length !== 1 || !plans[0])
         throw new Error("Unknown subscription price");
-      if (
-        items.some(
-          (item) =>
-            ![soloId, businessId, extraId]
-              .filter(Boolean)
-              .includes(item.price.id),
-        )
-      )
-        throw new Error("Unexpected subscription item");
-      if (
-        (solo && solo.quantity !== 1) ||
-        (business && business.quantity !== 1)
-      )
-        throw new Error("Invalid base quantity");
-      const extra = extraId
-        ? items
-            .filter((item) => item.price.id === extraId)
-            .reduce((n, item) => n + (item.quantity ?? 0), 0)
-        : 0;
-      if (
-        (solo && extra) ||
-        !Number.isSafeInteger(extra) ||
-        extra < 0 ||
-        extra > 45
-      )
-        throw new Error("Invalid seats");
+      if (items[0].quantity !== 1) throw new Error("Invalid base quantity");
+      const plan: PaidPlanKey = plans[0];
       const periodEnd = Math.min(
         ...items.map((item) => item.current_period_end),
       );
@@ -179,8 +154,8 @@ export async function POST(request: Request) {
           subscription.id,
           customer,
           subscription.status,
-          solo ? "Solo" : "Business",
-          solo ? 1 : 5 + extra,
+          plan,
+          planCatalog()[plan].mailboxes,
           periodEnd,
           subscription.cancel_at_period_end,
         ],
@@ -189,6 +164,10 @@ export async function POST(request: Request) {
         "UPDATE stripe_subscriptions SET current_period_start=to_timestamp($2) WHERE tenant_id=$1",
         [tenantId, periodStart],
       );
+      // Plan cap follows the CURRENT subscription state, in the same transaction
+      // (rolled back with it, so a failed sync is retried by Stripe).
+      const cap = capForSubscription(subscription.status, plan);
+      if (cap) await syncPlanCap(db, tenantId, cap.capPlan, cap.cents);
     });
     return Response.json({ received: true });
   } catch {

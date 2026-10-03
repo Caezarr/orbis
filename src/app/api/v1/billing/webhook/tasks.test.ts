@@ -9,7 +9,7 @@ vi.mock("@/lib/billing/stripe", () => ({
     webhooks: { constructEvent: mock.construct },
     checkout: { sessions: { retrieve: mock.retrieve } },
   }),
-  stripePrices: {},
+
 }));
 vi.mock("@/lib/platform/db", () => ({
   transaction: (fn: (db: unknown) => unknown) => fn({ query: mock.query }),
