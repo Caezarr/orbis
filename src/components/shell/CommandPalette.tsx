@@ -3,19 +3,8 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/shell/WorkspaceProvider";
 import type { StoreState } from "@/lib/domain/types";
-const pages = [
-  ["/chat", "New conversation"],
-  ["/today", "Today"],
-  ["/fiche", "Fiche entreprise"],
-  ["/demandes", "Demandes"],
-  ["/rapport", "Rapport de la semaine"],
-  ["/catalog", "Marketplace"],
-  ["/connections", "Integrations"],
-  ["/knowledge", "Knowledge"],
-  ["/analytics", "Analytics"],
-  ["/settings", "Settings"],
-];
-export function CommandPalette() {
+import { navItems } from "@/lib/product/surfaces";
+export function CommandPalette({ full = false }: { full?: boolean }) {
   const [open, setOpen] = useState(false),
     [q, setQ] = useState(""),
     [cursor, setCursor] = useState(0);
@@ -44,8 +33,8 @@ export function CommandPalette() {
     };
   }, []);
   const results = [
-    ...pages.map(([href, label]) => ({ href, label, meta: "Page" })),
-    ...(data?.missions ?? [])
+    ...navItems(full).map(({ href, label }) => ({ href, label, meta: "Page" })),
+    ...(full ? (data?.missions ?? []) : [])
       .filter((m) => m.flowId)
       .map((m) => ({
         href: "/missions/" + m.id + "/lab",
@@ -72,7 +61,7 @@ export function CommandPalette() {
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label="Search workspace"
+        aria-label="Aller à une page"
         className="mx-auto mt-[10vh] max-w-xl overflow-hidden rounded-2xl border border-line bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
@@ -99,13 +88,13 @@ export function CommandPalette() {
         <div className="flex border-b border-line">
           <input
             autoFocus
-            aria-label="Search pages and missions"
+            aria-label="Rechercher une page"
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setCursor(0);
             }}
-            placeholder="Search pages and missions…"
+            placeholder="Rechercher une page…"
             className="h-16 min-w-0 flex-1 px-5 outline-none"
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
@@ -127,7 +116,7 @@ export function CommandPalette() {
           <button
             onClick={close}
             className="px-4 text-sm text-muted"
-            aria-label="Close search"
+            aria-label="Fermer la recherche"
           >
             Esc
           </button>
@@ -151,7 +140,7 @@ export function CommandPalette() {
         </ul>
         {!results.length && (
           <p className="px-5 pb-5 text-muted">
-            No match. Try a page name or one of your missions.
+            Aucun résultat. Essayez « Demandes » ou « Réglages ».
           </p>
         )}
       </div>
