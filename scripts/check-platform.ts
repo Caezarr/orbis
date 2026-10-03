@@ -152,6 +152,13 @@ async function databaseChecks() {
                 0,
                 `${apiRole} must have no privilege on public tables`,
               );
+          for (const apiRole of ["anon", "authenticated"])
+            if ((await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [apiRole])).rowCount)
+              assert.deepEqual(
+                (await db.query("SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname LIKE 'orbis\\_%' AND has_function_privilege($1,p.oid,'EXECUTE')", [apiRole])).rows,
+                [],
+                `${apiRole} must not execute Orbis functions (Data API RPC)`,
+              );
           for (const table of ["billing_plan_caps", "stripe_customers", "stripe_subscriptions", "stripe_events", "stripe_checkout_attempts", "task_payment_batches"])
             if ((await db.query("SELECT to_regclass($1) AS r", [`public.${table}`])).rows[0].r)
               assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass($1)", [`public.${table}`])).rows[0].relrowsecurity, false, `${table} is server-only, guarded by grants, without RLS`);

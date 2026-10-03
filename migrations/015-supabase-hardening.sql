@@ -18,18 +18,47 @@
 -- without RLS is a no-op. A future table meant to have no RLS must also be
 -- listed in a later migration when hosted on Supabase.
 
+-- Grants on an object can only be revoked by its owner. Definer functions are
+-- owned by NOLOGIN roles (008-013) that the migration owner can SET ROLE to
+-- (it assigned that ownership), so each revoke runs as the object's owner.
 DO $$
-DECLARE r text;
+DECLARE
+  me text := current_user;
+  api text;
+  obj record;
 BEGIN
-  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
-      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);
-      EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
-      EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', r);
-      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
-      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
-      EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
+  FOREACH api IN ARRAY ARRAY['anon','authenticated'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api) THEN
+      CONTINUE;
     END IF;
+    FOR obj IN
+      SELECT 'TABLE' AS kind, format('public.%I', c.relname) AS name, pg_get_userbyid(c.relowner) AS owner
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind IN ('r','v','m','p','f')
+      UNION ALL
+      SELECT 'SEQUENCE', format('public.%I', c.relname), pg_get_userbyid(c.relowner)
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'S'
+      UNION ALL
+      SELECT 'FUNCTION', format('public.%I(%s)', p.proname, pg_get_function_identity_arguments(p.oid)), pg_get_userbyid(p.proowner)
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.prokind IN ('f','p')
+    LOOP
+      BEGIN
+        IF obj.owner <> me THEN
+          EXECUTE format('SET LOCAL ROLE %I', obj.owner);
+        END IF;
+        EXECUTE format('REVOKE ALL ON %s %s FROM %I', obj.kind, obj.name, api);
+        EXECUTE format('SET LOCAL ROLE %I', me);
+      EXCEPTION WHEN insufficient_privilege THEN
+        -- Objects owned by a role we cannot act as (extension objects owned by
+        -- the platform) are left alone; the error rolls the SET ROLE back.
+        RAISE NOTICE 'skipped % % owned by %', obj.kind, obj.name, obj.owner;
+      END;
+    END LOOP;
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', api);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', api);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', api);
   END LOOP;
 END
 $$;
