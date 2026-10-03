@@ -14,7 +14,7 @@ Use locally hosted integration logos. Account verification, knowledge scope and 
 
 ## Assets
 
-Original supplied PNGs copied without editing to `public/brand/orbi/`: welcome, thinking, done, team. `Orbi.tsx` is the single component; Next Image serves responsive optimized sizes. Motion is limited to transform while working, with reduced-motion support. No new generated assets or third-party image calls.
+Original supplied PNGs copied without editing to `public/brand/orbi/`: welcome, thinking, done, team. Pre-sized AVIF/WebP derivatives (64–512 px, `scripts/orbi-assets.mjs`) and a flat SVG mark for ≤ 24 px spots. `Orbi.tsx` is the single character component; `OrbiSays`, `OrbiEmpty` and `OrbiMark` build on it. Placement, moods, motion and voice rules: [docs/design/orbi-mascot.md](../design/orbi-mascot.md). No new generated character art or third-party image calls.
 
 ## Current delivery boundary
 
