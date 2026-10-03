@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "local:up": "bash scripts/local-stack.sh up",
+    "local:env": "bash scripts/local-stack.sh env",
+    "local:down": "bash scripts/local-stack.sh down",
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "demo:reset": "node --import tsx scripts/demo-reset.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.50",

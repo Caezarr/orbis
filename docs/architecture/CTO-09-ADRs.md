@@ -41,3 +41,18 @@
 **Pourquoi :** l’utilisateur approuve un effet précis, pas une intention abstraite qui pourrait changer pendant l’exécution.
 
 **Coût :** plus de demandes d’approbation lors d’un changement ; réduction du risque d’action surprise.
+
+## ADR 006 — narrow broker paths for calendar reads and mailbox labels
+
+**Statut :** proposé (2026-10-03, branche `feat/inbox-calendar-labels`). Détail : [inbox-calendar-labels.md](../product/inbox-calendar-labels.md).
+
+**Décision :** le chemin brouillons (`src/lib/integrations/mailbox.ts`, politique `inbox-drafts-v1`) reste inchangé : sa regex `FORBIDDEN_SLUG` continue de refuser `LABEL`, `MODIFY`, `UPDATE`. Deux chemins séparés sont ajoutés derrière le broker, chacun avec sa table d’outils figée, sa propre assertion, son propre hash de politique et un flag de déploiement désactivé par défaut :
+
+- `calendar-freebusy-v1` (`src/lib/integrations/calendar.ts`) : lecture seule des plages occupées (`GOOGLECALENDAR_FREE_BUSY_QUERY`, `OUTLOOK_GET_CALENDAR_VIEW` limité à start/end/showAs). Aucune écriture, aucune création d’événement. Flag `ORBIS_INBOX_CALENDAR`.
+- `mailbox-labels-v1` (`src/lib/integrations/mailbox-labels.ts`) : ajout/retrait des cinq libellés « Orbi · … » uniquement (`GMAIL_LIST_LABELS`, `GMAIL_CREATE_LABEL`, `GMAIL_ADD_LABEL_TO_EMAIL`, `OUTLOOK_GET_MESSAGE`, `OUTLOOK_UPDATE_EMAIL` réduit à `{message_id, categories}`). Libellés système jamais modifiables. Ledger `inbox_labels` (clé d’idempotence + hash de politique) qui permet le retrait exact. Flags `ORBIS_INBOX_LABELS` et `ORBIS_INBOX_LABELS_GMAIL`.
+
+Les créneaux sont calculés par du code (`src/lib/calendar/slots.ts`), jamais par le modèle ; le modèle reçoit les créneaux comme données et un contrôle déterministe retire toute autre date ou heure du brouillon.
+
+**Pourquoi :** élargir la politique brouillons pour y faire entrer `UPDATE`/`LABEL` aurait affaibli la garantie « aucun envoi, aucune modification » du chemin le plus exposé. Des politiques séparées gardent chaque capacité auditable et révocable indépendamment, en mode `test` (simulé) d’abord.
+
+**Coût :** un peu de duplication (exécuteur partagé `broker-exec.ts`), un scope Google restreint de plus pour les libellés Gmail (`gmail.modify`), et une seconde autorisation OAuth pour l’agenda.

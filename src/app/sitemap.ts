@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getAllJobParams, hubs } from "@/data/verticals";
 import { SITE_URL } from "@/lib/site";
+import { frozenSurfacesEnabled } from "@/lib/product/surfaces";
 
 /**
  * Only URLs an anonymous visitor (and a crawler) can reach without being
@@ -15,7 +16,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   });
   return [
     entry("", 1.0),
-    entry("/catalog", 0.8),
+    // The catalogue is frozen in V1 (redirects to /start) unless re-enabled.
+    ...(frozenSurfacesEnabled() ? [entry("/catalog", 0.8)] : []),
     entry("/for", 0.8),
     ...hubs.map((h) => entry(`/for/${h.slug}`, 0.7)),
     ...getAllJobParams().map(({ hub, job }) => entry(`/for/${hub}/${job}`, 0.6)),

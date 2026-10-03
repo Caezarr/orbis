@@ -120,6 +120,7 @@ The migration owner is granted the two NOLOGIN roles `WITH INHERIT FALSE, SET TR
 
 ## Known limits / follow-ups
 
+- Calendar-aware drafts (slots from free/busy) and visible triage (Orbis labels/categories): see [inbox-calendar-labels.md](inbox-calendar-labels.md).
 - Company brain (migration 009): open `[[À CONFIRMER]]` placeholders become deduplicated questions, a sent-mail extraction is queued once after the first completed run, and incremental batches check draft outcomes. See [company-brain.md](company-brain.md).
 
 - Response shapes are untested against real accounts (see above). Gmail reconciliation scans one page of 100 drafts.

@@ -179,6 +179,15 @@ async function main() {
         );
         await client.query("RESET ROLE");
       }
+      // 014 calendar-aware drafts + visible triage: opt-ins and label ledger.
+      // No DELETE (cleanup marks rows `removed`; workspace deletion cascades).
+      const features = await client.query(
+        "SELECT to_regclass('public.inbox_labels') AS relation",
+      );
+      if (features.rows[0].relation)
+        await client.query(
+          `GRANT SELECT, INSERT, UPDATE ON inbox_features, inbox_labels TO ${quoted}`,
+        );
     }
     await client.query("COMMIT");
     console.log("Migrations complete");

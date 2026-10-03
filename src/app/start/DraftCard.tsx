@@ -4,6 +4,7 @@ import {
   splitPlaceholders,
   type InboxMessageView,
 } from "@/lib/start/flow";
+import { OrbiChip } from "@/components/product/OrbiMark";
 import s from "./start.module.css";
 
 /** One reply draft to review. Shared by the /start results and the Today decisions. */
@@ -18,9 +19,12 @@ export function DraftCard({
   return (
     <article className={s.draft}>
       <header>
-        <span className={s.badge}>
-          {CLASSIFICATION_LABELS[m.classification ?? ""] ?? "Demande"}
-        </span>
+        <div className={s.draftMeta}>
+          <span className={s.badge}>
+            {CLASSIFICATION_LABELS[m.classification ?? ""] ?? "Demande"}
+          </span>
+          <OrbiChip />
+        </div>
         {m.subjectPreview && <h3>{m.subjectPreview}</h3>}
       </header>
       <p className={s.draftBody}>
@@ -34,6 +38,19 @@ export function DraftCard({
           ),
         )}
       </p>
+      {m.proposedSlots && m.proposedSlots.length > 0 && (
+        <div className={s.questions}>
+          <h4>Créneaux proposés depuis votre agenda</h4>
+          <ul>
+            {m.proposedSlots.map((slot) => (
+              <li key={slot.start}>{slot.label}</li>
+            ))}
+          </ul>
+          <p className={s.muted}>
+            Aucun rendez-vous n’est créé : vous confirmez vous-même le créneau choisi.
+          </p>
+        </div>
+      )}
       {m.questions.length > 0 && (
         <div className={s.questions}>
           <h4>À confirmer avant d’envoyer</h4>

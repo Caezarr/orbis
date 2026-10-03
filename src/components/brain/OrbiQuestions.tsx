@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { OrbiSays } from "@/components/product/OrbiSays";
 import s from "./brain.module.css";
 
 export type QuestionView = {
@@ -43,6 +44,8 @@ export function OrbiQuestions({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  // Mood follows real outcomes only: « done » right after the server confirmed a saved answer.
+  const [saved, setSaved] = useState(false);
 
   async function regenerate(id: string) {
     setBusy(id);
@@ -76,11 +79,19 @@ export function OrbiQuestions({
           Voir la fiche entreprise
         </Link>
       </div>
-      {count > 0 && (
-        <p className={s.fine} style={{ margin: 0 }}>
-          Répondez une fois : la réponse rejoint votre fiche entreprise et Orbi ne vous la redemandera plus.
-        </p>
-      )}
+      <OrbiSays mood={saved && !error ? "done" : count > 0 ? "thinking" : "welcome"} size={52}>
+        {count > 0 ? (
+          <>
+            <p>
+              {count === 1 ? "J’ai une question pour vous." : `J’ai ${count} questions pour vous.`} Répondez une fois :
+              je ne vous la redemanderai plus.
+            </p>
+            <p>La réponse rejoint votre fiche entreprise et sert à tous les brouillons suivants.</p>
+          </>
+        ) : (
+          <p>Merci, j’ai tout ce qu’il me faut pour l’instant.</p>
+        )}
+      </OrbiSays>
       {error && <p className={s.alert} role="alert">{error}</p>}
       {notice && <p className={s.notice} role="status">{notice}</p>}
       {questions.map((q) => (
@@ -88,8 +99,9 @@ export function OrbiQuestions({
           key={q.id}
           question={q}
           canAnswer={canAnswer}
-          onDone={async (message) => {
+          onDone={async (message, answered) => {
             setNotice(message);
+            setSaved(answered);
             setError("");
             await onChange();
           }}
@@ -147,7 +159,7 @@ function QuestionCard({
 }: {
   question: QuestionView;
   canAnswer: boolean;
-  onDone: (message: string) => Promise<void>;
+  onDone: (message: string, answered: boolean) => Promise<void>;
   onError: (message: string) => void;
 }) {
   const [answer, setAnswer] = useState("");
@@ -185,6 +197,7 @@ function QuestionCard({
                   `Réponse enregistrée dans votre fiche entreprise. Orbi ne vous la redemandera plus.${
                     r.affectedDrafts?.length ? " Des brouillons peuvent être mis à jour ci-dessous." : ""
                   }`,
+                  true,
                 ),
               )
               .catch((err: Error) => onError(err.message));
@@ -197,6 +210,13 @@ function QuestionCard({
               value={answer}
               maxLength={400}
               onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => {
+                // ⌘/Ctrl + Entrée enregistre la réponse (Entrée seule = retour à la ligne).
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               placeholder={conditional ? "Ex. : tel prix jusqu’à tel seuil, sur devis au-delà" : "Votre réponse, comme vous l’écririez à un client"}
             />
           </div>
@@ -214,7 +234,7 @@ function QuestionCard({
               disabled={busy}
               onClick={() =>
                 send(`/api/v1/brain/questions/${q.id}/dismiss`)
-                  .then(() => onDone("Question écartée."))
+                  .then(() => onDone("Question écartée.", false))
                   .catch((err: Error) => onError(err.message))
               }
             >

@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ReportView, type ReportData } from "./ReportView";
+import { OrbiEmpty } from "@/components/product/OrbiSays";
 import s from "./followups.module.css";
 
 export function Report() {
@@ -31,8 +33,14 @@ export function Report() {
       <div className={`${s.root} ${s.page}`}>
         <header className={s.head}>
           <h1>Rapport de la semaine</h1>
-          <p>Le rapport s’active avec les brouillons de réponse. Il n’est pas encore disponible sur ce déploiement.</p>
         </header>
+        <OrbiEmpty title="Chaque semaine, ce que j’ai vraiment fait pour vous." actions={<Link href="/start">Reprendre le démarrage</Link>}>
+          <p>
+            Mails lus, brouillons préparés, réponses envoyées telles quelles, délai de réponse : uniquement des mesures,
+            jamais d’estimation.
+          </p>
+          <p>Le rapport s’active avec les brouillons de réponse : il n’est pas encore disponible sur ce déploiement.</p>
+        </OrbiEmpty>
       </div>
     );
   if (!data)

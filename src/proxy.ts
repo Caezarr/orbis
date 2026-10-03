@@ -2,12 +2,22 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/platform/auth";
 import { isOfflineMode } from "@/lib/platform/context";
+import { frozenRedirect } from "@/lib/product/surfaces";
 
 /** Refresh managed sessions before Server Components (which cannot write cookies). */
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  // V1 focus: frozen surfaces redirect to the wedge page that replaces them
+  // (ORBIS_FROZEN_SURFACES_ENABLED=true keeps them reachable).
+  const frozen = frozenRedirect(pathname);
+  if (frozen) {
+    const url = request.nextUrl.clone();
+    url.pathname = frozen;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
   let response = NextResponse.next({ request });
   if (isOfflineMode()) return response;
-  const pathname = request.nextUrl.pathname;
   const publicCatalog = pathname === "/catalog" || pathname === "/catalog/";
   // Industry pages are public marketing pages and must stay crawlable.
   const publicVertical = pathname === "/for" || pathname.startsWith("/for/");

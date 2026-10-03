@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Orbi } from "@/components/product/Orbi";
+import { OrbiSays } from "@/components/product/OrbiSays";
 import { ToolLogo } from "@/components/product/ToolLogo";
 import {
   BLOCKER_COPY,
@@ -26,6 +26,7 @@ import {
   type InboxBatchView,
   type InboxMessageView,
   type MailboxStatus,
+  type PreviewQuestion,
   type StartPreview,
   type StartProfile,
   type StartStep,
@@ -33,6 +34,7 @@ import {
 import { ContinuousToggle } from "./ContinuousToggle";
 import { PlanBanner } from "@/components/billing/PlanBanner";
 import { DraftCard } from "./DraftCard";
+import { ProfileReview } from "./ProfileReview";
 import s from "./start.module.css";
 import { AuthPanel } from "@/components/auth/AuthPanel";
 import { LegalLinks } from "@/components/legal/LegalLinks";
@@ -457,6 +459,23 @@ function CompanyStep({
 
   return (
     <form onSubmit={read} className={s.form} aria-busy={busy}>
+      <OrbiSays mood={busy || error ? "thinking" : "welcome"} working={busy} live>
+        {busy ? (
+          <p>{mode === "site" ? "Je lis votre site : zone, prestations, prix, délais, contact…" : "Je prépare votre profil…"}</p>
+        ) : error ? (
+          <>
+            <p>Je n’ai pas pu aller au bout.</p>
+            <p>Le détail est juste en dessous ; vous pouvez aussi me décrire votre activité.</p>
+          </>
+        ) : mode === "site" ? (
+          <>
+            <p>Bonjour, je suis Orbi.</p>
+            <p>Donnez-moi l’adresse de votre site : je lis vos pages publiques et je vous dis ce que j’ai compris.</p>
+          </>
+        ) : (
+          <p>Deux phrases suffisent : ce que vous faites, et pour qui.</p>
+        )}
+      </OrbiSays>
       <div className={s.switch} role="group" aria-label="Comment présenter votre entreprise">
         <button type="button" aria-pressed={mode === "site"} onClick={() => setMode("site")}>
           J’ai un site
@@ -478,7 +497,7 @@ function CompanyStep({
             minLength={4}
             maxLength={2000}
           />
-          <span className={s.fine}>Orbi lit uniquement la page publique. Aucun compte requis pour cette étape.</span>
+          <span className={s.fine}>Orbi lit votre page d’accueil et quelques pages publiques utiles (contact, prestations, tarifs, mentions légales), dans le respect des règles du site. Aucun compte requis, rien n’est conservé.</span>
         </label>
       ) : (
         <>
@@ -523,130 +542,6 @@ function CompanyStep({
         )}
         <button className={s.primary} disabled={busy}>
           {busy ? "Lecture en cours…" : mode === "site" ? "Lire mon site" : "Préparer mon profil"}
-        </button>
-      </div>
-      {busy && (
-        <div className={s.working} role="status">
-          <Orbi mood="thinking" size={56} working />
-          <span>{mode === "site" ? "Orbi lit votre page publique…" : "Orbi prépare votre profil…"}</span>
-        </div>
-      )}
-    </form>
-  );
-}
-
-function ProfileReview({
-  profile,
-  kept,
-  setKept,
-  setProfile,
-  saving,
-  saveError,
-  authed,
-  onRestart,
-  onConfirm,
-}: {
-  profile: StartProfile;
-  kept: boolean[];
-  setKept: (v: boolean[]) => void;
-  setProfile: (p: StartProfile) => void;
-  saving: boolean;
-  saveError: string;
-  authed: boolean;
-  onRestart: () => void;
-  onConfirm: () => void;
-}) {
-  const origin = {
-    ai: "Proposé par Orbi à partir de votre page. Chaque citation a été vérifiée mot pour mot dans la source.",
-    site: "Lecture directe de votre page : des citations exactes, sans interprétation.",
-    description: "À partir de vos propres mots.",
-  }[profile.origin];
-  const valid = profile.name.trim().length >= 2 && profile.summary.trim().length >= 10;
-  return (
-    <form
-      className={s.form}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (valid && !saving) onConfirm();
-      }}
-    >
-      <div className={s.orbiLine}>
-        <Orbi mood="done" size={48} />
-        <p>
-          Voici ce qu’Orbi a compris. <span className={s.muted}>{origin}</span>
-        </p>
-      </div>
-      <label>
-        Nom de l’entreprise
-        <input
-          value={profile.name}
-          onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-          required
-          minLength={2}
-          maxLength={120}
-        />
-      </label>
-      <label>
-        <span>
-          Résumé proposé <span className={s.optional}>— corrigez-le si besoin</span>
-        </span>
-        <textarea
-          value={profile.summary}
-          onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
-          required
-          minLength={10}
-          maxLength={1800}
-          rows={4}
-        />
-      </label>
-      {profile.facts.length > 0 && (
-        <fieldset className={s.facts}>
-          <legend>Ce que disent vos sources</legend>
-          {profile.facts.map((fact, i) => (
-            <div key={i} className={s.fact} data-kept={kept[i]}>
-              <blockquote>
-                <span className={s.factLabel}>{fact.label}</span>
-                {fact.quote}
-                {fact.sourceUrl && (
-                  <a href={fact.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
-                    Source : {new URL(fact.sourceUrl).hostname}
-                  </a>
-                )}
-              </blockquote>
-              <label className={s.check}>
-                <input
-                  type="checkbox"
-                  checked={kept[i] ?? true}
-                  onChange={(e) => setKept(kept.map((k, j) => (j === i ? e.target.checked : k)))}
-                />
-                Garder
-              </label>
-            </div>
-          ))}
-        </fieldset>
-      )}
-      <section className={s.unknowns} aria-label="Ce qu’Orbi ne devine pas">
-        <h3>Ce qu’Orbi ne devine pas</h3>
-        <ul>
-          {profile.unknowns.map((u) => (
-            <li key={u}>{u}</li>
-          ))}
-        </ul>
-        <p className={s.fine}>
-          Dans vos brouillons, ces points apparaîtront comme des questions surlignées, jamais comme des réponses inventées.
-        </p>
-      </section>
-      {saveError && (
-        <p className={s.alert} role="alert">
-          {saveError}
-        </p>
-      )}
-      <div className={s.actions}>
-        <button type="button" className={s.secondary} onClick={onRestart} disabled={saving}>
-          Recommencer
-        </button>
-        <button className={s.primary} disabled={!valid || saving}>
-          {saving ? "Enregistrement…" : authed ? "C’est bien mon entreprise" : "C’est bien mon entreprise, continuer"}
         </button>
       </div>
     </form>
@@ -703,47 +598,37 @@ function PreviewStep({
   const host = profile.website ? new URL(profile.website).hostname : null;
   return (
     <div className={s.form}>
+      <OrbiSays mood={!preview ? "thinking" : preview.mode === "ai" ? "done" : "welcome"} working={!preview} live>
+        {!preview ? (
+          <p>Je prépare ce que vos clients vous demandent probablement…</p>
+        ) : preview.mode === "ai" ? (
+          <>
+            <p>Voici un avant-goût, sans rien connecter.</p>
+            <p>Branchez votre boîte et je ferai la même chose avec vos vrais mails.</p>
+          </>
+        ) : (
+          <>
+            <p>Je ne cite que ce qui figure mot pour mot dans vos sources.</p>
+            <p>Branchez votre boîte et je préparerai de vrais brouillons.</p>
+          </>
+        )}
+      </OrbiSays>
       <p>
         Profil de <strong>{profile.name}</strong> confirmé.{" "}
         <button type="button" className={s.link} onClick={onEdit}>
           Modifier le profil
         </button>
       </p>
-      {!preview ? (
-        <div className={s.working} role="status">
-          <Orbi mood="thinking" size={56} working />
-          <span>Orbi prépare ce que vos clients vous demandent probablement…</span>
-        </div>
-      ) : preview.mode === "ai" ? (
+      {!preview ? null : preview.mode === "ai" ? (
         <section className={s.preview} aria-labelledby="start-preview-title">
           <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
-            Ce que vos clients vous demandent probablement
+            {questionsTitle(preview.questions.length)}
           </h3>
           <p className={s.fine}>
             Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
             n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
           </p>
-          <ol className={s.likely}>
-            {preview.questions.map((q, i) => (
-              <li key={i}>
-                <strong>{q.question}</strong>
-                {q.answer ? (
-                  <blockquote>
-                    {q.answer.quote}
-                    {q.answer.sourceUrl ? (
-                      <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
-                        Source : {q.answer.sourceName}
-                      </a>
-                    ) : (
-                      <span className={s.source}>Source : {q.answer.sourceName}</span>
-                    )}
-                  </blockquote>
-                ) : (
-                  <p className={s.missing}>{NOT_FOUND_LABEL}</p>
-                )}
-              </li>
-            ))}
-          </ol>
+          <LikelyQuestions questions={preview.questions} />
           {preview.flags.includes("source_instructions_ignored") && (
             <p className={s.fine}>
               Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
@@ -818,37 +703,21 @@ function PreviewStep({
       ) : (
         <section className={s.preview} aria-labelledby="start-preview-title">
           <h3 id="start-preview-title" ref={headingRef} tabIndex={-1}>
-            Ce qu’Orbi peut déjà citer dans une réponse
+            {questionsTitle(preview.questions.length)}
           </h3>
           <p className={s.fine}>
             {preview.reason === "disabled"
-              ? "Lecture directe : uniquement des citations exactes de vos sources, sans interprétation."
-              : "L’aperçu détaillé n’est pas disponible pour le moment. Voici uniquement des citations exactes de vos sources."}{" "}
-            Les brouillons d’exemple apparaîtront avec vos vrais mails.
+              ? ""
+              : "L’aperçu avec brouillons d’exemple n’est pas disponible pour le moment. "}
+            Chaque réponse est une citation exacte de {host ? "votre site" : "vos mots"}, avec sa source. Sans réponse
+            sourcée, la question reste à confirmer : Orbi vous la posera une seule fois, au lieu d’inventer. Les
+            brouillons apparaîtront avec vos vrais mails.
           </p>
-          {preview.found.length > 0 ? (
-            <ul className={s.likely}>
-              {preview.found.map((f, i) => (
-                <li key={i}>
-                  <blockquote>
-                    <span className={s.factLabel}>{f.label}</span>
-                    {f.quote}
-                  </blockquote>
-                </li>
-              ))}
-            </ul>
+          {preview.questions.length > 0 ? (
+            <LikelyQuestions questions={preview.questions} />
           ) : (
             <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
           )}
-          <div className={s.unknowns}>
-            <h3>Ce qu’Orbi ne devine pas</h3>
-            <ul>
-              {preview.unknowns.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-            <p className={s.fine}>Orbi vous posera chacune de ces questions une seule fois, au lieu d’inventer.</p>
-          </div>
         </section>
       )}
       <div className={s.actions}>
@@ -857,6 +726,39 @@ function PreviewStep({
         </button>
       </div>
     </div>
+  );
+}
+
+function questionsTitle(n: number) {
+  return n >= 2 ? `${n} questions que vos clients vous posent probablement` : "Ce que vos clients vous demandent probablement";
+}
+
+/** Each answer is a sourced quote; a question without one is highlighted « À CONFIRMER ». */
+function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
+  return (
+    <ol className={s.likely}>
+      {questions.map((q, i) => (
+        <li key={i}>
+          <strong>{q.question}</strong>
+          {q.answer ? (
+            <blockquote>
+              {q.answer.quote}
+              {q.answer.sourceUrl ? (
+                <a href={q.answer.sourceUrl} target="_blank" rel="noreferrer noopener" className={s.source}>
+                  Source : {q.answer.sourceName}
+                </a>
+              ) : (
+                <span className={s.source}>Source : {q.answer.sourceName}</span>
+              )}
+            </blockquote>
+          ) : (
+            <p className={s.missing}>
+              <mark className={s.placeholder}>[[À CONFIRMER]]</mark> {NOT_FOUND_LABEL}
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -873,6 +775,9 @@ function AccountStep({
 }) {
   return (
     <div className={s.form}>
+      <OrbiSays>
+        <p>Créez votre compte : je range le profil dans votre espace, puis on passe à votre boîte mail.</p>
+      </OrbiSays>
       <p>
         Le profil de <strong>{profileName}</strong> est prêt. Il sera enregistré dans votre espace dès que votre compte
         existe.{" "}
@@ -926,8 +831,25 @@ function MailboxStep({
       setBusy(null);
     }
   }
+  const checking = PROVIDERS.some((p) => status[p.id] === "checking");
+  const cancelled = returnedFrom !== null && status[returnedFrom] === "not_connected";
   return (
     <div className={s.form}>
+      <OrbiSays mood={checking || cancelled ? "thinking" : "welcome"} working={checking} live>
+        {checking ? (
+          <p>Je vérifie la connexion côté serveur…</p>
+        ) : cancelled ? (
+          <>
+            <p>Je ne trouve pas de connexion active.</p>
+            <p>L’autorisation a peut-être été annulée : vous pouvez la relancer.</p>
+          </>
+        ) : (
+          <>
+            <p>Je lis vos mails et je prépare des brouillons.</p>
+            <p>Je n’envoie jamais rien : vous relisez, vous envoyez.</p>
+          </>
+        )}
+      </OrbiSays>
       {!readiness.inbox.enabled && (
         <p className={s.notice}>
           Les brouillons ne sont pas encore activés sur ce déploiement. Vous pouvez connecter votre boîte : le premier
@@ -1141,12 +1063,22 @@ function DraftsStep({
   if (!batch)
     return (
       <div className={s.form}>
+        <OrbiSays mood={starting ? "thinking" : "welcome"} working={starting} live>
+          {starting ? (
+            <p>Je mets le passage en file…</p>
+          ) : (
+            <>
+              <p>Tout est prêt de mon côté.</p>
+              <p>
+                Je lis les 14 derniers jours, j’écarte newsletters et notifications, puis je prépare des brouillons pour
+                les demandes de clients et de devis.
+              </p>
+            </>
+          )}
+        </OrbiSays>
         {testBanner}
         <PlanBanner />
-        <p>
-          Orbi lit les messages reçus ces 14 derniers jours, écarte les newsletters et notifications, puis prépare des
-          brouillons pour les demandes de clients et de devis. Le nombre de brouillons du premier passage est limité.
-        </p>
+        <p className={s.fine}>Le nombre de brouillons du premier passage est limité.</p>
         {blocker && <Blocker kind={blocker.kind} detail={blocker.detail} onRetry={onRecheck} />}
         <div className={s.actions}>
           <button type="button" className={s.primary} onClick={() => void start()} disabled={!provider || starting}>
@@ -1162,24 +1094,23 @@ function DraftsStep({
     const drafted = messages.filter((m) => m.status === "drafted").length;
     return (
       <div className={s.form}>
-        {testBanner}
-        <div className={s.working} role="status" aria-live="polite">
-          <Orbi mood="thinking" size={64} working />
-          <div>
+        <OrbiSays mood="thinking" size={64} working live>
+          <p>
             <strong>
               {phase === "queued"
-                ? "En file d’attente"
+                ? "Votre passage est en file d’attente."
                 : phase === "drafting"
-                  ? "Rédaction d’un brouillon…"
-                  : "Lecture et tri des messages…"}
+                  ? "Je rédige un brouillon…"
+                  : "Je lis et je trie vos messages…"}
             </strong>
-            <p className={s.muted}>
-              {phase === "queued"
-                ? "Le traitement démarre dès qu’il est pris en charge."
-                : `${messages.length} message${messages.length > 1 ? "s" : ""} examiné${messages.length > 1 ? "s" : ""}, ${drafted} brouillon${drafted > 1 ? "s" : ""} prêt${drafted > 1 ? "s" : ""} pour l’instant.`}
-            </p>
-          </div>
-        </div>
+          </p>
+          <p>
+            {phase === "queued"
+              ? "Je commence dès qu’il est pris en charge."
+              : `${messages.length} message${messages.length > 1 ? "s" : ""} examiné${messages.length > 1 ? "s" : ""}, ${drafted} brouillon${drafted > 1 ? "s" : ""} prêt${drafted > 1 ? "s" : ""} pour l’instant.`}
+          </p>
+        </OrbiSays>
+        {testBanner}
         {phase === "queued" && now - queuedSince > 90_000 && (
           <p className={s.notice}>
             Le lot attend toujours d’être pris en charge. Vous pouvez quitter cette page : vos résultats s’afficheront ici
@@ -1259,23 +1190,27 @@ function Results({
       )}
       {blocker && <Blocker kind={blocker.kind} detail={blocker.detail} />}
       {summary.drafts.length > 0 ? (
-        <div className={s.orbiLine}>
-          <Orbi mood="done" size={48} />
+        <OrbiSays mood="done" live>
           <p>
             <strong>
               {summary.drafts.length} brouillon{summary.drafts.length > 1 ? "s" : ""} prêt
               {summary.drafts.length > 1 ? "s" : ""} à relire.
-            </strong>{" "}
-            <span className={s.muted}>Les passages surlignés sont des questions à confirmer avant tout envoi.</span>
+            </strong>
           </p>
-        </div>
-      ) : (
-        batch.status === "completed" && (
-          <div className={s.notice}>
+          <p>Les passages surlignés sont des questions à confirmer avant tout envoi.</p>
+        </OrbiSays>
+      ) : batch.status === "completed" ? (
+        <OrbiSays live>
+          <p>
             <strong>Aucune demande client à laquelle répondre sur la période.</strong>
-            <p>Orbi n’a trouvé aucun message qui appelle une réponse de votre part. Voici ce qui a été écarté, et pourquoi.</p>
-          </div>
-        )
+          </p>
+          <p>Aucun message n’appelle une réponse de votre part. Voici ce que j’ai écarté, et pourquoi.</p>
+        </OrbiSays>
+      ) : (
+        <OrbiSays mood="thinking" live>
+          <p>{batch.status === "failed" ? "Je n’ai pas pu terminer ce passage." : "Je me suis arrêté avant la fin."}</p>
+          <p>Rien n’a été envoyé. Le détail et la marche à suivre sont ci-dessus.</p>
+        </OrbiSays>
       )}
       {summary.drafts.map((m) => (
         <DraftCard key={m.id} message={m} mailbox={mailbox} />

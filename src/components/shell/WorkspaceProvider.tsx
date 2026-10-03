@@ -27,7 +27,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState("");
   const reload = useCallback(async () => {
     const res = await fetch("/api/v1/workspace", { cache: "no-store" });
-    if (!res.ok) throw new Error("Could not load workspace");
+    if (!res.ok) throw new Error("Impossible de charger l’espace");
     const json = await res.json();
     setData(json);
     setLoading(false);
@@ -36,7 +36,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       void reload().catch(() => {
-        setError("Could not load your workspace.");
+        setError("Impossible de charger votre espace pour l’instant.");
         setLoading(false);
       });
     }, 0);
@@ -52,12 +52,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             onClick={() => {
               void reload().catch(() =>
                 setError(
-                  "Still unavailable. Check the local server and retry.",
+                  "Toujours indisponible. Réessayez dans un instant.",
                 ),
               );
             }}
           >
-            Retry
+            Réessayer
           </button>
         </div>
       ) : (

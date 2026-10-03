@@ -13,7 +13,6 @@ import s from "./workspace.module.css";
 import { DailyRecap } from "./DailyRecap";
 import { ContributionActivity } from "./ContributionActivity";
 import type { ContributionEvent } from "@/lib/product/contributions";
-import { Orbi } from "./Orbi";
 
 export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
   const { data, loading } = useWorkspace<
@@ -292,10 +291,7 @@ export function WorkOverview({ analytics = false }: { analytics?: boolean }) {
         </section>
       ) : (
         <div className={s.empty}>
-          <Orbi
-            mood={runs.length && filter === "attention" ? "done" : "welcome"}
-            size={80}
-          />
+          {/* Today's Orbi lives in the inbox block above: one per viewport. */}
           <h2>
             {analytics
               ? "Your results start here."

@@ -225,7 +225,8 @@ export function postgresInboxStore(
           `UPDATE inbox_messages SET
             status=COALESCE($4,status), classification=COALESCE($5,classification), skip_reason=COALESCE($6,skip_reason),
             flags=COALESCE($7::jsonb,flags), draft_preview=COALESCE($8,draft_preview), questions=COALESCE($9::jsonb,questions),
-            citations=COALESCE($10::jsonb,citations), batch_id=$11, updated_at=now()
+            citations=COALESCE($10::jsonb,citations), batch_id=$11,
+            proposed_slots=COALESCE($12::jsonb,proposed_slots), updated_at=now()
            WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3`,
           [
             rowId,
@@ -238,6 +239,9 @@ export function postgresInboxStore(
             update.questions ? JSON.stringify(update.questions) : null,
             update.citations ? JSON.stringify(update.citations) : null,
             batch.id,
+            update.proposedSlots
+              ? JSON.stringify(update.proposedSlots.slice(0, 3))
+              : null,
           ],
         ),
       );

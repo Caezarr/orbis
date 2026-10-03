@@ -5,7 +5,6 @@ import {
   dailyOperations,
   type OperationalTask,
 } from "@/lib/product/work-overview";
-import { Orbi } from "./Orbi";
 import {
   contributionActivity,
   type ContributionEvent,
@@ -37,7 +36,7 @@ export function DailyRecap({
   return (
     <section className={s.section} aria-label="Daily recap">
       <div className="flex items-center gap-4">
-        <Orbi mood={doneCount ? "done" : "welcome"} size={64} />
+        {/* No mascot here: a recap is data (docs/design/orbi-mascot.md). */}
         <div>
           <h2>Today’s recap</h2>
           <p>

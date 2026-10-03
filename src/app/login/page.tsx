@@ -3,6 +3,8 @@ import Link from "next/link";
 import { AuthPanel } from "@/components/auth/AuthPanel";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { authOptions, safeReturnTo } from "@/lib/platform/auth";
+import { Orbi } from "@/components/product/Orbi";
+import { OrbiMark } from "@/components/product/OrbiMark";
 import styles from "./login.module.css";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +44,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </section>
       <aside className={styles.preview} aria-label="Aperçu de l’espace de travail">
         <div className={styles.previewInner}>
-          <div className={styles.orb} aria-hidden="true" />
+          <span className={styles.orbiSpot}>
+            <Orbi mood="welcome" size={136} float priority />
+          </span>
           <p className={styles.previewLead}>Votre boîte, en ordre.</p>
           <h2>
             Les demandes triées. <em>Les réponses prêtes.</em>
@@ -68,7 +72,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 <br />
                 <small>Une fois, jamais deux</small>
               </div>
-              <span>?</span>
+              <OrbiMark size={20} />
             </div>
             <div className={styles.mockRow}>
               <div>

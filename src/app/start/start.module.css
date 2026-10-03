@@ -319,18 +319,6 @@
   line-height: 1.5;
   border: 1px solid #f3dca8;
 }
-.working,
-.orbiLine {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-.working p,
-.orbiLine p {
-  margin: 0;
-  line-height: 1.5;
-}
 .facts {
   border: 0;
   padding: 0;
@@ -496,6 +484,12 @@
   font-size: 16px;
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+.draftMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .badge {
   justify-self: start;

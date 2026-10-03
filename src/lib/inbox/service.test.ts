@@ -14,7 +14,7 @@ import {
   type WorkspaceContext,
 } from "@/lib/platform/context";
 import type { PoolClient } from "pg";
-import { enqueueFirstRun, triggerSchema } from "./service";
+import { enqueueFirstRun, listInboxResults, triggerSchema } from "./service";
 import { postgresInboxStore, reserveInboxBudget } from "./store";
 
 const query = vi.fn();
@@ -355,5 +355,35 @@ describe("first-run trigger: plan enforcement", () => {
     withRows({ "SELECT plan,status": [{ plan: "solo", status: "canceled", current_period_start: null, current_period_end: null, cancel_at_period_end: false }] });
     await start("key-off");
     expect(query.mock.calls.some(([sql]) => String(sql).startsWith("INSERT INTO billing_trials"))).toBe(false);
+  });
+});
+
+describe("inbox results default view", () => {
+  const batch = (id: string, kind: string, minutes: number) => ({
+    id,
+    kind,
+    provider: "gmail",
+    mode: "test",
+    status: "completed",
+    stats: {},
+    error: null,
+    window_days: 14,
+    max_messages: 50,
+    max_drafts: 5,
+    created_at: new Date(Date.UTC(2026, 9, 3, 10, minutes)),
+    completed_at: null,
+  });
+  it("shows the latest first run, not a newer (empty) continuous batch", async () => {
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes("kind='first_run'")) return { rows: [batch("first", "first_run", 0)] };
+      if (sql.startsWith("SELECT * FROM inbox_batches"))
+        return { rows: [batch("inc-2", "incremental", 30), batch("inc-1", "incremental", 15), batch("first", "first_run", 0)] };
+      return { rows: [] };
+    });
+    const result = await inSession(() => listInboxResults());
+    expect(result.batch?.id).toBe("first");
+    expect(result.batches.map((b) => b.id)).toEqual(["inc-2", "inc-1", "first"]);
+    // An explicit batch id still selects that batch.
+    expect((await inSession(() => listInboxResults("inc-1"))).batch?.id).toBe("inc-1");
   });
 });

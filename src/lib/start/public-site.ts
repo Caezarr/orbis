@@ -1,19 +1,18 @@
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import { analyzeCompany } from "@/lib/runtime/company-analysis";
-import { readCompanySite } from "@/lib/runtime/company-site";
-import { providerStatus } from "@/lib/runtime/provider";
-import {
-  DEFAULT_UNKNOWNS,
-  profileFromDescription,
-  profileFromSite,
-  type StartProfile,
-} from "./flow";
+import { getModel, providerStatus } from "@/lib/runtime/provider";
+import { DEFAULT_UNKNOWNS, profileFromDescription, type StartProfile } from "./flow";
+import { crawlSite, type CrawlResult } from "./site-crawl";
+import { profileFromCrawl, synthesisPrompt, synthesisSchema, validateSynthesis } from "./site-profile";
 
 /**
- * Step 1 of /start, callable WITHOUT an account. Reads one public page through
- * the existing SSRF-guarded broker reader. A model call is made only when
- * ORBIS_START_AI_PROFILE=true and a provider is configured; otherwise the
- * profile is deterministic (verbatim quotes only). Nothing is persisted.
+ * Step 1 of /start, callable WITHOUT an account. Reads the home page and a few
+ * high-value pages of the same site (bounded crawl through the SSRF-guarded
+ * broker reader, robots.txt respected) and extracts sourced facts
+ * deterministically. A model call is made only when ORBIS_START_AI_PROFILE=true
+ * and a provider is configured, and it only rewrites the name and summary from
+ * those facts. Nothing is persisted.
  */
 export const siteInputSchema = z.union([
   z.object({ website: z.string().trim().min(4).max(2000) }).strict(),
@@ -31,8 +30,9 @@ export function publicAiEnabled() {
 }
 
 export type PrepareDeps = {
-  readSite?: typeof readCompanySite;
+  crawl?: (website: string) => Promise<CrawlResult>;
   analyze?: typeof analyzeCompany;
+  synthesize?: (prompt: { system: string; prompt: string }, signal: AbortSignal) => Promise<unknown>;
   aiEnabled?: () => boolean;
 };
 
@@ -57,26 +57,36 @@ export async function prepareStartProfile(
       return base;
     }
   }
-  const site = await (deps.readSite ?? readCompanySite)(input.website);
-  const base = profileFromSite(site);
-  if (!ai) return base;
+  const crawl = await (deps.crawl ?? crawlSite)(input.website);
+  const base = profileFromCrawl(crawl);
+  if (!ai || base.facts.length < 2) return base;
   try {
-    // Quotes are verified verbatim against the page by validateCompanyAnalysis.
-    const result = await (deps.analyze ?? analyzeCompany)({ website: site.website }, site);
-    return {
-      name: result.name,
-      summary: result.summary,
-      website: site.website,
-      facts: result.facts.length
-        ? result.facts.map((f) => ({ label: "Extrait du site", quote: f.quote, sourceUrl: site.website }))
-        : base.facts,
-      unknowns: unknownsFrom(result.questions, base.unknowns),
-      origin: "ai",
-    };
+    // The model only rewrites name + summary from the extracted facts (cited by id);
+    // facts and unknowns stay the deterministic ground truth.
+    const raw = await (deps.synthesize ?? providerSynthesis)(synthesisPrompt(base), AbortSignal.timeout(SYNTHESIS_TIMEOUT_MS));
+    const parsed = synthesisSchema.safeParse(raw);
+    if (!parsed.success) return base;
+    const checked = validateSynthesis(parsed.data, base);
+    return { ...base, name: checked.name, summary: checked.summary, summarySources: checked.sources, origin: "ai" };
   } catch {
     // Model failure never blocks step 1: fall back to the deterministic reading.
     return base;
   }
+}
+
+const SYNTHESIS_TIMEOUT_MS = 15_000;
+/** Provider-backed synthesis. No tools, no retries. */
+export async function providerSynthesis(prompt: { system: string; prompt: string }, signal: AbortSignal) {
+  const result = await generateText({
+    model: getModel(),
+    system: prompt.system,
+    prompt: prompt.prompt,
+    output: Output.object({ schema: synthesisSchema }),
+    maxOutputTokens: 700,
+    maxRetries: 0,
+    abortSignal: signal,
+  });
+  return result.output;
 }
 function unknownsFrom(questions: string[], fallback: string[]) {
   const merged = [...questions.map((q) => q.trim()).filter((q) => q.length >= 2), ...DEFAULT_UNKNOWNS];
