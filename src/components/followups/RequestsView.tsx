@@ -3,6 +3,7 @@
 import { splitPlaceholders } from "@/lib/start/flow";
 import type { RequestView } from "@/lib/followups/service";
 import type { PipelineStatus } from "@/lib/followups/detect";
+import { OrbiEmpty } from "@/components/product/OrbiSays";
 import s from "./followups.module.css";
 
 export type RequestsData = {
@@ -162,7 +163,14 @@ export function RequestsView({
         </div>
       </section>
 
-      {data.items.length === 0 ? (
+      {total === 0 ? (
+        <OrbiEmpty mood="team" title="Aucune demande pour l’instant.">
+          <p>
+            Chaque mail de client ou de devis que je classe devient une ligne ici, avec son statut et ses relances.
+            Je ne remplis le besoin, le budget et le délai que s’ils figurent mot pour mot dans le mail.
+          </p>
+        </OrbiEmpty>
+      ) : data.items.length === 0 ? (
         <p className={s.empty}>
           Aucune demande pour ce filtre. Les demandes apparaissent ici dès qu’Orbi a classé un mail de client ou de devis.
         </p>

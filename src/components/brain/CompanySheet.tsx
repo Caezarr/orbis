@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { OrbiEmpty, OrbiSays } from "@/components/product/OrbiSays";
 import s from "./brain.module.css";
 
 type Quote = { quote: string; messageId: string; sentAt: string };
@@ -92,6 +94,15 @@ export function CompanySheet({ initial }: { initial?: Overview }) {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
   }, [load]);
+  // While the extraction job is pending, refresh so the « working » state ends when the job does.
+  const extracting = data?.extraction?.status === "queued" || data?.extraction?.status === "running";
+  useEffect(() => {
+    if (!extracting) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [extracting, load]);
 
   async function review(fact: FactView, action: "approve" | "reject", statement?: string) {
     setBusy(fact.id);
@@ -142,8 +153,14 @@ export function CompanySheet({ initial }: { initial?: Overview }) {
       <div className={`${s.root} ${s.page}`}>
         <header className={s.head}>
           <h1>Fiche entreprise</h1>
-          <p>La fiche entreprise s’active avec les brouillons de réponse. Elle n’est pas encore disponible sur ce déploiement.</p>
         </header>
+        <OrbiEmpty title="Ce que je sais de votre entreprise, validé par vous." actions={<Link href="/start">Reprendre le démarrage</Link>}>
+          <p>
+            Prix, délais, zone, conditions, ton : je les apprends de vos mails envoyés et de vos réponses à mes
+            questions. Seuls les faits que vous validez servent à vos brouillons.
+          </p>
+          <p>La fiche s’active avec les brouillons de réponse : elle n’est pas encore disponible sur ce déploiement.</p>
+        </OrbiEmpty>
       </div>
     );
   if (!data)
@@ -187,7 +204,14 @@ export function CompanySheet({ initial }: { initial?: Overview }) {
       </header>
 
       <section className={s.panel} aria-label="Lecture des mails envoyés">
-        <p className={s.lead} style={{ margin: 0 }}>{extractionLine(data.extraction)}</p>
+        {data.extraction?.status === "queued" || data.extraction?.status === "running" ? (
+          // A real job is pending: the only moment the sheet shows Orbi at work.
+          <OrbiSays mood="thinking" working live size={48}>
+            <p>{data.extraction.status === "queued" ? "Je commence dès que la lecture est prise en charge…" : "Je lis vos mails envoyés…"}</p>
+          </OrbiSays>
+        ) : (
+          <p className={s.lead} style={{ margin: 0 }}>{extractionLine(data.extraction)}</p>
+        )}
         <p className={s.fine} style={{ margin: 0 }}>
           Orbi lit au plus 200 réponses envoyées des 90 derniers jours, en lecture seule. Il ne garde que de courtes
           citations de vos propres mails, sans le nom ni les coordonnées de vos clients.

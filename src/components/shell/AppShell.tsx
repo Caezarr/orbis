@@ -9,7 +9,6 @@ import {
   KeyRound,
   Settings,
   Sun,
-  MessageSquare,
   BarChart3,
   BookOpenCheck,
   Inbox,
@@ -18,9 +17,16 @@ import {
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { cn } from "@/lib/cn";
+import { OrbiMark } from "@/components/product/OrbiMark";
+
+/** Orbi's own entry point carries Orbi's mark (mono, follows the nav text colour). */
+function OrbiIcon({ size = 16 }: { size?: number; "aria-hidden"?: boolean }) {
+  // The ring takes the full width: draw slightly larger so the head matches the stroke icons.
+  return <OrbiMark size={size + 2} mono className="-mx-px" />;
+}
 
 const NAV = [
-  { href: "/chat", label: "Ask Orbi", icon: MessageSquare },
+  { href: "/chat", label: "Ask Orbi", icon: OrbiIcon },
   { href: "/today", label: "Today", icon: Sun },
   { href: "/fiche", label: "Fiche entreprise", icon: BookOpenCheck },
   { href: "/demandes", label: "Demandes", icon: Inbox },

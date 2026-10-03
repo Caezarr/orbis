@@ -13,6 +13,8 @@ import {
   type NewInfoView,
   type QuestionView,
 } from "@/components/brain/OrbiQuestions";
+import { OrbiEmpty, OrbiSays } from "@/components/product/OrbiSays";
+import Link from "next/link";
 import s from "@/app/start/start.module.css";
 
 type Digest = {
@@ -45,6 +47,7 @@ export function InboxToday() {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [error, setError] = useState("");
   const [marking, setMarking] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -53,8 +56,11 @@ export function InboxToday() {
       });
       if (response.status === 503 || response.status === 401) {
         setDigest(null);
+        // 503: inbox drafts are off on this deployment. 401: no session, the shell handles it.
+        setUnavailable(response.status === 503);
         return;
       }
+      setUnavailable(false);
       if (!response.ok) throw new Error("unavailable");
       setDigest((await response.json()) as Digest);
       setError("");
@@ -87,6 +93,21 @@ export function InboxToday() {
     }
   }
 
+  if (!digest && unavailable)
+    return (
+      <section className={s.digest} aria-label="Vos décisions du jour">
+        <OrbiEmpty
+          title="Vos décisions du jour arriveront ici."
+          actions={<Link href="/start">Reprendre le démarrage</Link>}
+        >
+          <p>
+            Dès que votre boîte mail est branchée, je dépose ici les brouillons à relire et les questions que je dois
+            vous poser. Rien n’est jamais envoyé sans vous.
+          </p>
+          <p>Les brouillons de réponse ne sont pas encore activés sur ce déploiement.</p>
+        </OrbiEmpty>
+      </section>
+    );
   if (!digest && !error) return null;
   if (!digest)
     return (
@@ -100,6 +121,8 @@ export function InboxToday() {
   const { counts } = digest;
   const mailbox = digest.settings.provider === "outlook" ? "Outlook" : "Gmail";
   const nothing = counts.draftsReady + counts.needsReview === 0;
+  // One Orbi per viewport: the « Questions d’Orbi » block below has its own when questions are pending.
+  const orbiAsks = (digest.questions?.count ?? 0) > 0 || (digest.newInfo?.length ?? 0) > 0;
   return (
     <section className={s.digest} aria-label="Vos décisions du jour">
       <div className={s.digestHead}>
@@ -135,10 +158,19 @@ export function InboxToday() {
         </p>
       )}
       {nothing ? (
-        <p className={s.notice}>
-          Rien de nouveau à relire. Les brouillons apparaissent ici dès qu’Orbi
-          en prépare.
-        </p>
+        orbiAsks ? (
+          <p className={s.notice}>
+            Rien de nouveau à relire. Les brouillons apparaissent ici dès
+            qu’Orbi en prépare.
+          </p>
+        ) : (
+          <OrbiSays>
+            <p>
+              <strong>Rien de nouveau à relire.</strong>
+            </p>
+            <p>Je dépose ici chaque brouillon dès qu’il est prêt.</p>
+          </OrbiSays>
+        )
       ) : (
         digest.drafts.map((m) => (
           <DraftCard key={m.id} message={m} mailbox={mailbox} />
