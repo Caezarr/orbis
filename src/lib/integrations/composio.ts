@@ -122,6 +122,17 @@ export async function startConnection(
   const toolkit = toolkitSlug(slug);
   if (!config || !toolkit)
     throw new Error("This tool needs an administrator auth configuration.");
+  return startConnectionWith(userId, { config, toolkit }, callbackUrl);
+}
+/**
+ * Same as startConnection for an auth config that is not a catalogue slug
+ * (e.g. the calendar-only Outlook auth config). Server-resolved values only.
+ */
+export async function startConnectionWith(
+  userId: string,
+  { config, toolkit }: { config: string; toolkit: string },
+  callbackUrl: string,
+) {
   const sdk = client();
   await validateAuthConfig(sdk, config, toolkit);
   const link = await sdk.connectedAccounts

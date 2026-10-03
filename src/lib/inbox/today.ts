@@ -191,7 +191,7 @@ export async function todayDigest(now = new Date()): Promise<TodayDigest> {
   const drafts = (
     await ctx.db.query<DigestRow>(
       `SELECT id,batch_id,provider,message_id,thread_id,status,classification,skip_reason,flags,subject_preview,draft_preview,
-       questions,citations,draft_state,draft_id,received_at,drafted_at FROM inbox_messages
+       questions,citations,draft_state,draft_id,received_at,drafted_at,proposed_slots FROM inbox_messages
        WHERE workspace_id=$1 AND tenant_id=$2 AND status='drafted' AND drafted_at>$3 ORDER BY drafted_at DESC LIMIT 10`,
       [...ids, since],
     )
