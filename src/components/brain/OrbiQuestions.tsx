@@ -197,6 +197,13 @@ function QuestionCard({
               value={answer}
               maxLength={400}
               onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => {
+                // ⌘/Ctrl + Entrée enregistre la réponse (Entrée seule = retour à la ligne).
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               placeholder={conditional ? "Ex. : tel prix jusqu’à tel seuil, sur devis au-delà" : "Votre réponse, comme vous l’écririez à un client"}
             />
           </div>
