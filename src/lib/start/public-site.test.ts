@@ -66,6 +66,21 @@ describe("prepareStartProfile", () => {
       expect(p.origin).toBe("site");
     }
   });
+  it("turns dashes into commas and accepts a site figure the model forgot to cite", () => {
+    const base = profileFromCrawl(crawl);
+    const withYear = base.facts.find((f) => /2009/.test(`${f.quote} ${f.value ?? ""}`));
+    const other = base.facts.find((f) => f.id && f !== withYear && !/2009/.test(`${f.quote} ${f.value ?? ""}`));
+    expect(withYear?.id && other?.id).toBeTruthy();
+    const out = validateSynthesis(
+      { name: "Example SARL", summary: "Example SARL — paysagiste — entretient des jardins depuis 2009.", sources: [other!.id as string] },
+      base,
+    );
+    expect(out.summary).toBe("Example SARL, paysagiste, entretient des jardins depuis 2009.");
+    expect(out.sources).toContain(withYear!.id);
+    expect(() =>
+      validateSynthesis({ name: "Example SARL", summary: "Example SARL compte 12 jardiniers.", sources: [other!.id as string] }, base),
+    ).toThrow("unsupported figure");
+  });
   it("keeps a name only if it appears in the sources", () => {
     const base = profileFromCrawl(crawl);
     const fact = base.facts[0].id as string;

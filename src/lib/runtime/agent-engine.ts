@@ -6,7 +6,7 @@ import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/time";
 import { hashPayload } from "@/lib/ssrf";
 import { getStore, mutateStore } from "@/lib/store/store";
-import { getModel, providerStatus } from "./provider";
+import { generationSettings, getModel, providerStatus } from "./provider";
 import {
   contracts,
   planSchema,
@@ -211,7 +211,7 @@ export async function runTest(input: {
       system,
       prompt: `${payload}\n\n${prompt}`,
       output: Output.object({ schema }),
-      maxOutputTokens: 2400,
+      ...generationSettings(2400),
       maxRetries: 0,
       abortSignal: signal,
     });

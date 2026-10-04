@@ -23,7 +23,7 @@ const ROWS: Row[] = [
     status: "Actif",
     role: "Authentification des comptes et base de données PostgreSQL du service.",
     data: "Adresse e-mail du compte, données de l’espace de travail (fiche entreprise, métadonnées des e-mails traités, aperçus temporaires, demandes, réglages, données de facturation de référence).",
-    location: <Todo>région Supabase — UE prévue, à confirmer</Todo>,
+    location: "Union européenne (Irlande, région eu-west-1).",
     safeguards: <Todo>DPA Supabase, garanties de transfert le cas échéant</Todo>,
   },
   {
@@ -31,7 +31,7 @@ const ROWS: Row[] = [
     status: "Actif",
     role: "Hébergement de l’application et exécution des fonctions serveur.",
     data: "Données traitées en transit par l’application (requêtes, contenu des e-mails pendant leur traitement), journaux techniques.",
-    location: <Todo>région des fonctions Vercel</Todo>,
+    location: "Fonctions serveur dans l’Union européenne (Dublin, région dub1) ; réseau de diffusion mondial pour les pages publiques.",
     safeguards: <Todo>DPA Vercel, clauses contractuelles types</Todo>,
   },
   {

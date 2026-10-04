@@ -753,7 +753,7 @@ function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
             </blockquote>
           ) : (
             <p className={s.missing}>
-              <mark className={s.placeholder}>[[À CONFIRMER]]</mark> {NOT_FOUND_LABEL}
+              <mark className={s.placeholder}>À confirmer</mark> {NOT_FOUND_LABEL}
             </p>
           )}
         </li>
