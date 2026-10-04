@@ -27,11 +27,16 @@ import { processExtraction, type ExtractionStats } from "./extract";
 import { factSources } from "./facts";
 import { providerBrainModel, type BrainModel } from "./model";
 import type { OutcomeStore } from "./outcomes";
+import {
+  providerQuestionGrouper,
+  questionGroupingEnabled,
+  recordQuestionsWithGrouping,
+  type QuestionGrouper,
+} from "./grouping";
 import { draftQuestions } from "./questions";
 import {
   addBrainUsage,
   loadActiveFacts,
-  recordDraftQuestions,
   reserveBrainBudget,
   saveCandidates,
   type Ids,
@@ -70,6 +75,8 @@ type Mailbox = {
 export type BrainWorkerDeps = {
   model?: BrainModel;
   inboxModel?: InboxModel;
+  /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
+  questionGrouper?: QuestionGrouper;
   mailbox?: (...args: Parameters<typeof mailboxClient>) => Mailbox;
   deadline?: number;
   /** Plan entitlement loader (tests); defaults to the PostgreSQL entitlement service. */
@@ -312,6 +319,9 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
         model: deps.inboxModel ?? providerInboxModel,
         sources: replyContext(state, factSources(facts)),
         heartbeat,
+        questionGrouper: questionGroupingEnabled()
+          ? (deps.questionGrouper ?? providerQuestionGrouper)
+          : undefined,
       });
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
@@ -364,6 +374,7 @@ async function regenerate(params: {
   model: InboxModel;
   sources: ReturnType<typeof replyContext>;
   heartbeat: () => Promise<boolean>;
+  questionGrouper?: QuestionGrouper;
 }) {
   const { job, identity, run, mailbox } = params;
   const ids = [identity.workspaceId, identity.tenantId];
@@ -493,7 +504,7 @@ async function regenerate(params: {
     const questions = draftQuestions(guarded.body, guarded.questions, {
       thirdParties: [recipient, ...(message.from?.name ? [message.from.name] : [])],
     });
-    await run((db) => recordDraftQuestions(db, identity, target.id, questions));
+    await recordQuestionsWithGrouping(run, identity, target.id, questions, params.questionGrouper);
     return {
       outcome: mismatch ? "recipient_mismatch" : receipt.simulated ? "simulated" : "drafted",
       questions: questions.length,
