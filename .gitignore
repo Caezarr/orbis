@@ -51,3 +51,7 @@ next-env.d.ts
 
 # local demo mailbox state (pnpm demo:reset)
 /.orbis-demo/
+
+# playwright
+/test-results/
+/playwright-report/
