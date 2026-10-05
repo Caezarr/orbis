@@ -15,6 +15,7 @@ import {
   inboxErrorKind,
   isPending,
   NOT_FOUND_LABEL,
+  NOT_FOUND_LABEL_DESCRIPTION,
   PENDING_KEY,
   PREVIEW_SHOWN_KEY,
   quotePreview,
@@ -628,7 +629,7 @@ function PreviewStep({
             Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
             n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
           </p>
-          <LikelyQuestions questions={preview.questions} />
+          <LikelyQuestions questions={preview.questions} fromSite={!!host} />
           {preview.flags.includes("source_instructions_ignored") && (
             <p className={s.fine}>
               Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
@@ -714,7 +715,7 @@ function PreviewStep({
             brouillons apparaîtront avec vos vrais mails.
           </p>
           {preview.questions.length > 0 ? (
-            <LikelyQuestions questions={preview.questions} />
+            <LikelyQuestions questions={preview.questions} fromSite={!!host} />
           ) : (
             <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
           )}
@@ -734,7 +735,7 @@ function questionsTitle(n: number) {
 }
 
 /** Each answer is a sourced quote; a question without one is highlighted « À CONFIRMER ». */
-function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
+function LikelyQuestions({ questions, fromSite }: { questions: PreviewQuestion[]; fromSite: boolean }) {
   return (
     <ol className={s.likely}>
       {questions.map((q, i) => (
@@ -753,7 +754,7 @@ function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
             </blockquote>
           ) : (
             <p className={s.missing}>
-              <mark className={s.placeholder}>À confirmer</mark> {NOT_FOUND_LABEL}
+              <mark className={s.placeholder}>À confirmer</mark> {fromSite ? NOT_FOUND_LABEL : NOT_FOUND_LABEL_DESCRIPTION}
             </p>
           )}
         </li>

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
-import { likelyQuestions, NOT_FOUND_LABEL, profileFromSite, SIMULATED_LABEL, type StartProfile } from "./flow";
+import { likelyQuestions, NOT_FOUND_LABEL, NOT_FOUND_LABEL_DESCRIPTION, profileFromSite, SIMULATED_LABEL, type StartProfile } from "./flow";
 import {
   buildStartPreview,
   createDailyBudget,
@@ -124,6 +124,9 @@ describe("buildStartPreview — honesty", () => {
     expect(preview.questions.some((q) => q.question.includes("48"))).toBe(false);
     for (const q of preview.questions) if (q.answer) expect(pageText.replace(/\s+/g, " ")).toContain(q.answer.quote);
     expect(NOT_FOUND_LABEL).toMatch(/une seule fois/);
+    // Without a site (description path), the label must not point at one.
+    expect(NOT_FOUND_LABEL_DESCRIPTION).toMatch(/une seule fois/);
+    expect(NOT_FOUND_LABEL_DESCRIPTION).not.toMatch(/site/);
   });
 
   it("no invented number survives in example drafts, and labels are present", async () => {
