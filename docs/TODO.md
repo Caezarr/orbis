@@ -11,7 +11,7 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 5. [x] Regroupement des questions assisté par modèle : opt-in `ORBIS_BRAIN_QUESTION_GROUPING`, questions **ouvertes** seulement, repli lexical sur toute erreur — PR #38 ([company-brain.md](product/company-brain.md#model-assisted-question-grouping-opt-in-orbis_brain_question_groupingtrue)).
 6. [ ] Pages `/for` : MAJ copie quand la lecture de boîte sera en prod.
 7. [x] Tests E2E navigateur du parcours `/start` : Playwright, 4 tests sur la pile locale (description → lien magique Mailpit → Gmail démo vérifié serveur → blocage honnête sans modèle ; refus Outlook ; lien magique dans un autre navigateur ; visiteur déconnecté) — PR #39 ([e2e-start.md](product/e2e-start.md)).
-8. [x] Niveau 9 autonomie progressive : spec uniquement — [level-9-autonomy.md](product/level-9-autonomy.md) (envoi en un tap `supervised`, puis auto-envoi opt-in par catégorie `scoped_autonomy`, chemin broker séparé `mailbox-send-v1`, ADR 007 proposé). **Aucun code** avant les préalables du § 9 — PR #PRNUM.
+8. [x] Niveau 9 autonomie progressive : spec uniquement — [level-9-autonomy.md](product/level-9-autonomy.md) (envoi en un tap `supervised`, puis auto-envoi opt-in par catégorie `scoped_autonomy`, chemin broker séparé `mailbox-send-v1`, ADR 007 proposé). **Aucun code** avant les préalables du § 9 — PR #40.
 
 ## Découvert en route
 
