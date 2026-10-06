@@ -11,7 +11,7 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 5. [x] Regroupement des questions assisté par modèle : opt-in `ORBIS_BRAIN_QUESTION_GROUPING`, questions **ouvertes** seulement, repli lexical sur toute erreur — PR #38 ([company-brain.md](product/company-brain.md#model-assisted-question-grouping-opt-in-orbis_brain_question_groupingtrue)).
 6. [ ] Pages `/for` : MAJ copie quand la lecture de boîte sera en prod.
 7. [x] Tests E2E navigateur du parcours `/start` : Playwright, 4 tests sur la pile locale (description → lien magique Mailpit → Gmail démo vérifié serveur → blocage honnête sans modèle ; refus Outlook ; lien magique dans un autre navigateur ; visiteur déconnecté) — PR #39 ([e2e-start.md](product/e2e-start.md)).
-8. [ ] Niveau 9 autonomie progressive : spec uniquement.
+8. [x] Niveau 9 autonomie progressive : spec uniquement — [level-9-autonomy.md](product/level-9-autonomy.md) (envoi en un tap `supervised`, puis auto-envoi opt-in par catégorie `scoped_autonomy`, chemin broker séparé `mailbox-send-v1`, ADR 007 proposé). **Aucun code** avant les préalables du § 9 — PR #40.
 
 ## Découvert en route
 
@@ -26,6 +26,8 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 - [ ] Regroupement des questions : mesurer la qualité sur de vraies questions avant d'activer le flag en prod.
 - [x] Aperçu `/start` par description : « Orbi ne trouve pas la réponse sur votre site » affiché sans site → « dans votre description » (trouvé par l'E2E, PR #39).
 - [ ] E2E en CI : workflow GitHub Actions qui monte la pile locale (Supabase CLI, images Docker Hub) et lance `pnpm test:e2e`. Note : depuis le sandbox cloud, les images Supabase sur ECR sont bloquées ; `SUPABASE_INTERNAL_IMAGE_REGISTRY=docker.io pnpm local:up` passe.
+- [ ] Niveau 9 : 5 décisions de Gabriel (seuils d'éligibilité, délai d'annulation, plafond quotidien, plan concerné, signature) — spec § 10. Pas urgent : rien ne sera codé avant la prod des niveaux 2/5/8.
+- [ ] Garde des brouillons : aucun détecteur général de date/heure inventée hors brouillons de RDV (limite notée dans inbox-drafts.md). Préalable de l'auto-envoi, utile dès maintenant pour signaler une date promise par le modèle.
 - [ ] E2E : étape 4 avec un modèle factice local (brouillons visibles dans `/dev/demo-mailbox`), sans appel payant. Demande un faux fournisseur refusé en production, comme la boîte de démo.
 
 ## Décisions de Gabriel
