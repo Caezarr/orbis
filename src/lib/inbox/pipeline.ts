@@ -350,7 +350,8 @@ export async function processMailboxBatch(params: {
       // never read anyway: the recipient is computed by code above.
       const parsedDraft = replyDraftSchema.safeParse(generated.output);
       if (!parsedDraft.success) throw new InvalidModelOutput();
-      const guarded = guardDraft(parsedDraft.data, { sources, message });
+      // Meeting drafts: dates are checked against the offered slots below.
+      const guarded = guardDraft(parsedDraft.data, { sources, message }, { dates: !meeting });
       const allFlags = [...flags, ...guarded.issues.map((i) => `guard:${i}`)];
       if (meeting) {
         // Critique step for meetings: only code-computed slots may appear.
