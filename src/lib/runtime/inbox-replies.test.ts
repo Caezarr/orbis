@@ -225,3 +225,63 @@ describe("draft guard: never invent prices, contacts or links", () => {
     expect(result.issues).toEqual([]);
   });
 });
+
+describe("draft guard: never invent dates or times", () => {
+  const dated: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Ouvert du lundi au vendredi de 9h à 18h. Fermeture annuelle le 15 août. Salon le 2026-11-20.",
+    },
+  ];
+  const guard = (body: string, options?: { dates?: boolean }) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: dated, message: mail() }, options);
+
+  it.each([
+    "Nous passerons le 12 mars.",
+    "Livraison prévue mardi 14.",
+    "Je vous rappelle à 15h.",
+    "Rendez-vous à 10h30.",
+    "Intervention le 12/03.",
+    "Devis envoyé le 2026-10-12.",
+    "Nous viendrons demain.",
+    "Nous vous répondons d’ici vendredi.",
+    "On passe lundi prochain.",
+    "We will come next Monday.",
+    "We can be there at 3 pm.",
+  ])("replaces an unsourced date or time: %s", (body) => {
+    const result = guard(body);
+    expect(result.body).toContain("[[À CONFIRMER : date]]");
+    expect(result.issues).toContain("unsupported_date");
+    expect(result.questions).toContain(
+      "Date ou horaire à confirmer (proposé par le brouillon, non vérifié)",
+    );
+  });
+
+  it("keeps dates and hours written in trusted sources (accent/case-folded)", () => {
+    const result = guard("Nous sommes ouverts de 9h à 18h, fermés le 15 Aout, présents au salon le 2026-11-20.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).not.toContain("unsupported_date");
+  });
+
+  it("does not echo the proposed date into stored questions", () => {
+    const result = guard("Nous passerons le 12 mars à 10h30.");
+    expect(result.body).not.toMatch(/12 mars|10h30/);
+    expect(result.questions.join(" ")).not.toMatch(/12 mars|10h30/);
+  });
+
+  it("leaves durations, quantities and dates inside placeholders alone", () => {
+    const result = guard(
+      "Comptez 2 jours de travaux, sous 2h de route. [[À CONFIRMER : le 12 mars ?]] Nous avons 3 équipes.",
+    );
+    expect(result.body).toContain("Comptez 2 jours de travaux, sous 2h de route.");
+    expect(result.body).toContain("[[À CONFIRMER : le 12 mars ?]]");
+    expect(result.issues).not.toContain("unsupported_date");
+  });
+
+  it("is skipped for meeting drafts (checked against code-computed slots)", () => {
+    const result = guard("Je vous propose mardi 14 octobre à 10h00.", { dates: false });
+    expect(result.body).toBe("Je vous propose mardi 14 octobre à 10h00.");
+  });
+});
