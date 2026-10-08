@@ -524,6 +524,8 @@ export function meetingFlagLabel(flag: string): string | null {
 export function flagLabel(flag: string) {
   if (flag.startsWith("injection_suspected:"))
     return "Le mail contient des instructions suspectes : elles ont été ignorées.";
+  if (flag === "guard:vague_delay")
+    return "Promesse de délai vague (« rapidement »…) : précisez un délai réel ou retirez-la.";
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
   if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
