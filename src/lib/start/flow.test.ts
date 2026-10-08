@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decodePending,
+  flagLabel,
   decodePreviewShown,
   encodePreviewShown,
   likelyQuestions,
@@ -215,5 +216,14 @@ describe("instant preview (client-safe helpers)", () => {
     expect(decodePreviewShown(encodePreviewShown(false, now), now + PENDING_TTL_MS + 1)).toBeNull();
     expect(decodePreviewShown('{"v":1,"ai":"yes","savedAt":1}', now)).toBeNull();
     expect(decodePreviewShown("{", now)).toBeNull();
+  });
+});
+
+describe("flagLabel", () => {
+  it("says a vague delay was flagged, not replaced", () => {
+    expect(flagLabel("guard:vague_delay")).toMatch(/délai vague/);
+    expect(flagLabel("guard:unsupported_delay")).toBe(
+      "Des informations non sourcées ont été remplacées par des questions.",
+    );
   });
 });
