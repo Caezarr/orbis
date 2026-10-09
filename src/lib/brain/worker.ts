@@ -19,6 +19,7 @@ import {
   replyToDiverges,
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
+import { demoBrainModel, demoInboxModel, demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import { scoped, type Identity } from "@/lib/operations/worker";
 import { currentEntitlement } from "@/lib/billing/entitlements-store";
@@ -169,7 +170,8 @@ export function postgresOutcomeStore(
  */
 export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps = {}) {
   if (!inboxDraftsEnabled()) return { processed: false, reason: "disabled" };
-  if (!providerStatus().configured) throw new Error("AI provider not configured");
+  const demo = demoModelActive();
+  if (!providerStatus().configured && !demo) throw new Error("AI provider not configured");
   if (!monthlyCapCents()) throw new Error("Configure ORBIS_OPERATIONS_MONTHLY_CAP_CENTS first");
   const run = <T>(fn: (db: PoolClient) => Promise<T>) => scoped<T>(identity, fn);
   const ids = [identity.workspaceId, identity.tenantId];
@@ -255,7 +257,7 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
       stats = await processExtraction({
         job: { windowDays: claimed.window_days, maxMessages: claimed.max_messages },
         mailbox,
-        model: deps.model ?? providerBrainModel,
+        model: deps.model ?? (demo ? demoBrainModel : providerBrainModel),
         company: state.profile?.name,
         trustedText: trustedProfileText(state),
         cents: BRAIN_COSTS.extract(),
@@ -316,7 +318,7 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
         identity,
         run,
         mailbox,
-        model: deps.inboxModel ?? providerInboxModel,
+        model: deps.inboxModel ?? (demo ? demoInboxModel : providerInboxModel),
         sources: replyContext(state, factSources(facts)),
         heartbeat,
         questionGrouper: questionGroupingEnabled()
