@@ -58,6 +58,8 @@ ORBIS_DIGEST=true
 ORBIS_OPERATIONS_MONTHLY_CAP_CENTS=2000
 # Fake Gmail/Outlook for local runs (refused in production): pnpm demo:reset, then /dev/demo-mailbox
 ORBIS_DEMO_MAILBOX=true
+# Template drafts without any model call (refused in production, needs the demo mailbox):
+# ORBIS_AI_PROVIDER=demo
 ENV
 }
 
