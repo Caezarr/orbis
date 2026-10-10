@@ -25,13 +25,14 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 - [ ] 4 commits de `fix/start-ai-fallback-reason` poussés après le merge de #36 (IA muette en prod sur Claude 5, fonctions à Dublin) : jamais arrivés sur main → PR #37 (04/10), à merger par Gabriel (toujours ouverte le 09/10).
 - [ ] Regroupement des questions : mesurer la qualité sur de vraies questions avant d'activer le flag en prod.
 - [x] Aperçu `/start` par description : « Orbi ne trouve pas la réponse sur votre site » affiché sans site → « dans votre description » (trouvé par l'E2E, PR #39).
-- [ ] E2E en CI : workflow GitHub Actions qui monte la pile locale (Supabase CLI, images Docker Hub) et lance `pnpm test:e2e`. Note : depuis le sandbox cloud, les images Supabase sur ECR sont bloquées ; `SUPABASE_INTERNAL_IMAGE_REGISTRY=docker.io pnpm local:up` passe.
+- [x] CI GitHub Actions (`.github/workflows/ci.yml`) : job `checks` (typegen, tsc, vitest) + job `e2e` (pile Supabase locale sur le runner, `pnpm test:e2e` sans modèle puis avec le modèle factice). Aucun secret, aucun service live — PR #44 ([e2e-start.md](product/e2e-start.md#in-ci)). Premier passage réel sur GitHub à vérifier à l'ouverture de la PR.
 - [ ] Niveau 9 : 5 décisions de Gabriel (seuils d'éligibilité, délai d'annulation, plafond quotidien, plan concerné, signature) — spec § 10. Pas urgent : rien ne sera codé avant la prod des niveaux 2/5/8.
 - [x] Garde des brouillons : date/heure absente des sources → `[[À CONFIRMER : date]]` + question, hors brouillons de RDV (déjà contrôlés par les créneaux) — PR #41 (07/10, [inbox-drafts.md](product/inbox-drafts.md)).
 - [x] Garde des brouillons : délais inventés (« sous 48h », « en 3 jours ») → `[[À CONFIRMER : délai]]` ; promesses vagues (« rapidement ») signalées au relecteur sans réécriture — PR #42 (08/10, [inbox-drafts.md](product/inbox-drafts.md)).
 - [ ] Garde des brouillons : engagements verbaux (« nous nous en occupons », « c'est noté, nous passerons ») et délais hors motifs (« avant la fin du mois ») non détectés. Préalable de l'auto-envoi (niveau 9) ; demanderait un contrôle assisté par modèle.
 - [x] E2E : étape 4 avec un modèle factice local (`ORBIS_AI_PROVIDER=demo`, refusé en production, actif seulement avec la boîte de démo, chaque brouillon étiqueté « démonstration »), sans appel payant — PR #43 ([e2e-start.md](product/e2e-start.md#step-4-with-the-demo-model)). Testé par vitest sur le vrai pipeline ; le test Playwright `e2e/drafts.spec.ts` n'a **pas** pu tourner dans le sandbox du 09/10 (pas de Docker → pas de Supabase local).
-- [ ] Lancer `E2E_DEMO_MODEL=1 pnpm test:e2e` sur une machine avec Docker (ou en CI) et corriger ce qui casse.
+- [x] `E2E_DEMO_MODEL=1 pnpm test:e2e` lancé le 10/10 (Docker disponible dans le sandbox cloud ce jour-là) : 4 passés / 1 ignoré dans chaque mode, depuis une pile vierge, rien à corriger — PR #44.
+- [ ] CI : pas de lint dans le job `checks` (`pnpm lint` le 10/10 : 11 erreurs, 3 avertissements, préexistants ; les corriger avant de l'ajouter).
 
 ## Décisions de Gabriel
 
