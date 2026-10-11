@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { withWorkspaceRequest } from "@/lib/platform/request";
-import { workspaceContext } from "@/lib/platform/context";
 import { PlatformError } from "@/lib/platform/auth";
 import {
   browseRemote,
