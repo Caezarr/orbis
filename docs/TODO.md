@@ -32,7 +32,7 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 - [ ] Garde des brouillons : engagements verbaux (« nous nous en occupons », « c'est noté, nous passerons ») et délais hors motifs (« avant la fin du mois ») non détectés. Préalable de l'auto-envoi (niveau 9) ; demanderait un contrôle assisté par modèle.
 - [x] E2E : étape 4 avec un modèle factice local (`ORBIS_AI_PROVIDER=demo`, refusé en production, actif seulement avec la boîte de démo, chaque brouillon étiqueté « démonstration »), sans appel payant — PR #43 ([e2e-start.md](product/e2e-start.md#step-4-with-the-demo-model)). Testé par vitest sur le vrai pipeline ; le test Playwright `e2e/drafts.spec.ts` n'a **pas** pu tourner dans le sandbox du 09/10 (pas de Docker → pas de Supabase local).
 - [x] `E2E_DEMO_MODEL=1 pnpm test:e2e` lancé le 10/10 (Docker disponible dans le sandbox cloud ce jour-là) : 4 passés / 1 ignoré dans chaque mode, depuis une pile vierge, rien à corriger — PR #44.
-- [x] CI : `pnpm lint` ajouté au job `checks` (11/10). Les 11 erreurs préexistantes corrigées : `BlurText.tsx` supprimé (jamais importé), les `any` de `knowledge/remote.ts` regroupés en un seul type `ApiJson` documenté — PR à venir.
+- [x] CI : `pnpm lint` ajouté au job `checks` (11/10). Les 11 erreurs préexistantes corrigées : `BlurText.tsx` supprimé (jamais importé), les `any` de `knowledge/remote.ts` regroupés en un seul type `ApiJson` documenté — PR #45.
 - [ ] Lint : 2 avertissements restants, non bloquants. `Audit.tsx` navigue avec `window.location.assign()` (→ `router.push`, à tester) ; `MotionScenes.tsx` importe `ReactNode` sans l'utiliser (landing : attend l'accord de Gabriel).
 
 ## Décisions de Gabriel
