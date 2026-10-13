@@ -397,6 +397,20 @@ describe("draft guard: never invent delays", () => {
   });
 });
 
+describe("draft guard: more vague speed promises", () => {
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: [], message: mail() });
+  it.each([
+    "On vous rappelle dès que possible.",
+    "Nous passerons le plus vite possible.",
+    "Nous intervenons en urgence.",
+    "Votre dossier est traité en priorité.",
+    "We'll reply as soon as we can.",
+  ])("flags: %s", (body) => {
+    expect(guard(body).issues).toContain("vague_delay");
+  });
+});
+
 describe("draft guard: flag verbal commitments", () => {
   const sheet: ReplySource[] = [
     {
@@ -445,5 +459,77 @@ describe("draft guard: flag verbal commitments", () => {
   it("leaves a commitment inside a placeholder alone", () => {
     const result = guard("[[À CONFIRMER : nous passerons ?]] Merci.");
     expect(result.issues).not.toContain("unsupported_commitment");
+  });
+  it.each([
+    "Nous ferons le nécessaire pour votre toiture.",
+    "On fait le nécessaire.",
+    "Nous allons faire tout notre possible.",
+    "On vous rappelle demain matin.",
+    "Je vous rappellerai pour fixer la visite.",
+    "We'll call you back.",
+  ])("flags phrasings outside the first patterns: %s", (body) => {
+    expect(guard(body).issues).toContain("unsupported_commitment");
+  });
+
+  it.each(["Je vous rappelle que le chantier est fermé le dimanche.", "Nous vous rappelons qu’un acompte est demandé."])(
+    "leaves reminders alone: %s",
+    (body) => {
+      expect(guard(body).issues).not.toContain("unsupported_commitment");
+    },
+  );
+});
+
+describe("draft guard: flag free services and refunds", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Devis gratuit sous conditions. Remboursement selon nos CGV.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const FREE_Q =
+    "Gratuité ou remboursement promis (« offert », « à nos frais »…) : vérifier que vos conditions le prévoient ou le retirer";
+
+  it.each([
+    "Le déplacement est offert.",
+    "Nous effectuerons un déplacement gratuit.",
+    "La reprise se fera sans frais supplémentaires.",
+    "Le remplacement de la pièce est à nos frais.",
+    "Nous vous rembourserons l'acompte.",
+    "Vous serez remboursé sous peu.",
+    "We will fix it free of charge.",
+    "We'll refund the deposit.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_free_offer");
+    expect(result.questions).toContain(FREE_Q);
+    expect(result.body).toContain(body);
+  });
+
+  it("does not flag a free service the business itself states", () => {
+    expect(guard("Bonjour, devis gratuit sous conditions, bien sûr.").issues).not.toContain(
+      "unsupported_free_offer",
+    );
+  });
+
+  it("does not let one free item vouch for another", () => {
+    expect(guard("Devis gratuit et déplacement gratuit.").issues).toContain("unsupported_free_offer");
+  });
+
+  it.each([
+    "Concernant votre demande de remboursement, pouvez-vous nous envoyer la facture ?",
+    "Pouvez-vous préciser si la pièce est sous garantie ?",
+    "Merci de votre offre de collaboration.",
+  ])("leaves questions and customer requests alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_free_offer");
+  });
+
+  it("leaves an offer inside a placeholder alone", () => {
+    expect(guard("[[À CONFIRMER : déplacement offert ?]] Merci.").issues).not.toContain(
+      "unsupported_free_offer",
+    );
   });
 });
