@@ -67,7 +67,7 @@ export function Audit({
               body: JSON.stringify({ website }), signal: controller.signal,
             });
             if (response.status === 401) {
-              window.location.assign(`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+              router.push(`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
               return;
             }
             site = await response.json();
@@ -105,7 +105,7 @@ export function Audit({
       }
     }, 0);
     return () => { cancelled = true; clearTimeout(timer); controller.abort(); };
-  }, [website, fromDescription]);
+  }, [website, fromDescription, router]);
   const valid = [
     form.company.trim().length >= 2 && form.description.trim().length >= 20,
     !!form.department && form.volume.trim().length >= 2,
