@@ -1,7 +1,8 @@
 /**
  * V1 focus (docs/strategy/17-v1-self-serve.md, « Ce qu'on gèle »): the
  * horizontal product (catalogue, missions, workflows, knowledge, analytics,
- * integrations catalogue, old audit/onboarding, Ask Orbi chat) is frozen.
+ * integrations catalogue, old audit/onboarding, industry pages, Ask Orbi
+ * chat) is frozen.
  * The code stays; the workspace hides it from navigation and its routes
  * redirect to the wedge page that replaces them.
  *
@@ -19,6 +20,9 @@ export const FROZEN_ROUTES: readonly (readonly [prefix: string, target: string])
   ["/discover", "/start"],
   ["/audit", "/start"],
   ["/onboarding", "/start"],
+  // Industry pages describe catalogue missions (source pickers, /audit, /catalog),
+  // not the V1 inbox wedge — doc 17 freezes the verticals from the public UI.
+  ["/for", "/start"],
   // Workspace surfaces of the horizontal product.
   ["/chat", "/today"],
   ["/missions", "/today"],
