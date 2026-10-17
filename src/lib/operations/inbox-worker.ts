@@ -19,6 +19,12 @@ import {
   providerInboxModel,
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
+import {
+  claimCheckCents,
+  claimCheckEnabled,
+  providerClaimChecker,
+  type ClaimChecker,
+} from "@/lib/inbox/claim-check";
 import { demoBrainModel, demoFollowupModel, demoInboxModel, demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
@@ -88,6 +94,8 @@ export type InboxWorkerDeps = {
   brainModel?: BrainModel;
   /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
   questionGrouper?: QuestionGrouper;
+  /** Claim check model (tests); used only when ORBIS_INBOX_CLAIM_CHECK=true. */
+  claimChecker?: ClaimChecker;
   mailbox?: (
     ...args: Parameters<typeof mailboxClient>
   ) => Parameters<typeof processMailboxBatch>[0]["mailbox"] &
@@ -312,7 +320,13 @@ export async function runOneInboxBatch(
       costs: {
         classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
         draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
+        claimCheckCents: claimCheckCents(),
       },
+      // Never with the demo model: it writes canned drafts, nothing to check.
+      claimChecker:
+        claimCheckEnabled() && !demo
+          ? (deps.claimChecker ?? providerClaimChecker)
+          : undefined,
       shouldYield:
         deps.deadline === undefined
           ? undefined
