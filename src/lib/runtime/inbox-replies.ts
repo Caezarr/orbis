@@ -609,6 +609,20 @@ function flagUnsupported(
   });
   return flagged;
 }
+/**
+ * Reviewer questions for claims kept in the draft but flagged (never rewritten).
+ * Shared with the model-assisted claim check (src/lib/inbox/claim-check.ts) so
+ * both paths raise the same question once.
+ */
+export const REVIEW_QUESTIONS = {
+  vague_delay: "Promesse de délai vague (« rapidement »…) : préciser un délai réel ou la retirer",
+  commitment:
+    "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer",
+  free_offer:
+    "Gratuité ou remboursement promis (« offert », « à nos frais »…) : vérifier que vos conditions le prévoient ou le retirer",
+  discount:
+    "Remise ou geste commercial promis (« remise », « geste commercial »…) : vérifier que vous l'accordez ou le retirer",
+} as const;
 /** Question/placeholder text that tries to instruct the model or the reviewer. */
 const NEUTRAL_QUESTION = "information à confirmer";
 /**
@@ -671,19 +685,13 @@ export function guardDraft(
   body = delayed.body;
   if (delayed.found) questions.push("Délai à confirmer (proposé par le brouillon, non vérifié)");
   if (delayed.vague)
-    questions.push("Promesse de délai vague (« rapidement »…) : préciser un délai réel ou la retirer");
+    questions.push(REVIEW_QUESTIONS.vague_delay);
   if (flagUnsupported(COMMITMENT, "unsupported_commitment", body, trusted, issues))
-    questions.push(
-      "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer",
-    );
+    questions.push(REVIEW_QUESTIONS.commitment);
   if (flagUnsupported(FREE_OFFER, "unsupported_free_offer", body, trusted, issues))
-    questions.push(
-      "Gratuité ou remboursement promis (« offert », « à nos frais »…) : vérifier que vos conditions le prévoient ou le retirer",
-    );
+    questions.push(REVIEW_QUESTIONS.free_offer);
   if (flagUnsupported(DISCOUNT, "unsupported_discount", body, trusted, issues))
-    questions.push(
-      "Remise ou geste commercial promis (« remise », « geste commercial »…) : vérifier que vous l'accordez ou le retirer",
-    );
+    questions.push(REVIEW_QUESTIONS.discount);
   if (injectionSignals(body).length) issues.push("injection_echo");
   const citations = draft.citations.filter((c) => {
     const source = input.sources.find((s) => s.id === c.sourceId);
