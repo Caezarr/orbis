@@ -397,7 +397,12 @@ export async function runOneInboxBatch(
           costs: {
             classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
             draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
+            claimCheckCents: claimCheckCents(),
           },
+          claimChecker:
+            claimCheckEnabled() && !demo
+              ? (deps.claimChecker ?? providerClaimChecker)
+              : undefined,
           shouldYield:
             deps.deadline === undefined
               ? undefined

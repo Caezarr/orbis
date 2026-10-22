@@ -7,6 +7,7 @@ import {
 } from "@/lib/integrations/mailbox";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import { redactThirdParty, stripQuoted } from "@/lib/brain/text";
+import { runClaimCheck, type ClaimChecker } from "@/lib/inbox/claim-check";
 import type { ReplyContext } from "@/lib/inbox/context";
 import {
   guardDraft,
@@ -113,7 +114,12 @@ export async function runFollowups(params: {
   context: ReplyContext;
   /** Fresh plan check before each follow-up draft (draft quota). */
   canDraft: () => Promise<boolean>;
-  costs: { classifyCents: number; draftCents: number };
+  costs: { classifyCents: number; draftCents: number; claimCheckCents?: number };
+  /**
+   * Model-assisted claim check (opt-in, src/lib/inbox/claim-check.ts), same as
+   * reply drafts: adds reviewer flags and questions, never rewrites the body.
+   */
+  claimChecker?: ClaimChecker;
   now?: () => Date;
   shouldYield?: () => boolean;
   maxThreads?: number;
@@ -284,6 +290,22 @@ export async function runFollowups(params: {
       if (!parsedDraft.success) throw new Error("invalid_model_output");
       const guarded = guardDraft(parsedDraft.data, { sources, message: customer });
       const flags = [...guarded.issues.map((i) => `guard:${i}`), `owner_message:${kind}`];
+      if (params.claimChecker) {
+        // Charged as part of the follow-up draft (its own usage row).
+        let checkUsageId: string | null = null;
+        flags.push(
+          ...(await runClaimCheck(guarded, sources, {
+            checker: params.claimChecker,
+            reserve: async () =>
+              !!(checkUsageId = await store.reserve(
+                "followup_draft",
+                followupId,
+                params.costs.claimCheckCents ?? 1,
+              )),
+            addUsage: (usage) => store.addUsage(checkUsageId!, usage),
+          })),
+        );
+      }
       await store.finishFollowup(followupId, {
         status: "drafting",
         reason: kind,

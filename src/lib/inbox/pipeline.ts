@@ -27,7 +27,7 @@ import {
   type MeetingPlan,
   type Slot,
 } from "@/lib/calendar/slots";
-import { applyClaimCheck, claimCheckSchema, type ClaimChecker } from "./claim-check";
+import { runClaimCheck, type ClaimChecker } from "./claim-check";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -374,24 +374,14 @@ export async function processMailboxBatch(params: {
           ...check.issues.map((i) => `meeting:${i}`),
         );
       }
-      if (params.claimChecker) {
-        try {
-          if (!(await store.reserveBudget(row.rowId, costs.claimCheckCents ?? 1)))
-            allFlags.push("claim_check:budget");
-          else {
-            const checked = await params.claimChecker.check({
-              draft: guarded.body,
-              sources,
-            });
-            await store.addUsage(row.rowId, checked.usage);
-            const result = applyClaimCheck(guarded, claimCheckSchema.parse(checked.output));
-            Object.assign(guarded, result.guarded);
-            allFlags.push(...result.flags);
-          }
-        } catch {
-          allFlags.push("claim_check:unavailable");
-        }
-      }
+      if (params.claimChecker)
+        allFlags.push(
+          ...(await runClaimCheck(guarded, sources, {
+            checker: params.claimChecker,
+            reserve: () => store.reserveBudget(row.rowId, costs.claimCheckCents ?? 1),
+            addUsage: (usage) => store.addUsage(row.rowId, usage),
+          })),
+        );
       await store.update(row.rowId, {
         status: "drafting",
         flags: allFlags,

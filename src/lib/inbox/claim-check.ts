@@ -123,6 +123,35 @@ export function applyClaimCheck(guarded: GuardResult, output: ClaimCheck) {
   };
 }
 
+/**
+ * Runs the checker after the pattern guard. Shared by every path that writes
+ * a reply draft into the mailbox: inbox pipeline, follow-ups (level 6) and
+ * brain regenerations. Updates `guarded` in place with the verified result and
+ * returns the flags to record. Never throws: no budget → `claim_check:budget`,
+ * any failure → `claim_check:unavailable`, guard result unchanged.
+ */
+export async function runClaimCheck(
+  guarded: GuardResult,
+  sources: ReplySource[],
+  deps: {
+    checker: ClaimChecker;
+    /** Reserves the estimated cost in the workspace budget; false = refused. */
+    reserve: () => Promise<boolean>;
+    addUsage: (usage: ModelUsage) => Promise<void>;
+  },
+): Promise<string[]> {
+  try {
+    if (!(await deps.reserve())) return ["claim_check:budget"];
+    const checked = await deps.checker.check({ draft: guarded.body, sources });
+    await deps.addUsage(checked.usage);
+    const result = applyClaimCheck(guarded, claimCheckSchema.parse(checked.output));
+    Object.assign(guarded, result.guarded);
+    return result.flags;
+  } catch {
+    return ["claim_check:unavailable"];
+  }
+}
+
 const usageOf = (u: { inputTokens?: number; outputTokens?: number }) => ({
   inputTokens: u.inputTokens ?? 0,
   outputTokens: u.outputTokens ?? 0,
