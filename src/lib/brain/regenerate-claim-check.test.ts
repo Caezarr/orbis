@@ -63,7 +63,7 @@ const state = {
 };
 const ent = { canProcess: true, draftsRemaining: 10 } as Entitlement;
 
-function harness() {
+function harness(draftBody = body) {
   const createReplyDraft = vi.fn(async (input: { body: string; recipient: string }) => ({
     draftId: "simulated:1",
     threadId: "th",
@@ -81,7 +81,7 @@ function harness() {
   }));
   const inboxModel = {
     classify: vi.fn(),
-    draft: vi.fn(async () => ({ output: { body, questions: [], citations: [] }, usage })),
+    draft: vi.fn(async () => ({ output: { body: draftBody, questions: [], citations: [] }, usage })),
   };
   return { mailbox, inboxModel, createReplyDraft };
 }
@@ -118,6 +118,12 @@ describe("brain regeneration claim check (opt-in)", () => {
     expect(checker.check).not.toHaveBeenCalled();
     expect(usageKinds()).toEqual(["regenerate"]);
     expect((h.createReplyDraft.mock.calls[0]![0] as { body: string }).body).toBe(body);
+  });
+
+  it("keeps the pattern-guard flags for the reviewer notes, claim check off", async () => {
+    const h = harness("Bonjour,\n\nNous passerons chez vous pour regarder.\n\nCordialement");
+    const r = await runOneBrainJob(identity, { ...h, entitlement: async () => ent } as never);
+    expect(r).toMatchObject({ failure: null, stats: { outcome: "simulated", flags: ["guard:unsupported_commitment"] } });
   });
 
   it("flags a paraphrased commitment: question banner added, sentence kept, budgeted", async () => {

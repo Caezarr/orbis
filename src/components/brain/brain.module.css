@@ -254,6 +254,15 @@
   color: var(--text);
   font-size: 14px;
 }
+.notes {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--amber);
+}
 .fine {
   font-size: 12px;
   color: var(--text);

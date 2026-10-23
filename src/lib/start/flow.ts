@@ -549,9 +549,14 @@ export function flagLabel(flag: string) {
       reply_to_diverges: "L’adresse de réponse diffère de l’expéditeur : à vérifier avant tout brouillon.",
       recipient_mismatch: "Le destinataire du brouillon ne correspond pas à l’expéditeur : à vérifier.",
       awaiting_draft_quota: "En attente : limite de brouillons du premier passage atteinte.",
+      recipient_check: "Destinataire inhabituel dans la conversation : aucune relance préparée, à vérifier.",
     }[flag] ?? null
   );
 }
+
+/** Reviewer notes for a draft: one line per distinct label, internal flags dropped. */
+export const flagLabels = (flags: string[]) =>
+  [...new Set(flags.map(flagLabel))].filter((label): label is string => !!label);
 
 export type ResultSummary = {
   drafts: InboxMessageView[];

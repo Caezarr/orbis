@@ -1,6 +1,6 @@
 "use client";
 
-import { splitPlaceholders } from "@/lib/start/flow";
+import { flagLabels, splitPlaceholders } from "@/lib/start/flow";
 import type { RequestView } from "@/lib/followups/service";
 import type { PipelineStatus } from "@/lib/followups/detect";
 import { OrbiEmpty } from "@/components/product/OrbiSays";
@@ -46,6 +46,18 @@ export const dateFr = (iso: string | null, withTime = false) =>
     : "pas encore";
 function statusClass(status: PipelineStatus) {
   return status === "gagne" ? s.ok : status === "perdu" ? s.bad : status === "nouveau" ? s.warn : s.badge;
+}
+/** What the guards flagged on a follow-up draft (patterns, opt-in claim check, recipient). */
+function ReviewerNotes({ flags }: { flags: string[] }) {
+  const notes = flagLabels(flags);
+  if (!notes.length) return null;
+  return (
+    <ul className={s.notes} aria-label="Points à vérifier">
+      {notes.map((label) => (
+        <li key={label}>{label}</li>
+      ))}
+    </ul>
+  );
 }
 function Body({ text }: { text: string }) {
   return (
@@ -239,6 +251,7 @@ export function RequestsView({
                       {f.draftedAt ? ` · ${dateFr(f.draftedAt, true)}` : ""}
                     </span>
                     {f.preview && <Body text={f.preview} />}
+                    <ReviewerNotes flags={f.flags} />
                     {f.status === "drafted" && (
                       <p className={s.fine}>
                         {f.simulated
