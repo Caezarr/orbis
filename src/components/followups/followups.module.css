@@ -204,6 +204,13 @@
   background: #fafbfd;
   min-width: 0;
 }
+.confirm h4 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber);
+}
+.confirm ul,
 .notes {
   margin: 0;
   padding-left: 18px;
@@ -417,4 +424,7 @@
 .followup > span {
   justify-self: start;
   white-space: normal;
+}
+.confirm ul {
+  color: var(--text);
 }
