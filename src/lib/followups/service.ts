@@ -180,11 +180,28 @@ export async function requestAction(id: string, input: z.infer<typeof actionSche
       "UPDATE followups SET status='dismissed', updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3 AND draft_state='none' AND status IN ('drafting','failed','not_needed')",
       [id, ...p(ctx)],
     );
-  if (input.action === "erase_contact")
+  if (input.action === "erase_contact") {
     await ctx.db.query(
       "UPDATE followups SET draft_preview=NULL, questions='[]'::jsonb, updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3",
       [id, ...p(ctx)],
     );
+    // The thread's reply previews (subject, draft greeting, questions) name the
+    // contact too: without this they stayed in Today and in the export for 30 days.
+    await ctx.db.query(
+      `UPDATE inbox_messages m SET subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb, updated_at=now()
+       FROM pipeline_items i WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3
+         AND m.workspace_id=i.workspace_id AND m.tenant_id=i.tenant_id AND m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id`,
+      [id, ...p(ctx)],
+    );
+    await ctx.db.query(
+      `UPDATE brain_jobs j SET draft_preview=NULL
+       FROM pipeline_items i JOIN inbox_messages m ON m.workspace_id=i.workspace_id AND m.tenant_id=i.tenant_id
+         AND m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id
+       WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3
+         AND j.inbox_message_id=m.id AND j.workspace_id=i.workspace_id AND j.tenant_id=i.tenant_id AND j.draft_preview IS NOT NULL`,
+      [id, ...p(ctx)],
+    );
+  }
   const row = (await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3`, [id, ...p(ctx)])).rows[0];
   return publicItem(row!);
 }

@@ -43,7 +43,7 @@ export function Requests({ view = "demandes" }: { view?: "demandes" | "relances"
   }, [filters, reload]);
 
   async function act(id: string, action: RequestAction) {
-    if (action.action === "erase_contact" && !window.confirm("Effacer le nom, l’adresse et le résumé de cette demande ? C’est définitif."))
+    if (action.action === "erase_contact" && !window.confirm("Effacer le nom, l’adresse et le résumé de cette demande, et les aperçus de ses e-mails dans Orbis ? C’est définitif."))
       return;
     setBusy(id);
     setError("");
