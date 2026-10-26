@@ -56,7 +56,7 @@ export async function addPipelineUsage(db: PoolClient, ids: Ids, usageId: string
 /** Retention: contact data nulled 24 months after the last activity; follow-up previews after 30 days. */
 export async function purgePipeline(db: PoolClient, ids: Ids) {
   await db.query(
-    "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND contact_erased_at IS NULL",
+    "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, contact_domain=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=COALESCE(contact_erased_at, now()), updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (contact_erased_at IS NULL OR contact_domain IS NOT NULL)",
     p(ids),
   );
   await db.query(
