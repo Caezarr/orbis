@@ -471,6 +471,16 @@ describe("draft guard: flag verbal commitments", () => {
     expect(guard(body).issues).toContain("unsupported_commitment");
   });
 
+  it.each([
+    "Pas de souci, on s'arrange.",
+    "On va s’arranger pour la date.",
+    "Nous trouverons une solution ensemble.",
+    "On va trouver un arrangement.",
+    "We'll work something out.",
+  ])("flags open-ended arrangements: %s", (body) => {
+    expect(guard(body).issues).toContain("unsupported_commitment");
+  });
+
   it.each(["Je vous rappelle que le chantier est fermé le dimanche.", "Nous vous rappelons qu’un acompte est demandé."])(
     "leaves reminders alone: %s",
     (body) => {
@@ -530,6 +540,69 @@ describe("draft guard: flag free services and refunds", () => {
   it("leaves an offer inside a placeholder alone", () => {
     expect(guard("[[À CONFIRMER : déplacement offert ?]] Merci.").issues).not.toContain(
       "unsupported_free_offer",
+    );
+  });
+});
+
+describe("draft guard: flag discounts and commercial gestures", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Remise de 10 % pour les clients fidèles. Tarifs : main d'œuvre 55 € HT/h.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const DISCOUNT_Q =
+    "Remise ou geste commercial promis (« remise », « geste commercial »…) : vérifier que vous l'accordez ou le retirer";
+
+  it.each([
+    "Nous vous accordons une remise sur la main d'œuvre.",
+    "Je vous fais un petit geste.",
+    "Nous allons vous faire une réduction.",
+    "Nous vous proposons un tarif préférentiel.",
+    "À titre de geste commercial, la dépose est incluse.",
+    "Pour vous, ce sera un prix d'ami.",
+    "Les joints, c'est cadeau.",
+    "We'll give you a discount on the labour.",
+    "As a goodwill gesture, we include the removal.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_discount");
+    expect(result.questions).toContain(DISCOUNT_Q);
+    expect(result.body).toContain(body);
+  });
+
+  it("flags the concession that survives the amount guard", () => {
+    const result = guard("Nous appliquerons une remise de 15 % sur le devis.");
+    expect(result.issues).toEqual(
+      expect.arrayContaining(["unsupported_amount", "unsupported_discount"]),
+    );
+    expect(result.body).not.toContain("15 %");
+    expect(guard("Vous bénéficiez de 20 % de réduction.").issues).toContain("unsupported_discount");
+  });
+
+  it("does not flag a discount the business itself states", () => {
+    const result = guard("Vous êtes client fidèle : remise de 10 % sur ce devis.");
+    expect(result.issues).not.toContain("unsupported_discount");
+    expect(result.body).toContain("10 %");
+  });
+
+  it.each([
+    "Concernant votre demande de remise, nous revenons vers vous.",
+    "Nous ferons la remise en état du mur.",
+    "Nous effectuerons la remise à neuf du parquet.",
+    "La remise des clés est prévue en fin de chantier.",
+    "Pouvez-vous préciser le geste attendu ?",
+  ])("leaves customer requests and work descriptions alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_discount");
+  });
+
+  it("leaves a discount inside a placeholder alone", () => {
+    expect(guard("[[À CONFIRMER : remise accordée ?]] Merci.").issues).not.toContain(
+      "unsupported_discount",
     );
   });
 });

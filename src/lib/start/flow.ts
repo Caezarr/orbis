@@ -530,6 +530,8 @@ export function flagLabel(flag: string) {
     return "Engagement pris en votre nom (« nous passerons »…) : vérifiez qu’il est tenable ou retirez-le.";
   if (flag === "guard:unsupported_free_offer")
     return "Gratuité ou remboursement promis (« offert »…) : vérifiez que vos conditions le prévoient ou retirez-le.";
+  if (flag === "guard:unsupported_discount")
+    return "Remise ou geste commercial promis en votre nom : vérifiez que vous l’accordez ou retirez-le.";
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
   if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
