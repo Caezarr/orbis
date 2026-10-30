@@ -17,7 +17,7 @@ import {
   URL_RE as LINK_RE,
 } from "@/lib/security/untrusted-text";
 import { generationSettings, getModel } from "./provider";
-import type { MeetingPlan } from "@/lib/calendar/slots";
+import { TIME_MENTION, type MeetingPlan } from "@/lib/calendar/slots";
 
 /*
  * Mission contract "inbox-replies". Kept out of the generic `contracts` map on
@@ -32,7 +32,9 @@ import type { MeetingPlan } from "@/lib/calendar/slots";
  *  - Post-generation guards replace amounts, email addresses, URLs, bare
  *    domains and phone numbers that do not appear in trusted sources with
  *    highlighted placeholders, in the body AND the questions (unicode-aware,
- *    see src/lib/security/untrusted-text.ts).
+ *    see src/lib/security/untrusted-text.ts). Dates and times of day absent
+ *    from trusted sources get the same treatment in the body (meeting drafts
+ *    are checked against code-computed slots instead).
  */
 export const INBOX_CONTRACT = {
   slug: "inbox-replies",
@@ -412,6 +414,47 @@ function scrub(
   );
   return out;
 }
+/**
+ * Dates, times of day and near-term day references a draft could promise
+ * (« le 12 mars », « mardi 14 », « à 15h », « 12/03 », « demain », « d'ici
+ * vendredi », « lundi prochain »). Pattern-based: a vaguer commitment
+ * (« rapidement », « sous peu ») is not caught.
+ */
+const WEEKDAY =
+  "(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|monday|tuesday|wednesday|thursday|friday|saturday|sunday)";
+const DATE_MENTION = new RegExp(
+  [
+    TIME_MENTION.source,
+    "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+    "(?<!\\p{L})(?:apr[eè]s-demain|demain|tomorrow)(?!\\p{L})",
+    `(?<!\\p{L})(?:d'ici|d’ici|avant|d[eè]s|jusqu'[aà]|jusqu’[aà]|ce|cette|this|next|by)\\s+${WEEKDAY}(?!\\p{L})`,
+    `(?<!\\p{L})${WEEKDAY}\\s+(?:prochain|matin|apr[eè]s-midi|soir)(?!\\p{L})`,
+  ].join("|"),
+  "giu",
+);
+const foldDate = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[’]/g, "'")
+    .replace(/\s+/g, " ");
+/**
+ * Body only: a date or time not written verbatim (accent/case-folded) in the
+ * trusted sources becomes [[À CONFIRMER : date]]. Mentions already inside a
+ * placeholder stay, they are flagged for confirmation anyway.
+ */
+function scrubDates(body: string, trusted: string, issues: string[]) {
+  const known = foldDate(trusted);
+  let found = false;
+  const out = replaceEach(body, DATE_MENTION, (m, inside) => {
+    if (inside || known.includes(foldDate(m))) return m;
+    found = true;
+    issues.push("unsupported_date");
+    return `${PLACEHOLDER_OPEN}À CONFIRMER : date${PLACEHOLDER_CLOSE}`;
+  });
+  return { body: out, found };
+}
 /** Question/placeholder text that tries to instruct the model or the reviewer. */
 const NEUTRAL_QUESTION = "information à confirmer";
 /**
@@ -421,10 +464,13 @@ const NEUTRAL_QUESTION = "information à confirmer";
  * body and are stored). Model text is compatibility-folded (fullwidth "＠",
  * math/enclosed letters), stripped of invisible and bidi control characters and
  * un-defanged ("evil[.]test") before any check; HTML/markdown is removed.
+ * `dates: false` skips the date check: meeting drafts go through
+ * validateMeetingDraft, which only allows the code-computed slots.
  */
 export function guardDraft(
   draft: ReplyDraft,
   input: Pick<DraftInput, "sources" | "message">,
+  options: { dates?: boolean } = {},
 ): GuardResult {
   const trusted = normalizeUntrusted(input.sources.map((s) => s.content).join("\n"));
   const ctx = {
@@ -460,6 +506,13 @@ export function guardDraft(
   if (amounts.length)
     // The proposed figure itself is never stored: it is unverified model text.
     questions.push("Montant à confirmer (proposé par le brouillon, non vérifié)");
+  if (options.dates !== false) {
+    const dated = scrubDates(body, trusted, issues);
+    body = dated.body;
+    if (dated.found)
+      // Same rule as amounts: the proposed date itself is never stored.
+      questions.push("Date ou horaire à confirmer (proposé par le brouillon, non vérifié)");
+  }
   if (injectionSignals(body).length) issues.push("injection_echo");
   const citations = draft.citations.filter((c) => {
     const source = input.sources.find((s) => s.id === c.sourceId);
