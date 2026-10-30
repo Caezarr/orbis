@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
+import type { ClaimChecker } from "@/lib/inbox/claim-check";
+import { REVIEW_QUESTIONS } from "@/lib/runtime/inbox-replies";
 import { MailboxPolicyError, type DraftLedger } from "@/lib/integrations/mailbox";
 import type { FollowupState } from "./detect";
 import type { FollowupModel } from "./model";
@@ -43,6 +45,10 @@ function harness(opts: {
   existingRow?: boolean;
   waiting?: { awaitingReply: boolean; kind: "quote" | "answer" | "question" | "closing" | "other" };
   recipients?: string[];
+  draftBody?: string;
+  claimChecker?: ClaimChecker;
+  /** false = the claim check's own reservation is refused (the draft's is not). */
+  checkBudget?: boolean;
 }) {
   const item: TrackedItem = {
     id: "item-1",
@@ -74,6 +80,7 @@ function harness(opts: {
     finishFollowup: async (_id, u) => void updates.push(u),
     reserve: async (kind) => {
       reserved.push(kind);
+      if (opts.checkBudget === false && reserved.filter((k) => k === "followup_draft").length > 1) return null;
       return opts.budget === false ? null : `u-${kind}`;
     },
     addUsage: async () => {},
@@ -96,7 +103,11 @@ function harness(opts: {
     extractRequest: vi.fn(),
     ownerWaiting: vi.fn(async () => ({ output: opts.waiting ?? { awaitingReply: true, kind: "answer" as const }, usage: { inputTokens: 1, outputTokens: 1 } })),
     draftFollowup: vi.fn(async () => ({
-      output: { body: "Bonjour,\nAvez-vous pu consulter notre devis de 2 400 € HT ? Je reste disponible.", questions: [], citations: [] },
+      output: {
+        body: opts.draftBody ?? "Bonjour,\nAvez-vous pu consulter notre devis de 2 400 € HT ? Je reste disponible.",
+        questions: [],
+        citations: [],
+      },
       usage: { inputTokens: 1, outputTokens: 1 },
     })),
   } satisfies FollowupModel;
@@ -109,7 +120,8 @@ function harness(opts: {
       store,
       context: { company: { name: "Atelier" }, sourcesFor: () => [] } as never,
       canDraft,
-      costs: { classifyCents: 1, draftCents: 5 },
+      costs: { classifyCents: 1, draftCents: 5, claimCheckCents: 1 },
+      ...(opts.claimChecker ? { claimChecker: opts.claimChecker } : {}),
       now: () => new Date(opts.now ?? "2026-10-12T08:00:00Z"),
     });
   return { run, observations, updates, begun, reserved, model, createReplyDraft, canDraft, mailbox };
@@ -208,6 +220,50 @@ describe("follow-up detection and drafting", () => {
     expect(await h.run()).toMatchObject({ readFailed: 1, checked: 0 });
     h.mailbox.readThread.mockRejectedValueOnce(new MailboxPolicyError("nope"));
     await expect(h.run()).rejects.toBeInstanceOf(MailboxPolicyError);
+  });
+});
+
+describe("follow-up claim check (opt-in)", () => {
+  const paraphrase =
+    "Bonjour,\nAvez-vous pu consulter notre devis ? Pas de souci, on ne vous comptera pas le déplacement.";
+  const checker = (claims: { kind: "commitment" | "free_offer" | "discount" | "delay"; quote: string }[]) => ({
+    check: vi.fn<ClaimChecker["check"]>(async () => ({ output: { claims }, usage: { inputTokens: 3, outputTokens: 2 } })),
+  });
+  it("flags a paraphrased free offer in the follow-up draft; body kept, question banner added", async () => {
+    const c = checker([{ kind: "free_offer", quote: "on ne vous comptera pas le déplacement" }]);
+    const h = harness({ thread: quoteThread, draftBody: paraphrase, claimChecker: c });
+    expect(await h.run()).toMatchObject({ drafted: 1 });
+    expect(c.check).toHaveBeenCalledTimes(1);
+    expect(c.check.mock.calls[0]![0]).toMatchObject({ draft: expect.stringContaining("comptera pas le déplacement") });
+    expect(h.reserved).toEqual(["followup_draft", "followup_draft"]);
+    const input = h.createReplyDraft.mock.calls[0]![0] as { body: string };
+    expect(input.body).toContain("on ne vous comptera pas le déplacement"); // never rewritten
+    expect(input.body.startsWith("[[À CONFIRMER")).toBe(true);
+    const drafting = h.updates.find((u) => u.status === "drafting")!;
+    expect(drafting.flags).toContain("claim_check:unsupported_free_offer");
+    expect(drafting.questions).toContain(REVIEW_QUESTIONS.free_offer);
+    expect(h.updates.at(-1)).toMatchObject({ status: "drafted", flags: expect.arrayContaining(["claim_check:unsupported_free_offer"]) });
+  });
+  it("a quote that is not in the draft raises nothing", async () => {
+    const c = checker([{ kind: "discount", quote: "remise exceptionnelle de 30 %" }]);
+    const h = harness({ thread: quoteThread, draftBody: paraphrase, claimChecker: c });
+    await h.run();
+    const input = h.createReplyDraft.mock.calls[0]![0] as { body: string };
+    expect(input.body).toBe(paraphrase);
+    expect(h.updates.find((u) => u.status === "drafting")!.flags).not.toContain("claim_check:unsupported_discount");
+  });
+  it("checker failure or refused budget → pattern-guard draft unchanged, internal flag only", async () => {
+    const failing = { check: vi.fn(async () => Promise.reject(new Error("model down"))) };
+    const h1 = harness({ thread: quoteThread, draftBody: paraphrase, claimChecker: failing });
+    expect(await h1.run()).toMatchObject({ drafted: 1 });
+    expect((h1.createReplyDraft.mock.calls[0]![0] as { body: string }).body).toBe(paraphrase);
+    expect(h1.updates.find((u) => u.status === "drafting")!.flags).toContain("claim_check:unavailable");
+
+    const c = checker([{ kind: "free_offer", quote: "on ne vous comptera pas le déplacement" }]);
+    const h2 = harness({ thread: quoteThread, draftBody: paraphrase, claimChecker: c, checkBudget: false });
+    expect(await h2.run()).toMatchObject({ drafted: 1 });
+    expect(c.check).not.toHaveBeenCalled();
+    expect(h2.updates.find((u) => u.status === "drafting")!.flags).toContain("claim_check:budget");
   });
 });
 
