@@ -62,7 +62,7 @@ Drafts already created in the user's mailbox stay there: deleting mail is outsid
 
 **Retention**: `GET|POST /api/cron/retention` (CRON_SECRET, daily) calls `orbis_retention_purge()`:
 
-- it nulls inbox subject/draft previews, regeneration previews, follow-up previews/questions and request contacts once past `purge_after` (30 days / 30 days / 30 days / 24 months);
+- it nulls inbox subject/draft previews and Orbi's questions on the draft, regeneration previews, follow-up previews/questions and request contacts (name, email, **domain**, need, budget, deadline) once past `purge_after` (30 days / 30 days / 30 days / 24 months). Migration 016 (26/10) added the inbox questions (model text that can name the contact, kept for the life of the workspace before) and the contact domain (the per-worker purge and « Effacer le contact » left it; rows past `purge_after` still holding one are cleared on the next run);
 - it covers every workspace, including inactive ones, which the per-worker purges never reached;
 - the `orbis_retention` role's policies only match `purge_after < now()`, and its column grants cover only the nulled columns.
 

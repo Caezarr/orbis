@@ -170,7 +170,7 @@ export async function requestAction(id: string, input: z.infer<typeof actionSche
     dismiss_followups: "UPDATE pipeline_items SET followups_dismissed=true, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
     resume_followups: "UPDATE pipeline_items SET followups_dismissed=false, snoozed_until=NULL, next_check_at=now(), updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND status NOT IN ('gagne','perdu') AND $4::text IS NOT NULL",
     erase_contact:
-      "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), next_check_at=NULL, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
+      "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, contact_domain=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), next_check_at=NULL, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
   };
   const result = await ctx.db.query(sql[input.action], input.action === "snooze" ? [...args, input.days] : args);
   if (!result.rowCount) throw new PlatformError("Demande introuvable ou action impossible dans son état actuel.", 404);

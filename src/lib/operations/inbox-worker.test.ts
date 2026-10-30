@@ -167,6 +167,14 @@ describe("inbox worker job", () => {
     });
     expect(mailbox).not.toHaveBeenCalled();
   });
+  it("purges expired previews AND Orbi's questions on the draft (they can name the contact)", async () => {
+    claimed = null;
+    await runOneInboxBatch(identity, { mailbox, model });
+    const purge = mock.query.mock.calls.find(([sql]) => String(sql).startsWith("UPDATE inbox_messages SET subject_preview=NULL"));
+    expect(String(purge![0])).toContain("questions='[]'::jsonb");
+    expect(String(purge![0])).toContain("OR questions<>'[]'::jsonb");
+    expect(purge![1]).toEqual(["ws-a", "tenant-a"]);
+  });
 });
 
 describe("inbox worker scheduling behaviour", () => {

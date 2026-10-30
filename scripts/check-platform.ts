@@ -378,17 +378,18 @@ async function databaseChecks() {
         assert.deepEqual([await reserve(key), await reserve(key), await reserve(other)], ["ok", "ok", "global"], "budget global cap");
         // Retention purge: expired previews and contacts of ANY tenant, nothing else.
         await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
-        await db.query("UPDATE inbox_messages SET subject_preview='Devis', draft_preview='Bonjour', purge_after=now()-interval '1 day' WHERE id=$1", [ids[1]]);
+        await db.query("UPDATE inbox_messages SET subject_preview='Devis', draft_preview='Bonjour', questions=$2::jsonb, purge_after=now()-interval '1 day' WHERE id=$1", [ids[1], JSON.stringify(["Prix pour M. Dupont ?"])]);
         const pipelineRows = !!(await db.query("SELECT to_regclass('public.pipeline_items') AS r")).rows[0].r;
         if (pipelineRows) await db.query("UPDATE pipeline_items SET purge_after=now()-interval '1 day' WHERE id=$1", [ids[1]]);
         await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
         const purged = (await db.query("SELECT orbis_retention_purge() AS r")).rows[0].r;
         assert.ok(purged.inbox_previews >= 1, "expired inbox previews purged");
         await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
-        assert.deepEqual((await db.query("SELECT subject_preview, draft_preview FROM inbox_messages WHERE id=$1", [ids[1]])).rows[0], { subject_preview: null, draft_preview: null });
+        assert.deepEqual((await db.query("SELECT subject_preview, draft_preview, questions FROM inbox_messages WHERE id=$1", [ids[1]])).rows[0], { subject_preview: null, draft_preview: null, questions: [] }, "expired previews and questions purged (016)");
         if (pipelineRows) {
-          const item = (await db.query("SELECT contact_email, contact_erased_at FROM pipeline_items WHERE id=$1", [ids[1]])).rows[0];
+          const item = (await db.query("SELECT contact_email, contact_domain, contact_erased_at FROM pipeline_items WHERE id=$1", [ids[1]])).rows[0];
           assert.equal(item.contact_email, null, "expired contact purged");
+          assert.equal(item.contact_domain, null, "expired contact domain purged (016)");
           assert.ok(item.contact_erased_at, "erasure timestamp set");
         }
         // Tenant erasure: deleting tenant B leaves tenant A intact.

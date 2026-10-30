@@ -10,6 +10,7 @@ vi.mock("@/lib/platform/context", () => ({
   }),
 }));
 import { requestAction } from "./service";
+import { purgePipeline } from "./store";
 
 const row = { id: "item", status: "nouveau", kind: "quote_request", contact_erased_at: new Date(), thread_id: "th", provider: "gmail", drafts: 0, followups: [] };
 beforeEach(() => {
@@ -33,6 +34,11 @@ describe("erase_contact", () => {
       expect(c?.params).toEqual(["item", "workspace", "tenant"]);
     }
   });
+  it("erases the contact's domain with the rest of the contact data", async () => {
+    await requestAction("item", { action: "erase_contact" });
+    const item = calls().find((c) => c.sql.startsWith("UPDATE pipeline_items"));
+    expect(item?.sql).toContain("contact_name=NULL, contact_email=NULL, contact_domain=NULL");
+  });
   it("leaves previews alone for other actions", async () => {
     await requestAction("item", { action: "won" });
     expect(calls().some((c) => /UPDATE (inbox_messages|brain_jobs)/.test(c.sql))).toBe(false);
@@ -41,5 +47,15 @@ describe("erase_contact", () => {
     mocks.role = "operator";
     await expect(requestAction("item", { action: "erase_contact" })).rejects.toThrow(/propriétaire/);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe("purgePipeline", () => {
+  it("nulls the domain too, including rows erased before it was covered", async () => {
+    await purgePipeline({ query: mocks.query } as never, { workspaceId: "workspace", tenantId: "tenant" });
+    const item = calls().find((c) => c.sql.startsWith("UPDATE pipeline_items"));
+    expect(item?.sql).toContain("contact_domain=NULL");
+    expect(item?.sql).toContain("contact_erased_at=COALESCE(contact_erased_at, now())");
+    expect(item?.sql).toContain("purge_after<now() AND (contact_erased_at IS NULL OR contact_domain IS NOT NULL)");
   });
 });

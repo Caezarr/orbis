@@ -85,7 +85,8 @@ export default function Page() {
         <li>
           Orbis conserve, pour chaque e-mail traité : les identifiants techniques du fournisseur de messagerie, des
           empreintes (hash SHA-256), le classement obtenu, un aperçu de l’objet (120 caractères au plus) et un aperçu du
-          brouillon rédigé par Orbis (1 200 caractères au plus). Ces aperçus sont effacés après 30 jours.
+          brouillon rédigé par Orbis (1 200 caractères au plus), ainsi que les questions d’Orbi sur ce brouillon. Ces
+          aperçus et ces questions sont effacés après 30 jours.
         </li>
         <li>Le brouillon complet est créé dans votre boîte mail ; il y reste sous votre contrôle.</li>
       </ul>
@@ -190,7 +191,7 @@ export default function Page() {
       <Retention
         rows={[
           ["Corps des e-mails reçus", "Non stocké (mémoire, le temps du traitement)"],
-          ["Aperçu de l’objet et du brouillon Orbis", "30 jours"],
+          ["Aperçu de l’objet et du brouillon Orbis, questions d’Orbi sur ce brouillon", "30 jours"],
           ["Aperçu des brouillons de relance", "30 jours"],
           ["Identifiants, empreintes et classement des e-mails traités", "Durée de vie de l’espace"],
           ["Fiche entreprise validée", "Durée de vie de l’espace, ou jusqu’à suppression par vous"],
