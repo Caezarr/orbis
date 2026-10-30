@@ -56,3 +56,13 @@ Les créneaux sont calculés par du code (`src/lib/calendar/slots.ts`), jamais p
 **Pourquoi :** élargir la politique brouillons pour y faire entrer `UPDATE`/`LABEL` aurait affaibli la garantie « aucun envoi, aucune modification » du chemin le plus exposé. Des politiques séparées gardent chaque capacité auditable et révocable indépendamment, en mode `test` (simulé) d’abord.
 
 **Coût :** un peu de duplication (exécuteur partagé `broker-exec.ts`), un scope Google restreint de plus pour les libellés Gmail (`gmail.modify`), et une seconde autorisation OAuth pour l’agenda.
+
+## ADR 007 — narrow broker path for sending a reviewed draft (level 9)
+
+**Statut :** proposé, **non implémenté** (2026-10-06, spécification seule). Détail : [level-9-autonomy.md](../product/level-9-autonomy.md).
+
+**Décision proposée :** un chemin `mailbox-send-v1` séparé, derrière le broker, qui ne sait faire qu'une chose : envoyer un brouillon **existant** par son id, après relecture du brouillon chez le fournisseur et comparaison de son hash avec une approbation liée au payload (ADR 005). Destinataire unique, égal à l'expéditeur d'origine calculé par le code ; ni cc, ni bcc, ni pièce jointe. Flag `ORBIS_INBOX_SEND` désactivé par défaut. `inbox-drafts-v1` reste inchangé et continue de refuser `SEND`. Le mode `test` simule toujours. L'auto-envoi (9b) n'existe que sous une politique explicite par catégorie et par espace, avec son propre hash, révocable.
+
+**Pourquoi :** l'envoi est l'effet le plus exposé du produit. Un chemin à part garde la garantie « le chemin brouillons ne peut pas envoyer » même en cas de bogue, et rend l'envoi auditable et révocable seul.
+
+**Coût :** nouvelle autorisation Outlook (`Mail.Send`), tables d'approbation et d'envois, pages légales à revoir. Aucun code tant que les préalables du § 9 de la spec ne sont pas remplis.
