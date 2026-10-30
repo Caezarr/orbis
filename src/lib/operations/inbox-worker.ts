@@ -137,10 +137,11 @@ export async function runOneInboxBatch(
       "UPDATE inbox_batches SET status='failed',error='Worker lease expired after three attempts.',lease_token=NULL,lease_until=NULL WHERE workspace_id=$1 AND tenant_id=$2 AND status='running' AND lease_until<now() AND attempts>=3",
       [identity.workspaceId, identity.tenantId],
     );
-    // Retention: inbound subjects, draft previews and Orbi's questions on the
-    // draft (they can name the contact) are short-lived.
+    // Retention: inbound subjects, draft previews, Orbi's questions on the
+    // draft (they can name the contact), the source excerpts it cited and the
+    // calendar slots it offered are short-lived.
     await db.query(
-      "UPDATE inbox_messages SET subject_preview=NULL,draft_preview=NULL,questions='[]'::jsonb,updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (subject_preview IS NOT NULL OR draft_preview IS NOT NULL OR questions<>'[]'::jsonb)",
+      "UPDATE inbox_messages SET subject_preview=NULL,draft_preview=NULL,questions='[]'::jsonb,citations='[]'::jsonb,proposed_slots=NULL,updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (subject_preview IS NOT NULL OR draft_preview IS NOT NULL OR questions<>'[]'::jsonb OR citations<>'[]'::jsonb OR proposed_slots IS NOT NULL)",
       [identity.workspaceId, identity.tenantId],
     );
     // One running batch per workspace (mailbox rate limits, fairness): claims of

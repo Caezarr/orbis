@@ -378,14 +378,14 @@ async function databaseChecks() {
         assert.deepEqual([await reserve(key), await reserve(key), await reserve(other)], ["ok", "ok", "global"], "budget global cap");
         // Retention purge: expired previews and contacts of ANY tenant, nothing else.
         await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
-        await db.query("UPDATE inbox_messages SET subject_preview='Devis', draft_preview='Bonjour', questions=$2::jsonb, purge_after=now()-interval '1 day' WHERE id=$1", [ids[1], JSON.stringify(["Prix pour M. Dupont ?"])]);
+        await db.query("UPDATE inbox_messages SET subject_preview='Devis', draft_preview='Bonjour', questions=$2::jsonb, citations=$3::jsonb, proposed_slots=$4::jsonb, purge_after=now()-interval '1 day' WHERE id=$1", [ids[1], JSON.stringify(["Prix pour M. Dupont ?"]), JSON.stringify([{ sourceId: "profile", sourceName: "Profil", excerpt: "Pose 45 €/m²" }]), JSON.stringify([{ start: "2026-10-28T09:00:00Z", end: "2026-10-28T10:00:00Z", label: "mardi 9h" }])]);
         const pipelineRows = !!(await db.query("SELECT to_regclass('public.pipeline_items') AS r")).rows[0].r;
         if (pipelineRows) await db.query("UPDATE pipeline_items SET purge_after=now()-interval '1 day' WHERE id=$1", [ids[1]]);
         await setTenantContext(db, { userId: ids[0], tenantId: ids[0], workspaceId: ids[0] });
         const purged = (await db.query("SELECT orbis_retention_purge() AS r")).rows[0].r;
         assert.ok(purged.inbox_previews >= 1, "expired inbox previews purged");
         await setTenantContext(db, { userId: ids[1], tenantId: ids[1], workspaceId: ids[1] });
-        assert.deepEqual((await db.query("SELECT subject_preview, draft_preview, questions FROM inbox_messages WHERE id=$1", [ids[1]])).rows[0], { subject_preview: null, draft_preview: null, questions: [] }, "expired previews and questions purged (016)");
+        assert.deepEqual((await db.query("SELECT subject_preview, draft_preview, questions, citations, proposed_slots FROM inbox_messages WHERE id=$1", [ids[1]])).rows[0], { subject_preview: null, draft_preview: null, questions: [], citations: [], proposed_slots: null }, "expired previews, questions (016), citations and slots (017) purged");
         if (pipelineRows) {
           const item = (await db.query("SELECT contact_email, contact_domain, contact_erased_at FROM pipeline_items WHERE id=$1", [ids[1]])).rows[0];
           assert.equal(item.contact_email, null, "expired contact purged");

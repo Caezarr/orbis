@@ -51,7 +51,7 @@ The docs type every tool output as `data`. Response parsing is defensive (`mailb
 `inbox_batches`: one row per worker job (provider, connected account id, mode, window, caps, status, aggregate stats, lease).
 `inbox_messages`: per processed message — provider message/thread ids, SHA-256 content hash, classification, skip reason, flags, Orbis-generated draft preview (≤1,200 chars), open questions, citations (excerpts of the company's own sources), truncated subject (≤120 chars), draft receipt (draft id, payload/policy hash, state, attempts), token counts and estimated cost.
 
-**No inbound email body is stored.** Bodies are held in memory during processing and sent to the model provider only. Justification: idempotency needs only ids + hash; the results screen needs our draft, not the customer's text (the user opens the thread in Gmail/Outlook). The subject preview and draft preview are nulled after `purge_after` (30 days) by the worker; rows keep only ids, hashes and receipts. The runtime role has no DELETE grant; tenant deletion cascades from `workspaces`.
+**No inbound email body is stored.** Bodies are held in memory during processing and sent to the model provider only. Justification: idempotency needs only ids + hash; the results screen needs our draft, not the customer's text (the user opens the thread in Gmail/Outlook). The subject preview, draft preview, questions (016), citations and offered calendar slots (017) are emptied after `purge_after` (30 days) by the worker and the daily retention cron; rows keep only ids, hashes and receipts. The runtime role has no DELETE grant; tenant deletion cascades from `workspaces`.
 
 ## API
 
