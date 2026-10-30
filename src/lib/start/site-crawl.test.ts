@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PublicFetchError } from "@/lib/runtime/company-site";
 import { crawlSite, parseRobots, pickPages, robotsAllows, sitemapLocs, type Fetcher } from "./site-crawl";
 
 const html = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), "utf8");
 const ORIGIN = "https://www.martin-plomberie.fr";
 
-type Route = { body: string; type?: string; delayMs?: number; redirect?: string; status?: number };
+type Route = { body: string; type?: string; delayMs?: number; redirect?: string; status?: number; networkError?: boolean };
 function fakeFetcher(routes: Record<string, Route>) {
   const calls: string[] = [];
   let active = 0;
@@ -24,9 +25,11 @@ function fakeFetcher(routes: Record<string, Route>) {
             reject(new Error("Délai dépassé."));
           });
         });
-      if (!route || route.status) throw new Error("Ce site ne fournit pas de page HTML publique lisible.");
+      if (route?.networkError) throw new Error("getaddrinfo ENOTFOUND");
+      if (!route || route.status) throw new PublicFetchError("Ce site ne fournit pas de page HTML publique lisible.", route?.status ?? 404);
       const type = route.type ?? "text/html; charset=utf-8";
-      if (!accept.some((a) => type.includes(a))) throw new Error("Ce site ne fournit pas de page HTML publique lisible.");
+      if (!accept.some((a) => a === "*/*" || type.includes(a)))
+        throw new PublicFetchError("Ce site ne fournit pas de page HTML publique lisible.", 200);
       return { url: route.redirect ?? url, contentType: type, body: route.body };
     } finally {
       active--;
@@ -71,6 +74,49 @@ describe("crawlSite", () => {
     expect(f.calls).not.toContain(`${ORIGIN}/tarifs`);
     expect(r.skipped).toContainEqual({ url: `${ORIGIN}/tarifs`, reason: "robots" });
     expect(r.pages.map((p) => p.url)).toContain(`${ORIGIN}/contact`);
+  });
+
+  it("allows every page when robots.txt is missing (4xx)", async () => {
+    for (const status of [404, 403, 410]) {
+      const routes = baseRoutes();
+      routes[`${ORIGIN}/robots.txt`] = { body: "", status };
+      const r = await crawlSite(`${ORIGIN}/`, {}, fakeFetcher(routes).fetcher);
+      expect(r.pages.map((p) => p.url)).toContain(`${ORIGIN}/tarifs`);
+      expect(r.skipped.filter((s) => s.reason === "robots")).toEqual([]);
+    }
+  });
+
+  it("reads the home page only when robots.txt is unreachable (5xx, network error, timeout)", async () => {
+    const unreachable: Route[] = [
+      { body: "", status: 503 },
+      { body: "", status: 500 },
+      { body: "", networkError: true },
+      { body: "User-agent: *\nAllow: /\n", type: "text/plain", delayMs: 10_000 },
+    ];
+    for (const robots of unreachable) {
+      const routes = baseRoutes();
+      routes[`${ORIGIN}/robots.txt`] = robots;
+      routes[`${ORIGIN}/sitemap.xml`] = { body: `<urlset><url><loc>${ORIGIN}/tarifs</loc></url></urlset>`, type: "application/xml" };
+      const f = fakeFetcher(routes);
+      const r = await crawlSite(`${ORIGIN}/`, {}, f.fetcher);
+      expect(r.pages.map((p) => p.url)).toEqual([`${ORIGIN}/`]);
+      expect(f.calls).toEqual([`${ORIGIN}/robots.txt`, `${ORIGIN}/`]);
+      expect(r.skipped.length).toBeGreaterThan(0);
+      expect(r.skipped.every((s) => s.reason === "robots")).toBe(true);
+    }
+  }, 15_000);
+
+  it("applies robots.txt rules whatever its content type", async () => {
+    const routes = baseRoutes();
+    routes[`${ORIGIN}/robots.txt`] = { body: "User-agent: *\nDisallow: /tarifs\n", type: "text/html" };
+    const f = fakeFetcher(routes);
+    const r = await crawlSite(`${ORIGIN}/`, {}, f.fetcher);
+    expect(f.calls).not.toContain(`${ORIGIN}/tarifs`);
+    expect(r.skipped).toContainEqual({ url: `${ORIGIN}/tarifs`, reason: "robots" });
+    // An HTML soft-404 carries no rule: same as a missing file.
+    routes[`${ORIGIN}/robots.txt`] = { body: "<html><body><h1>Page introuvable</h1></body></html>", type: "text/html" };
+    const soft404 = await crawlSite(`${ORIGIN}/`, {}, fakeFetcher(routes).fetcher);
+    expect(soft404.pages.map((p) => p.url)).toContain(`${ORIGIN}/tarifs`);
   });
 
   it("stops at the time budget and keeps what it has", async () => {
