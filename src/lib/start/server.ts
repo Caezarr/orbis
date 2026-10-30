@@ -12,6 +12,7 @@ import {
   type MailboxProvider,
 } from "@/lib/integrations/mailbox";
 import { isOfflineMode } from "@/lib/platform/context";
+import { demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import type { MailboxStatus } from "./flow";
 
@@ -26,7 +27,8 @@ export function startReadiness(state: StoreState) {
     inbox: {
       enabled: inboxDraftsEnabled(),
       mode: inboxMode(),
-      aiConfigured: providerStatus().configured,
+      aiConfigured: providerStatus().configured || demoModelActive(),
+      demoModel: demoModelActive(),
       budgetConfigured: !!monthlyCapCents(),
     },
     providers: Object.fromEntries(

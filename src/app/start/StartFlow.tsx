@@ -46,7 +46,7 @@ type Provider = "gmail" | "outlook";
 type Readiness = {
   session: "authenticated" | "offline";
   profile: { name: string; summary: string; website?: string } | null;
-  inbox: { enabled: boolean; mode: "test" | "scoped_autonomy"; aiConfigured: boolean; budgetConfigured: boolean };
+  inbox: { enabled: boolean; mode: "test" | "scoped_autonomy"; aiConfigured: boolean; demoModel?: boolean; budgetConfigured: boolean };
   providers: Record<Provider, { configured: boolean }>;
 };
 const PROVIDERS: { id: Provider; name: string }[] = [
@@ -1054,11 +1054,21 @@ function DraftsStep({
 
   if (preBlocker && !batch) return <Blocker kind={preBlocker} onRetry={onRecheck} />;
 
-  const testBanner = testMode && (
-    <p className={s.test} role="note">
-      <strong>Mode test.</strong> Les brouillons ci-dessous sont simulés : rien n’est écrit dans votre boîte mail, et rien
-      n’est envoyé.
-    </p>
+  const testBanner = (testMode || readiness.inbox.demoModel) && (
+    <>
+      {testMode && (
+        <p className={s.test} role="note">
+          <strong>Mode test.</strong> Les brouillons ci-dessous sont simulés : rien n’est écrit dans votre boîte mail, et
+          rien n’est envoyé.
+        </p>
+      )}
+      {readiness.inbox.demoModel && (
+        <p className={s.test} role="note">
+          <strong>Modèle factice local.</strong> Les brouillons sont rédigés par un gabarit de démonstration, sans appel à
+          une IA. Ils ne reflètent pas la qualité réelle d’Orbi.
+        </p>
+      )}
+    </>
   );
 
   if (!batch)

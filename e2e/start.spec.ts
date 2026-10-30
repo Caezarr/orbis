@@ -7,6 +7,7 @@ import { describeCompany, freshEmail, magicLinkFor, signUpByMagicLink, step } fr
  */
 
 test("description → magic link → Gmail (demo consent) → verified server-side; no model means no fake drafts", async ({ page }) => {
+  test.skip(process.env.E2E_DEMO_MODEL === "1", "asserts the no-model state; covered by drafts.spec.ts in demo-model runs");
   await describeCompany(page, "MDK Peinture");
 
   // Instant preview: nothing is invented; every unanswered question stays « À confirmer ».
