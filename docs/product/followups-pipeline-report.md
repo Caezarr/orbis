@@ -52,7 +52,7 @@ Status: built on branch `feat/followups-pipeline-report` (stacked on `feat/v1-in
 
 - **Stored:** the customer's display name (≤120), address (≤254) and domain, a short need summary, and budget/deadline excerpts (≤80, the customer's words). No inbound body is stored. Follow-up previews are our own text, kept ≤1,200 characters and purged after 30 days.
 - **Purpose and basis.** The owner's own follow-up of requests addressed to their company (a CRM line), under legitimate interest (Art. 6(1)(f)). The data is necessary to recognise and answer the customer, and limited to what the customer sent the company. Orbis acts as processor for the workspace, and the data is never shared between workspaces.
-- **Retention.** Contact and need fields are nulled 24 months after the last activity (`purge_after`, extended on activity; the purge runs in the worker). They are also nulled on request with « Effacer le contact » (owner/admin), which also clears follow-up previews. Deleting the workspace cascades to every table. The runtime role has no DELETE.
+- **Retention.** Contact and need fields are nulled 24 months after the last activity (`purge_after`, extended on activity; the purge runs in the worker). They are also nulled on request with « Effacer le contact » (owner/admin), which also clears follow-up previews and the previews kept for the request's thread: `inbox_messages` subject, draft preview and questions (same connected account and thread), and the draft preview of any regeneration (`brain_jobs`) of those messages. Without this they stayed visible in Today and in the account export for up to 30 days. Deleting the workspace cascades to every table. The runtime role has no DELETE.
 - **Logs and analytics.** No contact data in events or errors: errors are generic constants, and `maskEmail()` is available for any diagnostic. Report and Today APIs return counts only.
 
 ## Level 8: measured weekly report
@@ -118,5 +118,5 @@ FORCE RLS with the same membership policy as 007–010 on all four tables. The r
 - The owner-message classification is pattern-based first. A quote sent only as an attachment, with neutral text and no amount, goes to the model. The model is unmeasured on real mail.
 - Business days use metropolitan French holidays only: no Alsace-Moselle extras, no regional calendars.
 - The response time counts the owner's first message after the request, whatever its content. It is not measured for requests whose threads were never re-read (continuous drafting off).
-- « Effacer le contact » cannot remove drafts already in the mailbox or the provider's own copies.
+- « Effacer le contact » cannot remove drafts already in the mailbox or the provider's own copies. A new message from the same contact in that thread is read again like any message and gets fresh 30-day previews; the request's contact fields stay erased.
 - No email digest yet: the JSON exists, sending needs the action broker (outside this scope).
