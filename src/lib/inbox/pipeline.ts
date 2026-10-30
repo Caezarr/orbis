@@ -27,6 +27,7 @@ import {
   type MeetingPlan,
   type Slot,
 } from "@/lib/calendar/slots";
+import { applyClaimCheck, claimCheckSchema, type ClaimChecker } from "./claim-check";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -164,7 +165,7 @@ export async function processMailboxBatch(params: {
   model: InboxModel;
   store: InboxStore;
   context: ReplyContext;
-  costs: { classifyCents: number; draftCents: number };
+  costs: { classifyCents: number; draftCents: number; claimCheckCents?: number };
   now?: Date;
   /** Checked before each message; true = stop cleanly, the batch is resumed later. */
   shouldYield?: () => boolean;
@@ -183,6 +184,12 @@ export async function processMailboxBatch(params: {
   };
   /** Meeting requests: code-computed slots (calendar) or ask for availabilities. */
   meetings?: MeetingPlanner;
+  /**
+   * Model-assisted claim check (opt-in, ./claim-check.ts): adds reviewer flags
+   * for paraphrased promises the pattern guard misses. Never rewrites the body;
+   * any failure keeps the guard's result.
+   */
+  claimChecker?: ClaimChecker;
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -366,6 +373,24 @@ export async function processMailboxBatch(params: {
             : `meeting:ask_availability:${meeting.reason}`,
           ...check.issues.map((i) => `meeting:${i}`),
         );
+      }
+      if (params.claimChecker) {
+        try {
+          if (!(await store.reserveBudget(row.rowId, costs.claimCheckCents ?? 1)))
+            allFlags.push("claim_check:budget");
+          else {
+            const checked = await params.claimChecker.check({
+              draft: guarded.body,
+              sources,
+            });
+            await store.addUsage(row.rowId, checked.usage);
+            const result = applyClaimCheck(guarded, claimCheckSchema.parse(checked.output));
+            Object.assign(guarded, result.guarded);
+            allFlags.push(...result.flags);
+          }
+        } catch {
+          allFlags.push("claim_check:unavailable");
+        }
       }
       await store.update(row.rowId, {
         status: "drafting",

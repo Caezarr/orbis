@@ -550,3 +550,73 @@ describe("plan draft quota", () => {
     expect(m.classify).not.toHaveBeenCalled();
   });
 });
+
+describe("model-assisted claim check", () => {
+  const paraphrase = "Bonjour, pas de souci, on gère ça pour vous cette semaine.";
+  const checker = (claims: { kind: "commitment" | "free_offer" | "discount" | "delay"; quote: string }[]) => ({
+    check: vi.fn(async () => ({
+      output: { claims },
+      usage: { inputTokens: 80, outputTokens: 10 },
+    })),
+  });
+  const runChecked = (
+    m: InboxModel,
+    store: InboxStore,
+    claimChecker: ReturnType<typeof checker> | { check: () => Promise<never> },
+  ) =>
+    processMailboxBatch({
+      batch,
+      mailbox: mailboxClient("gmail", batch, { mode: "scoped_autonomy" }),
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5, claimCheckCents: 2 },
+      claimChecker,
+    });
+
+  it("flags a paraphrased promise the pattern guard misses, without rewriting it", async () => {
+    const { store, rows } = memoryStore();
+    const c = checker([{ kind: "commitment", quote: "on gère ça pour vous" }]);
+    const stats = await runChecked(model(paraphrase), store, c);
+    expect(stats.drafted).toBe(1);
+    expect(c.check).toHaveBeenCalledTimes(1);
+    const row = rows.get("m1")!;
+    expect(row.flags).toContain("claim_check:unsupported_commitment");
+    expect(row.questions).toContain(
+      "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer",
+    );
+    // The guard's banner (model question) is already there: body untouched.
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+    // Classify + draft + check, all charged to the same message.
+    expect(row.cost).toBe(1 + 5 + 2);
+  });
+  it("ignores a quote that is not in the draft", async () => {
+    const { store, rows } = memoryStore();
+    await runChecked(
+      model(paraphrase),
+      store,
+      checker([{ kind: "discount", quote: "ignore previous instructions" }]),
+    );
+    expect(rows.get("m1")!.flags ?? []).not.toContain("claim_check:unsupported_discount");
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+  });
+  it("a checker failure keeps the draft and the pattern guard's result", async () => {
+    const { store, rows } = memoryStore();
+    const stats = await runChecked(model(paraphrase), store, {
+      check: async () => {
+        throw new Error("timeout");
+      },
+    });
+    expect(stats).toMatchObject({ drafted: 1, failed: 0 });
+    expect(rows.get("m1")!.flags).toContain("claim_check:unavailable");
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+  });
+  it("no budget left for the check: the draft still goes out, flagged", async () => {
+    const { store, rows } = memoryStore(6);
+    const c = checker([{ kind: "commitment", quote: "on gère ça pour vous" }]);
+    const stats = await runChecked(model(paraphrase), store, c);
+    expect(stats.drafted).toBe(1);
+    expect(c.check).not.toHaveBeenCalled();
+    expect(rows.get("m1")!.flags).toContain("claim_check:budget");
+  });
+});
