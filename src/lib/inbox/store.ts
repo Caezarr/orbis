@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { Classification } from "@/lib/runtime/inbox-replies";
-import { recordDraftQuestions } from "@/lib/brain/store";
+import { recordQuestionsWithGrouping, type QuestionGrouper } from "@/lib/brain/grouping";
 import type { InboxBatch, InboxStore, MessageStatus } from "./pipeline";
 
 /** Runs fn in a short tenant-scoped transaction (worker `scoped`). */
@@ -88,6 +88,8 @@ export function postgresInboxStore(
   scoped: Scoped,
   batch: InboxBatch,
   lease: { token: string },
+  /** Model grouping of « Questions d'Orbi » (opt-in, ORBIS_BRAIN_QUESTION_GROUPING). */
+  options: { questionGrouper?: QuestionGrouper } = {},
 ): InboxStore {
   const ids = [batch.workspaceId, batch.tenantId];
   const ledger = (rowId: string): DraftLedger => ({
@@ -266,13 +268,12 @@ export function postgresInboxStore(
     },
     ledger,
     async recordQuestions(rowId, questions) {
-      return scoped((db) =>
-        recordDraftQuestions(
-          db,
-          { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
-          rowId,
-          questions,
-        ),
+      return recordQuestionsWithGrouping(
+        scoped,
+        { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
+        rowId,
+        questions,
+        options.questionGrouper,
       );
     },
     async heartbeat() {
