@@ -607,6 +607,9 @@ export function splitPlaceholders(text: string) {
 export const SIMULATED_LABEL = "Exemple simulé — pas un vrai mail";
 export const NOT_FOUND_LABEL =
   "Orbi ne trouve pas la réponse sur votre site → il vous la demandera une seule fois";
+/** Same label when step 1 was a description: there is no site to point at. */
+export const NOT_FOUND_LABEL_DESCRIPTION =
+  "Orbi ne trouve pas la réponse dans votre description → il vous la demandera une seule fois";
 /** Fictitious, code-defined parties of the example emails (never model output). */
 export const FICTITIOUS_SENDER = { name: "Client fictif", address: "client.fictif@exemple.invalid" } as const;
 export const FICTITIOUS_RECIPIENT = "Vous (exemple)";
