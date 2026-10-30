@@ -10,7 +10,7 @@ import {
   type ReplyDraft,
   type ReplySource,
 } from "@/lib/runtime/inbox-replies";
-import { getModel } from "@/lib/runtime/provider";
+import { generationSettings, getModel } from "@/lib/runtime/provider";
 import { requestExtractionSchema, type RequestExtraction } from "./request";
 
 /*
@@ -98,7 +98,7 @@ export const providerFollowupModel: FollowupModel = {
       system,
       prompt,
       output: Output.object({ schema: requestExtractionSchema }),
-      maxOutputTokens: 400,
+      ...generationSettings(400, { purpose: "classifier" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(20_000),
     });
@@ -111,7 +111,7 @@ export const providerFollowupModel: FollowupModel = {
       system,
       prompt,
       output: Output.object({ schema: ownerWaitingSchema }),
-      maxOutputTokens: 100,
+      ...generationSettings(100, { purpose: "classifier" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(20_000),
     });
@@ -124,7 +124,7 @@ export const providerFollowupModel: FollowupModel = {
       system,
       prompt,
       output: Output.object({ schema: replyDraftSchema }),
-      maxOutputTokens: 900,
+      ...generationSettings(900, { effort: "medium" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(45_000),
     });

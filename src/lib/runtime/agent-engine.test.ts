@@ -9,6 +9,7 @@ vi.mock("ai", () => ({
   Output: { object: (value: unknown) => value },
 }));
 vi.mock("./provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }),
   providerStatus: () => ({
     configured: true,
     provider: "test",

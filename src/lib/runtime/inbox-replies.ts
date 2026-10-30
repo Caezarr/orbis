@@ -16,7 +16,7 @@ import {
   trustedContact,
   URL_RE as LINK_RE,
 } from "@/lib/security/untrusted-text";
-import { getModel } from "./provider";
+import { generationSettings, getModel } from "./provider";
 import type { MeetingPlan } from "@/lib/calendar/slots";
 
 /*
@@ -501,7 +501,7 @@ export const providerInboxModel: InboxModel = {
       system,
       prompt,
       output: Output.object({ schema: classificationSchema }),
-      maxOutputTokens: 200,
+      ...generationSettings(200, { purpose: "classifier" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(20_000),
     });
@@ -514,7 +514,7 @@ export const providerInboxModel: InboxModel = {
       system,
       prompt,
       output: Output.object({ schema: replyDraftSchema }),
-      maxOutputTokens: 1800,
+      ...generationSettings(1800, { effort: "medium" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(45_000),
     });

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ query: vi.fn(), transaction: vi.fn(), setTenant: vi.fn() }));
 vi.mock("@/lib/platform/db", () => ({ transaction: mock.transaction, setTenantContext: mock.setTenant }));
-vi.mock("@/lib/runtime/provider", () => ({ providerStatus: () => ({ configured: true }), getModel: vi.fn() }));
+vi.mock("@/lib/runtime/provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }), providerStatus: () => ({ configured: true }), getModel: vi.fn() }));
 vi.mock("@/lib/runtime/agent-engine", () => ({ contextSnapshot: vi.fn() }));
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import { runOneInboxBatch } from "./inbox-worker";

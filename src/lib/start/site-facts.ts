@@ -57,6 +57,11 @@ export function quoteAround(text: string, start: number, end: number, max = MAX_
       e = i + 1;
       break;
     }
+  // A list ordinal glued to its item ("3 Vous recevez le devis") is layout, not text.
+  if (s < start) {
+    const ordinal = /^\s*\d{1,2}\s+(?=\p{Lu})/u.exec(text.slice(s, start));
+    if (ordinal) s += ordinal[0].length;
+  }
   if (e - s <= max) return text.slice(s, e).trim();
   const room = Math.max(0, max - (end - start));
   let ws = Math.max(s, start - Math.floor(room / 2));
@@ -404,7 +409,10 @@ function socialLink(href: string, pageUrl: string, out: FactSet, via: "link" | "
       if (!re.test(host)) continue;
       if (label === "Fiche Google" && !/maps|g\.page|goo\.gl|cid=|\/maps/.test(u.href)) return;
       if (label !== "Fiche Google" && u.pathname.replace(/\/$/, "").length < 2) return;
-      out.add({ category: "social", label, value: label, quote: u.href, sourceUrl: pageUrl, confidence: "high", via });
+      // The value is what the owner recognises: the profile path, not the network name again.
+      const path = decodeURIComponent(u.pathname).replace(/\/$/, "");
+      const value = label === "Fiche Google" ? "Lien vers votre fiche trouvé sur le site" : `${host}${path}`.slice(0, 80);
+      out.add({ category: "social", label, value, quote: u.href, sourceUrl: pageUrl, confidence: "high", via });
       return;
     }
   } catch {
