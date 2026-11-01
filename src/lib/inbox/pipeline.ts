@@ -223,17 +223,34 @@ export async function processMailboxBatch(params: {
     .filter((m) => !batch.since || !m.receivedAt || m.receivedAt >= batch.since)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   stats.listed = messages.length;
-  let tone: string[] | undefined;
-  const toneSamples = async () => {
-    if (tone) return tone;
-    try {
-      tone = (await mailbox.listSent({ windowDays: 31, maxMessages: 3 }))
-        .map((m) => m.text.slice(0, 1200))
-        .filter(Boolean);
-    } catch {
-      tone = []; // Tone is optional; never block a draft on it.
-    }
-    return tone;
+  // One sent-mail read per batch, shared by tone samples and owner addresses.
+  let sentSample: Promise<MailMessage[]> | undefined;
+  const recentSent = () =>
+    (sentSample ??= mailbox
+      .listSent({ windowDays: 31, maxMessages: 3 })
+      // Optional context: never block a draft on it.
+      .catch((): MailMessage[] => []));
+  const toneSamples = async () =>
+    (await recentSent()).map((m) => m.text.slice(0, 1200)).filter(Boolean);
+  /**
+   * The owner's own addresses. Outlook inbox messages never carry
+   * `fromOwner` (only the Sent Items copy does), so a note-to-self or a mail
+   * sent from the owner's address would otherwise be drafted as a "reply" to
+   * the owner. Read from sent mail (From = the mailbox owner).
+   */
+  let owners: Promise<Set<string>> | undefined;
+  const ownerAddresses = () =>
+    (owners ??= recentSent().then(
+      (sent) =>
+        new Set(
+          sent
+            .map((m) => m.from?.address.toLowerCase())
+            .filter((a): a is string => !!a),
+        ),
+    ));
+  const fromOwnAddress = (m: MailMessage, extra: Iterable<string> = []) => {
+    const address = m.from?.address.toLowerCase();
+    return !!address && new Set(extra).has(address);
   };
   for (const message of messages) {
     if (quotaUsed()) {
@@ -259,7 +276,9 @@ export async function processMailboxBatch(params: {
       stats.reused++;
       continue;
     }
-    const skip = skipReason(message);
+    const skip =
+      skipReason(message) ??
+      (fromOwnAddress(message, await ownerAddresses()) ? "own_message" : null);
     if (skip) {
       await store.update(row.rowId, { status: "skipped", skipReason: skip });
       stats.skipped++;
@@ -319,6 +338,23 @@ export async function processMailboxBatch(params: {
         await store.update(row.rowId, {
           status: "skipped",
           skipReason: "already_replied",
+        });
+        stats.skipped++;
+        continue;
+      }
+      // Same check against the thread's sent copies (Outlook marks them via
+      // Sent Items): catches an owner address absent from the recent sample.
+      if (
+        fromOwnAddress(
+          message,
+          thread
+            .filter((m) => m.fromOwner && !m.isDraft)
+            .map((m) => m.from?.address.toLowerCase() ?? ""),
+        )
+      ) {
+        await store.update(row.rowId, {
+          status: "skipped",
+          skipReason: "own_message",
         });
         stats.skipped++;
         continue;

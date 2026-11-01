@@ -55,6 +55,9 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 
 - [x] Dépendances : `@react-three/fiber` 9.7.0 déclarait `react <19.3` alors que main est en React 19.3.1 (bump Dependabot #60) → avertissement de pair à l'installation. Passé à `^9.8.2` (pair `<19.4`, publiée le 14/10) le 31/10 : lockfile limité à fiber 9.8.2 + `its-fine` 2.1.1, et la 2ᵉ copie de `scheduler` (0.27, tirée par fiber 9.7) disparaît. `tsc`, 1104 tests, lint, `next build --webpack` OK ; landing vérifiée dans Chromium sur le build de prod : 3 canvas WebGL, aucune erreur d'exécution. Aucun fichier de la landing modifié — PR #67.
 
+- [x] Boîte Outlook (revue du 01/11, bug) : `skipReason` savait écarter les adresses du propriétaire, mais le pipeline ne les passait jamais, et la copie Inbox d'un message Outlook n'a jamais `fromOwner` (seule la copie Sent Items l'a). Un mail que le patron s'envoie à lui-même (« Note : rappeler M. Martin ») ou envoyé depuis son adresse était classé, puis rédigé en « réponse » adressée au patron : un brouillon absurde, un appel modèle et une unité de quota du forfait consommés, le contenu de la note envoyé au modèle. Désormais écarté (`own_message`) avant tout appel modèle : adresses du propriétaire tirées des 3 mails envoyés récents (même lecture que les exemples de ton, une seule par lot), puis vérifiées contre les copies envoyées du fil avant rédaction. Gmail déjà couvert (`in:inbox -in:sent`). Tests : échouent sur l'ancien code — PR à venir.
+- [ ] Même cas, reste : si le patron n'a rien envoyé depuis 31 jours, la note est encore classée (1 appel modèle) et peut créer une fiche « demande » (niveau 7) avant d'être écartée par le contrôle du fil. Lire l'adresse du compte (Graph `/me`, `User.Read` déjà accordé) fermerait ce cas ; demande un nouvel outil Composio dans la liste blanche du broker.
+
 ## Décisions de Gabriel
 
 _(reportées ici depuis les commentaires Todoist)_
