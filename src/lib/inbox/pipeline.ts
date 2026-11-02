@@ -252,6 +252,11 @@ export async function processMailboxBatch(params: {
     const address = m.from?.address.toLowerCase();
     return !!address && new Set(extra).has(address);
   };
+  /** Addresses of the thread's sent copies (Outlook: Sent Items). */
+  const ownerAddressesIn = (thread: MailMessage[]) =>
+    thread
+      .filter((m) => m.fromOwner && !m.isDraft)
+      .map((m) => m.from?.address.toLowerCase() ?? "");
   for (const message of messages) {
     if (quotaUsed()) {
       // Graceful stop: results so far are kept, nothing else costs a model call.
@@ -309,10 +314,29 @@ export async function processMailboxBatch(params: {
       }
       if (!ACTIONABLE.has(classification)) continue;
       stats.actionable++;
-      if (params.requests)
+      let thread: MailMessage[] | undefined;
+      if (params.requests) {
+        // Before a request sheet (level 7) is created: a note-to-self whose
+        // owner address was not in the recent sent sample (nothing sent for
+        // 31 days, or an alias) must not become a "client request". A failed
+        // read keeps the previous behaviour (tracked; the draft path below
+        // reads the thread again and fails the row as before).
+        thread = await mailbox.readThread(message.threadId).catch((error) => {
+          if (error instanceof MailboxPolicyError) throw error;
+          return undefined;
+        });
+        if (thread && fromOwnAddress(message, ownerAddressesIn(thread))) {
+          await store.update(row.rowId, {
+            status: "skipped",
+            skipReason: "own_message",
+          });
+          stats.skipped++;
+          continue;
+        }
         await params.requests
           .track({ rowId: row.rowId, message, classification })
           .catch(() => {});
+      }
       if (stats.drafted >= batch.maxDrafts) {
         // Stays non-terminal: a later batch with remaining quota drafts it.
         await store.update(row.rowId, {
@@ -329,7 +353,7 @@ export async function processMailboxBatch(params: {
         stats.needsReview++;
         continue;
       }
-      const thread = await mailbox.readThread(message.threadId);
+      thread ??= await mailbox.readThread(message.threadId);
       if (
         thread.some(
           (m) => m.fromOwner && !m.isDraft && m.receivedAt > message.receivedAt,
@@ -345,12 +369,7 @@ export async function processMailboxBatch(params: {
       // Same check against the thread's sent copies (Outlook marks them via
       // Sent Items): catches an owner address absent from the recent sample.
       if (
-        fromOwnAddress(
-          message,
-          thread
-            .filter((m) => m.fromOwner && !m.isDraft)
-            .map((m) => m.from?.address.toLowerCase() ?? ""),
-        )
+        fromOwnAddress(message, ownerAddressesIn(thread))
       ) {
         await store.update(row.rowId, {
           status: "skipped",
