@@ -29,8 +29,8 @@ const ROWS: Row[] = [
   {
     name: "Vercel",
     status: "Actif",
-    role: "Hébergement de l’application et exécution des fonctions serveur.",
-    data: "Données traitées en transit par l’application (requêtes, contenu des e-mails pendant leur traitement), journaux techniques.",
+    role: "Hébergement de l’application et exécution des fonctions serveur ; mesure de performance des pages (Speed Insights), si elle est activée.",
+    data: "Données traitées en transit par l’application (requêtes, contenu des e-mails pendant leur traitement), journaux techniques ; pour Speed Insights, temps d’affichage et modèle de l’adresse de la page, sans paramètres ni identifiants.",
     location: "Fonctions serveur dans l’Union européenne (Dublin, région dub1) ; réseau de diffusion mondial pour les pages publiques.",
     safeguards: <Todo>DPA Vercel, clauses contractuelles types</Todo>,
   },

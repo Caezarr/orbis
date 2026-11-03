@@ -152,6 +152,12 @@ export default function Page() {
           (type d’erreur, message, pile d’appels, modèle de la page sans identifiants ni paramètres). Les adresses
           e-mail, le contenu des e-mails et les jetons sont filtrés avant envoi.
         </li>
+        <li>
+          Si la mesure de performance de Vercel (Speed Insights) est activée, chaque page mesure sa vitesse d’affichage
+          (indicateurs Web Vitals) et l’envoie à Vercel avec le modèle de l’adresse de la page : sans paramètres, sans
+          fragment et sans identifiants (par exemple « /workspace/[id]/inbox »). Aucun contenu de page, aucune saisie et
+          aucune identité ne sont transmis.
+        </li>
       </ul>
 
       <h3>Facturation</h3>
@@ -280,6 +286,11 @@ export default function Page() {
         <li>
           <strong>Mesure d’audience</strong> : PostHog, uniquement s’il est activé.{" "}
           <Todo>préciser si PostHog dépose des cookies côté navigateur et, si oui, le recueil du consentement</Todo>.
+        </li>
+        <li>
+          <strong>Mesure de performance</strong> : Vercel Speed Insights, uniquement s’il est activé. Selon la
+          documentation de Vercel, il ne dépose pas de cookie ; il envoie le modèle de l’adresse de la page (voir § 2) et
+          les temps d’affichage.
         </li>
         <li>Aucun cookie publicitaire.</li>
       </ul>

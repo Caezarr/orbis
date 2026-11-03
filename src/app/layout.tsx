@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ScrubbedSpeedInsights } from "./speed-insights";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-canvas text-ink">
         {children}
-        <SpeedInsights />
+        <ScrubbedSpeedInsights />
       </body>
     </html>
   );
