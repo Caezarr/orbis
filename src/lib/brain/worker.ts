@@ -12,6 +12,7 @@ import { replyContext } from "@/lib/inbox/context";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
 import { monthlyCapCents } from "@/lib/inbox/store";
 import {
+  draftRecipientMismatch,
   mailboxClient,
   MailboxPolicyError,
   MailboxUncertainError,
@@ -527,9 +528,7 @@ async function regenerate(params: {
       },
       ledger,
     );
-    const mismatch =
-      receipt.recipients !== undefined &&
-      (receipt.recipients.length !== 1 || receipt.recipients[0] !== recipient);
+    const mismatch = draftRecipientMismatch(receipt, recipient);
     const questions = draftQuestions(guarded.body, guarded.questions, {
       thirdParties: [recipient, ...(message.from?.name ? [message.from.name] : [])],
     });

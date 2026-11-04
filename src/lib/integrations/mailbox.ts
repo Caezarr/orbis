@@ -224,7 +224,9 @@ export function buildArguments(
       folder: "drafts",
       filter: `conversationId eq ${odataString(threadId)}`,
       top: 25,
-      select: ["id", "conversationId", "createdDateTime", "toRecipients"],
+      // isDraft must be selected: normalizeOutlookMessages reads it, and
+      // Graph returns only the selected properties.
+      select: ["id", "conversationId", "createdDateTime", "toRecipients", "isDraft"],
     };
   }
   if (operation === "create_reply_draft") {
@@ -449,6 +451,26 @@ export function mailboxClient(
     );
     return found?.id;
   }
+  /**
+   * Outlook only: the recipients of a draft as Graph reports them, re-read from
+   * the thread's drafts. Graph `createReply` picks the recipient itself, so a
+   * live Outlook receipt must always carry them. A draft that cannot be found or
+   * read reports `[]` (unverified), never `undefined` (which would skip the
+   * caller's check).
+   */
+  async function outlookDraftRecipients(threadId: string, draftId: string) {
+    try {
+      const data = await read("list_drafts", { threadId });
+      return (
+        normalizeOutlookMessages(data, { includeDrafts: true }).find(
+          (m) => m.id === draftId,
+        )?.to ?? []
+      );
+    } catch (error) {
+      if (error instanceof MailboxPolicyError) throw error;
+      return [];
+    }
+  }
 
   return {
     provider,
@@ -519,7 +541,24 @@ export function mailboxClient(
         policyHash: MAILBOX_POLICY_HASH,
       };
       const claim = await ledger.claim(input.idempotencyKey, payloadHash);
-      if (claim.state === "done") return { ...claim.receipt, created: false };
+      if (claim.state === "done") {
+        // A replayed live Outlook receipt does not persist its recipients:
+        // re-read them so the caller's recipient check still runs.
+        if (
+          provider === "outlook" &&
+          !claim.receipt.simulated &&
+          claim.receipt.recipients === undefined
+        )
+          return {
+            ...claim.receipt,
+            recipients: await outlookDraftRecipients(
+              payload.threadId,
+              claim.receipt.draftId,
+            ),
+            created: false,
+          };
+        return { ...claim.receipt, created: false };
+      }
       if (options.mode === "test") {
         // Test mode never reaches the provider; receipt marks the simulation.
         const receipt = {
@@ -539,6 +578,14 @@ export function mailboxClient(
             draftId: existing,
             simulated: false,
             reconciled: true,
+            ...(provider === "outlook"
+              ? {
+                  recipients: await outlookDraftRecipients(
+                    payload.threadId,
+                    existing,
+                  ),
+                }
+              : {}),
           };
           await ledger.record(input.idempotencyKey, receipt);
           return { ...receipt, created: false };
@@ -571,9 +618,13 @@ export function mailboxClient(
           "Draft creation returned no draft id. It will be reconciled before any retry.",
         );
       }
+      // Outlook: what Graph actually addressed. A response we cannot read
+      // (no message resource, no recipients) is `[]`: unverified, flagged by
+      // the caller, never silently accepted.
       const recipients =
         provider === "outlook"
-          ? normalizeOutlookMessages(data, { includeDrafts: true })[0]?.to
+          ? (normalizeOutlookMessages(data, { includeDrafts: true })[0]?.to ??
+            [])
           : [payload.recipient];
       const receipt = {
         ...base,
@@ -588,6 +639,22 @@ export function mailboxClient(
   };
 }
 export type MailboxClient = ReturnType<typeof mailboxClient>;
+
+/**
+ * True when the provider did not confirm that the draft goes to `recipient`
+ * alone: other or extra recipients, or none readable (`[]`). `undefined` only
+ * comes from receipts without a provider-chosen recipient (test-mode
+ * simulations; Gmail reconciliations, whose recipient is set by code).
+ */
+export function draftRecipientMismatch(
+  receipt: Pick<DraftReceipt, "recipients">,
+  recipient: string,
+) {
+  if (receipt.recipients === undefined) return false;
+  return (
+    receipt.recipients.length !== 1 || receipt.recipients[0] !== recipient
+  );
+}
 
 function draftIdFrom(provider: MailboxProvider, data: unknown) {
   const d = (data ?? {}) as Record<string, unknown>;
