@@ -4,7 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
  * Browser end-to-end tests of the /start golden path, against the local
  * production-like stack only (Supabase in Docker + demo mailbox). No live
  * service is called: step 1 uses the description path (no site fetch), the
- * mailbox is the in-process fake, and no AI model is configured.
+ * mailbox is the in-process fake, and no AI model is configured (or, with
+ * E2E_DEMO_MODEL=1, the local demo model: templates, no model call).
  * See docs/product/e2e-start.md.
  */
 const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000";
@@ -41,6 +42,7 @@ export default defineConfig({
     command: "pnpm exec next dev --hostname 127.0.0.1 --port 3000",
     url: `${baseURL}/start`,
     reuseExistingServer: true,
+    env: process.env.E2E_DEMO_MODEL === "1" ? { ORBIS_AI_PROVIDER: "demo" } : {},
     timeout: 180_000,
   },
 });

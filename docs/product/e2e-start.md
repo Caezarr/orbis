@@ -4,7 +4,7 @@ Status: built on branch `feat/start-e2e`. Local only, not in CI (there is no CI 
 
 ## What they prove
 
-Four Playwright tests in `e2e/start.spec.ts`, run in Chromium against the real app (`next dev`), the local Supabase (Auth + Postgres with RLS, runtime role without `BYPASSRLS`), Mailpit and the demo mailbox:
+Four Playwright tests in `e2e/start.spec.ts` (plus one demo-model test, below), run in Chromium against the real app (`next dev`), the local Supabase (Auth + Postgres with RLS, runtime role without `BYPASSRLS`), Mailpit and the demo mailbox:
 
 | Test | What it checks |
 |---|---|
@@ -13,9 +13,32 @@ Four Playwright tests in `e2e/start.spec.ts`, run in Chromium against the real a
 | Magic link in another browser | The link opened in a fresh browser context (no PKCE verifier) does not open a session: `GET /api/v1/inbox` = 401. |
 | Signed-out visitor | `GET /api/v1/inbox` = 401; the demo consent POST is refused (401/403). |
 
+A fifth test, `e2e/drafts.spec.ts`, runs only with `E2E_DEMO_MODEL=1` (see « Step 4 with the demo model » below):
+
+| Test | What it checks |
+|---|---|
+| Step 4, demo model | Same path up to « Gmail vérifié côté serveur » → step 4 announces « Modèle factice local » and « Mode test » before anything runs → « Préparer mes premiers brouillons » → scheduler pass (`POST /api/cron/inbox` with the local `CRON_SECRET`) → « N brouillons prêts à relire », each opening with the demo notice → the relayed site form is listed under « À vérifier par vous » → the demo mailbox still holds 0 draft (test mode). |
+
+## Step 4 with the demo model
+
+`ORBIS_AI_PROVIDER=demo` replaces the model calls of the inbox mission with deterministic code (`src/lib/runtime/demo-model.ts`): keyword triage, template drafts quoting one company source verbatim, verbatim request extraction, template follow-ups, an empty company sheet. Usage is 0 tokens; nothing leaves the machine. The real pipeline still runs around it: guard, citations check, Reply-To rule, ledger, mailbox broker.
+
+Fail closed:
+
+- refused on any production runtime (`NODE_ENV=production` or `VERCEL_ENV=production`);
+- active only with `ORBIS_DEMO_MAILBOX=true`: a template draft can never land in a real mailbox;
+- `providerStatus().configured` stays false: the /start profile and preview, missions and Orbi guidance keep saying no model is configured instead of running on fake output;
+- every draft opens with « (Brouillon de démonstration : modèle factice local, aucun appel à une IA.) » and step 4 shows « Modèle factice local » — it says nothing about Orbi's real quality.
+
+```bash
+E2E_DEMO_MODEL=1 pnpm test:e2e   # starts `next dev` with ORBIS_AI_PROVIDER=demo (stop any running dev server first)
+```
+
+In this mode the no-model golden-path test is skipped (it asserts the opposite state).
+
 ## What they do not cover
 
-- **Drafting itself.** No AI model is configured in these runs (no paid call, ever). The drafting pipeline, follow-ups, injection handling and the Reply-To rule are covered by `pnpm test` with a mocked model (`src/lib/integrations/demo-mailbox/demo-mailbox.test.ts`).
+- **Real drafting quality.** No real model is ever called (no paid call, ever). The demo model proves the plumbing, not the wording. Drafting rules, follow-ups, injection handling and the Reply-To rule are covered by `pnpm test` (`src/lib/integrations/demo-mailbox/demo-mailbox.test.ts`, `src/lib/runtime/demo-model.test.ts`).
 - **Step 1 from a website.** Reading a site means fetching a public page; tests never call a live site. The crawl is covered by unit tests on fixtures (`src/lib/start/__fixtures__`).
 - **Google / Microsoft sign-in and real OAuth.** Not configured locally.
 - **Mobile layout, Safari, Firefox.** Chromium desktop only for now.

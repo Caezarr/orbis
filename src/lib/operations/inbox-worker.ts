@@ -19,6 +19,7 @@ import {
   providerInboxModel,
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
+import { demoBrainModel, demoFollowupModel, demoInboxModel, demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
 import { enqueueExtraction } from "@/lib/brain/store";
@@ -116,7 +117,8 @@ export async function runOneInboxBatch(
   deps: InboxWorkerDeps = {},
 ) {
   if (!inboxDraftsEnabled()) return { processed: false, reason: "disabled" };
-  if (!providerStatus().configured)
+  const demo = demoModelActive();
+  if (!providerStatus().configured && !demo)
     throw new Error("AI provider not configured");
   if (!monthlyCapCents())
     throw new Error("Configure ORBIS_OPERATIONS_MONTHLY_CAP_CENTS first");
@@ -243,7 +245,7 @@ export async function runOneInboxBatch(
           : undefined,
       },
     );
-    const followupModel = deps.followupModel ?? providerFollowupModel;
+    const followupModel = deps.followupModel ?? (demo ? demoFollowupModel : providerFollowupModel);
     const context = replyContext(state, factSources(facts));
     // Opt-ins (migration 014). Deployment flags off → nothing changes.
     let features: InboxFeatures = DEFAULT_FEATURES;
@@ -293,7 +295,7 @@ export async function runOneInboxBatch(
     stats = await processMailboxBatch({
       batch,
       mailbox,
-      model: deps.model ?? providerInboxModel,
+      model: deps.model ?? (demo ? demoInboxModel : providerInboxModel),
       store: inboxStore,
       context,
       requests: {
@@ -493,7 +495,7 @@ export async function runOneInboxBatch(
     const listThreadSent = mailbox.listThreadSent.bind(mailbox);
     outcomes = await checkDraftOutcomes({
       mailbox: { listThreadSent },
-      model: deps.brainModel ?? providerBrainModel,
+      model: deps.brainModel ?? (demo ? demoBrainModel : providerBrainModel),
       store: postgresOutcomeStore(run, identity, "orbi"),
       trustedText,
       cents: BRAIN_COSTS.explain(),
