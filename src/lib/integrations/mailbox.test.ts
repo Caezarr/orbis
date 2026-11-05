@@ -15,6 +15,7 @@ vi.mock("@composio/core", () => ({
 import {
   assertMailboxPolicy,
   buildArguments,
+  draftRecipientMismatch,
   mailboxClient,
   MAILBOX_TOOLS,
   MailboxPolicyError,
@@ -439,6 +440,85 @@ describe("mailbox client", () => {
       message_id: "msg1",
       comment: draftRequest.body,
     });
+  });
+  it("Outlook: a createReply response without readable recipients is unverified ([]), never unchecked", async () => {
+    setup("outlook");
+    sdk.execute.mockResolvedValue({ successful: true, data: { id: "AAMkDraft=" } });
+    const { ledger } = memoryLedger();
+    const receipt = await mailboxClient("outlook", identity, {
+      mode: "scoped_autonomy",
+    }).createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({ draftId: "AAMkDraft=", recipients: [] });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+  });
+  it("Outlook: reconciliation finds the draft (isDraft selected) and re-reads its recipients", async () => {
+    setup("outlook");
+    const { ledger } = memoryLedger();
+    const client = mailboxClient("outlook", identity, { mode: "scoped_autonomy" });
+    sdk.execute.mockRejectedValueOnce(new Error("timeout"));
+    await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+      MailboxUncertainError,
+    );
+    // Graph returns only the $select-ed properties: emulate that.
+    sdk.execute.mockImplementation(async (_slug: string, call: { arguments: { select: string[] } }) => {
+      const full = {
+        id: "AAMkDraft=",
+        conversationId: "thread1",
+        isDraft: true,
+        toRecipients: [{ emailAddress: { address: "attacker@example.net" } }],
+      };
+      return {
+        successful: true,
+        data: {
+          value: [
+            Object.fromEntries(
+              Object.entries(full).filter(([k]) => call.arguments.select.includes(k)),
+            ),
+          ],
+        },
+      };
+    });
+    const receipt = await client.createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({
+      draftId: "AAMkDraft=",
+      reconciled: true,
+      created: false,
+      recipients: ["attacker@example.net"],
+    });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+    expect(
+      sdk.execute.mock.calls.filter(([slug]) => slug === "OUTLOOK_CREATE_DRAFT_REPLY"),
+    ).toHaveLength(1);
+  });
+  it("Outlook: a replayed receipt (ledger done, recipients not persisted) re-reads the recipients", async () => {
+    setup("outlook");
+    const { ledger, rows } = memoryLedger();
+    rows.set("key-1", {
+      state: "done",
+      claimedAt: new Date(),
+      attempts: 1,
+      receipt: {
+        draftId: "AAMkDraft=",
+        threadId: "thread1",
+        payloadHash: "h",
+        policyHash: "p",
+        simulated: false,
+        reconciled: false,
+      },
+    });
+    sdk.execute.mockResolvedValue({ successful: true, data: { value: [] } });
+    const receipt = await mailboxClient("outlook", identity, {
+      mode: "scoped_autonomy",
+    }).createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({ created: false, recipients: [] });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+    expect(sdk.execute.mock.calls.map(([slug]) => slug)).toEqual(["OUTLOOK_LIST_MESSAGES"]);
+  });
+  it("draftRecipientMismatch: exact single recipient only; [] is unverified", () => {
+    expect(draftRecipientMismatch({ recipients: ["a@x.fr"] }, "a@x.fr")).toBe(false);
+    expect(draftRecipientMismatch({ recipients: ["a@x.fr", "b@y.fr"] }, "a@x.fr")).toBe(true);
+    expect(draftRecipientMismatch({ recipients: [] }, "a@x.fr")).toBe(true);
+    expect(draftRecipientMismatch({}, "a@x.fr")).toBe(false);
   });
   it("lists only active private workspace accounts", async () => {
     sdk.list.mockResolvedValue({

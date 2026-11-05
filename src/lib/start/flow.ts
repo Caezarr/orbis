@@ -547,7 +547,7 @@ export function flagLabel(flag: string) {
   return (
     {
       reply_to_diverges: "L’adresse de réponse diffère de l’expéditeur : à vérifier avant tout brouillon.",
-      recipient_mismatch: "Le destinataire du brouillon ne correspond pas à l’expéditeur : à vérifier.",
+      recipient_mismatch: "Destinataire du brouillon différent de l’expéditeur, ou non confirmé par la messagerie : à vérifier avant d’envoyer.",
       awaiting_draft_quota: "En attente : limite de brouillons du premier passage atteinte.",
       recipient_check: "Destinataire inhabituel dans la conversation : aucune relance préparée, à vérifier.",
     }[flag] ?? null

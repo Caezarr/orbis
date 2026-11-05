@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  draftRecipientMismatch,
   MailboxPolicyError,
   MailboxUncertainError,
   type DraftLedger,
@@ -327,8 +328,7 @@ export async function runFollowups(params: {
         },
         store.ledger(followupId),
       );
-      const mismatch =
-        receipt.recipients !== undefined && (receipt.recipients.length !== 1 || receipt.recipients[0] !== recipient);
+      const mismatch = draftRecipientMismatch(receipt, recipient);
       await store.finishFollowup(followupId, {
         status: mismatch ? "needs_review" : "drafted",
         flags: mismatch ? [...flags, "recipient_mismatch"] : flags,

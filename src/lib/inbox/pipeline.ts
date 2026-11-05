@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  draftRecipientMismatch,
   MailboxPolicyError,
   MailboxUncertainError,
   type DraftLedger,
@@ -464,10 +465,7 @@ export async function processMailboxBatch(params: {
         store.ledger(row.rowId),
       );
       stats.draftsCreated = (stats.draftsCreated ?? 0) + 1;
-      const mismatch =
-        receipt.recipients !== undefined &&
-        (receipt.recipients.length !== 1 ||
-          receipt.recipients[0] !== recipient);
+      const mismatch = draftRecipientMismatch(receipt, recipient);
       await store.update(row.rowId, {
         status: mismatch ? "needs_review" : "drafted",
         flags: mismatch ? [...allFlags, "recipient_mismatch"] : allFlags,
