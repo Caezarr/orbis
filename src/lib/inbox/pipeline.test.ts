@@ -14,6 +14,7 @@ vi.mock("@composio/core", () => ({
 }));
 import { mailboxClient, type DraftReceipt } from "@/lib/integrations/mailbox";
 import type { InboxModel, ReplySource } from "@/lib/runtime/inbox-replies";
+import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import {
   processMailboxBatch,
   type InboxBatch,
@@ -618,5 +619,117 @@ describe("model-assisted claim check", () => {
     expect(stats.drafted).toBe(1);
     expect(c.check).not.toHaveBeenCalled();
     expect(rows.get("m1")!.flags).toContain("claim_check:budget");
+  });
+});
+
+describe("owner's own messages (Outlook inbox copies carry no fromOwner)", () => {
+  const owner = "patron@acme.test";
+  function outlook(
+    id: string,
+    from: string,
+    fields: Partial<MailMessage> = {},
+  ): MailMessage {
+    return {
+      provider: "outlook",
+      id,
+      threadId: `conv-${id}`,
+      from: { address: from },
+      replyTo: [],
+      to: [owner],
+      subject: "Note : rappeler M. Martin",
+      receivedAt: "2026-10-01T10:00:00Z",
+      text: "Penser à rappeler M. Martin pour le devis.",
+      labels: [],
+      headers: {},
+      isDraft: false,
+      fromOwner: false,
+      ...fields,
+    };
+  }
+  function stubMailbox(params: {
+    inbound: MailMessage[];
+    sent?: MailMessage[];
+    thread?: MailMessage[];
+  }) {
+    const createReplyDraft = vi.fn(async (input: { threadId: string; recipient: string }) => ({
+      draftId: "d1",
+      threadId: input.threadId,
+      payloadHash: "h",
+      policyHash: "p",
+      simulated: false,
+      reconciled: false,
+      recipients: [input.recipient],
+      created: true,
+    }));
+    return {
+      createReplyDraft,
+      mailbox: {
+        listInbound: async () => params.inbound,
+        listSent: vi.fn(async () => params.sent ?? []),
+        readThread: async () => params.thread ?? [],
+        createReplyDraft,
+      },
+    };
+  }
+  const runWith = (mailbox: ReturnType<typeof stubMailbox>["mailbox"], m: InboxModel, store: InboxStore) =>
+    processMailboxBatch({
+      batch: { ...batch, provider: "outlook" },
+      mailbox,
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5 },
+    });
+
+  it("a note-to-self is skipped before any model call (address read from sent mail)", async () => {
+    const stub = stubMailbox({
+      inbound: [outlook("self", "Patron@Acme.test")],
+      sent: [outlook("s1", owner, { fromOwner: true })],
+    });
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await runWith(stub.mailbox, m, store);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(stub.createReplyDraft).not.toHaveBeenCalled();
+    expect(stats.skipped).toBe(1);
+    expect(rows.get("self")).toMatchObject({ status: "skipped", skipReason: "own_message" });
+  });
+  it("no recent sent mail: the thread's Sent Items copy still stops the draft", async () => {
+    const self = outlook("self", owner);
+    const stub = stubMailbox({
+      inbound: [self],
+      sent: [],
+      thread: [self, outlook("self-sent", owner, { fromOwner: true })],
+    });
+    const { store, rows } = memoryStore();
+    const m = model();
+    await runWith(stub.mailbox, m, store);
+    expect(m.draft).not.toHaveBeenCalled();
+    expect(stub.createReplyDraft).not.toHaveBeenCalled();
+    expect(rows.get("self")).toMatchObject({ status: "skipped", skipReason: "own_message" });
+  });
+  it("a client's message is still drafted, and sent mail is read once per batch", async () => {
+    const stub = stubMailbox({
+      inbound: [outlook("c1", "client@example.com"), outlook("c2", "autre@example.com")],
+      sent: [outlook("s1", owner, { fromOwner: true, text: "Cordialement, Paul" })],
+      thread: [outlook("earlier", owner, { fromOwner: true, receivedAt: "2026-09-01T10:00:00Z" })],
+    });
+    const { store } = memoryStore();
+    const m = model();
+    const stats = await runWith(stub.mailbox, m, store);
+    expect(stats.drafted).toBe(2);
+    expect(stub.createReplyDraft.mock.calls.map((c) => c[0].recipient)).toEqual([
+      "client@example.com",
+      "autre@example.com",
+    ]);
+    expect(stub.mailbox.listSent).toHaveBeenCalledTimes(1);
+    expect(m.draft.mock.calls[0][0].toneSamples).toEqual(["Cordialement, Paul"]);
+  });
+  it("a sent-mail read failure never blocks a client's draft", async () => {
+    const stub = stubMailbox({ inbound: [outlook("c1", "client@example.com")] });
+    stub.mailbox.listSent.mockRejectedValue(new Error("graph 503"));
+    const { store } = memoryStore();
+    const stats = await runWith(stub.mailbox, model(), store);
+    expect(stats.drafted).toBe(1);
   });
 });
