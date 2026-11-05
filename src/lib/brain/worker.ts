@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { StoreState } from "@/lib/domain/types";
+import {
+  claimCheckCents,
+  claimCheckEnabled,
+  providerClaimChecker,
+  runClaimCheck,
+  type ClaimChecker,
+} from "@/lib/inbox/claim-check";
 import { replyContext } from "@/lib/inbox/context";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
 import { monthlyCapCents } from "@/lib/inbox/store";
@@ -78,6 +85,8 @@ export type BrainWorkerDeps = {
   inboxModel?: InboxModel;
   /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
   questionGrouper?: QuestionGrouper;
+  /** Claim check model (tests); used only when ORBIS_INBOX_CLAIM_CHECK=true. */
+  claimChecker?: ClaimChecker;
   mailbox?: (...args: Parameters<typeof mailboxClient>) => Mailbox;
   deadline?: number;
   /** Plan entitlement loader (tests); defaults to the PostgreSQL entitlement service. */
@@ -324,6 +333,11 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
         questionGrouper: questionGroupingEnabled()
           ? (deps.questionGrouper ?? providerQuestionGrouper)
           : undefined,
+        // Never with the demo model: it writes canned drafts, nothing to check.
+        claimChecker:
+          claimCheckEnabled() && !demo
+            ? (deps.claimChecker ?? providerClaimChecker)
+            : undefined,
       });
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
@@ -377,6 +391,7 @@ async function regenerate(params: {
   sources: ReturnType<typeof replyContext>;
   heartbeat: () => Promise<boolean>;
   questionGrouper?: QuestionGrouper;
+  claimChecker?: ClaimChecker;
 }) {
   const { job, identity, run, mailbox } = params;
   const ids = [identity.workspaceId, identity.tenantId];
@@ -411,6 +426,18 @@ async function regenerate(params: {
   });
   await run((db) => addBrainUsage(db, identity, usageId, generated.usage));
   const guarded = guardDraft(generated.output, { sources, message });
+  let claimFlags: string[] = [];
+  if (params.claimChecker) {
+    let checkUsageId: string | null = null;
+    claimFlags = await runClaimCheck(guarded, sources, {
+      checker: params.claimChecker,
+      reserve: async () =>
+        !!(checkUsageId = await run((db) =>
+          reserveBrainBudget(db, identity, "regenerate", job.id, claimCheckCents()),
+        )),
+      addUsage: (usage) => run((db) => addBrainUsage(db, identity, checkUsageId!, usage)),
+    });
+  }
   if (!(await params.heartbeat())) return { leaseLost: true };
   const ledger: DraftLedger = {
     claim: (key, payloadHash) =>
@@ -510,6 +537,7 @@ async function regenerate(params: {
     return {
       outcome: mismatch ? "recipient_mismatch" : receipt.simulated ? "simulated" : "drafted",
       questions: questions.length,
+      ...(claimFlags.length ? { flags: claimFlags } : {}),
     };
   } catch (error) {
     if (error instanceof MailboxUncertainError) return { outcome: "uncertain" };
