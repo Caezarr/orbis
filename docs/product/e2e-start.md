@@ -1,6 +1,6 @@
 # Browser E2E tests of `/start`
 
-Status: built on branch `feat/start-e2e`. Local only, not in CI (there is no CI workflow that runs the app yet).
+Status: built on branch `feat/start-e2e`. Run in CI by `.github/workflows/ci.yml` (job `e2e`, both modes, on every pull request and on `main`); also runnable locally.
 
 ## What they prove
 
@@ -64,6 +64,17 @@ Options:
 - `E2E_BASE_URL` (default `http://127.0.0.1:3000`), `E2E_MAILPIT_URL` (default `http://127.0.0.1:54324`).
 
 Failures keep a trace and a screenshot in `test-results/` (`pnpm exec playwright show-trace …`).
+
+## In CI
+
+`.github/workflows/ci.yml` has two jobs, with no secret and no live service:
+
+- `checks`: `next typegen`, `tsc --noEmit`, `pnpm test`.
+- `e2e`: `pnpm local:up` (Supabase in Docker on the runner), `pnpm local:env > .env.local`, then `pnpm test:e2e` twice, each after `pnpm demo:reset`: once with no model (the four `start.spec.ts` tests), once with `E2E_DEMO_MODEL=1` (`drafts.spec.ts`). On failure, `test-results/` (traces, screenshots) is uploaded as the `e2e-test-results` artifact for 7 days.
+
+All keys in `.env.local` are the fixed local-stack ones (`CRON_SECRET=local-cron-secret-…`, Supabase demo keys); nothing in the job can reach a real mailbox, a model or a payment rail.
+
+First full run on 10/10, in a cloud sandbox with Docker, from a wiped stack with `CI=true` (same steps as the workflow): 4 passed / 1 skipped in each mode. Sandboxes that cannot pull Supabase images from ECR need `SUPABASE_INTERNAL_IMAGE_REGISTRY=docker.io pnpm local:up`; GitHub runners do not.
 
 ## Design notes
 

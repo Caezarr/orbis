@@ -1,0 +1,77 @@
+name: CI
+
+# Typecheck + unit tests, then the browser tests of /start against the local
+# production-like stack (Supabase in Docker, Mailpit, demo mailbox).
+# No live service and no secret: no model is ever called (the second E2E pass
+# uses the local demo model), the mailbox is the in-process fake, and every
+# key comes from the throwaway local stack (`pnpm local:env`).
+# See docs/product/e2e-start.md.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # next-env.d.ts and route types are generated, not committed.
+      - run: pnpm exec next typegen
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start local Supabase, create the runtime role, migrate
+        run: pnpm local:up
+      - name: Write .env.local from the local stack
+        run: pnpm -s local:env > .env.local
+      - name: E2E, no model configured (honest no-model state)
+        run: |
+          pnpm demo:reset
+          pnpm test:e2e
+      - name: E2E, local demo model (step 4 drafts, test mode)
+        run: |
+          pnpm demo:reset
+          E2E_DEMO_MODEL=1 pnpm test:e2e
+      - name: Keep traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm local:down
