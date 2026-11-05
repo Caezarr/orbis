@@ -204,6 +204,14 @@
   background: #fafbfd;
   min-width: 0;
 }
+.notes {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--amber);
+}
 .followup p {
   margin: 0;
   font-size: 14px;

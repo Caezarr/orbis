@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { OrbiSays } from "@/components/product/OrbiSays";
+import { flagLabels } from "@/lib/start/flow";
 import s from "./brain.module.css";
 
 export type QuestionView = {
@@ -17,7 +18,7 @@ export type NewInfoView = {
   subjectPreview?: string;
   draftedAt?: string;
   simulated: boolean;
-  regeneration?: { status: string; draftState: string };
+  regeneration?: { status: string; draftState: string; flags?: string[] };
 };
 
 /**
@@ -122,6 +123,7 @@ export function OrbiQuestions({
             {newInfo.map((d) => {
               const pending = d.regeneration?.status === "queued" || d.regeneration?.status === "running";
               const done = d.regeneration?.status === "completed" && d.regeneration.draftState !== "none";
+              const notes = done ? flagLabels(d.regeneration?.flags ?? []) : [];
               return (
                 <li className={s.row} key={d.inboxMessageId}>
                   <span>{d.subjectPreview ?? "Brouillon sans objet"}</span>
@@ -140,6 +142,13 @@ export function OrbiQuestions({
                     >
                       Préparer un nouveau brouillon
                     </button>
+                  )}
+                  {notes.length > 0 && (
+                    <ul className={s.notes} aria-label="Points à vérifier">
+                      {notes.map((label) => (
+                        <li key={label}>{label}</li>
+                      ))}
+                    </ul>
                   )}
                 </li>
               );

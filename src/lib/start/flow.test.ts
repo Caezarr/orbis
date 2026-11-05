@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodePending,
   flagLabel,
+  flagLabels,
   decodePreviewShown,
   encodePreviewShown,
   likelyQuestions,
@@ -228,5 +229,23 @@ describe("flagLabel", () => {
     expect(flagLabel("guard:unsupported_delay")).toBe(
       "Des informations non sourcées ont été remplacées par des questions.",
     );
+  });
+});
+
+describe("flagLabels", () => {
+  it("one note per distinct label, internal flags dropped", () => {
+    expect(
+      flagLabels([
+        "guard:unsupported_commitment",
+        "claim_check:unsupported_commitment",
+        "claim_check:budget",
+        "owner_message:quote",
+        "recipient_check",
+      ]),
+    ).toEqual([
+      flagLabel("guard:unsupported_commitment"),
+      "Destinataire inhabituel dans la conversation : aucune relance préparée, à vérifier.",
+    ]);
+    expect(flagLabels([])).toEqual([]);
   });
 });

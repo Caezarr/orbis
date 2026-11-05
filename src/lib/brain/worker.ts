@@ -537,7 +537,10 @@ async function regenerate(params: {
     return {
       outcome: mismatch ? "recipient_mismatch" : receipt.simulated ? "simulated" : "drafted",
       questions: questions.length,
-      ...(claimFlags.length ? { flags: claimFlags } : {}),
+      // Reviewer notes shown next to « Nouveau brouillon prêt » (pattern guard + claim check).
+      ...(guarded.issues.length || claimFlags.length
+        ? { flags: [...guarded.issues.map((i) => `guard:${i}`), ...claimFlags] }
+        : {}),
     };
   } catch (error) {
     if (error instanceof MailboxUncertainError) return { outcome: "uncertain" };
