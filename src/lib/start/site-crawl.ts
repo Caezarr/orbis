@@ -1,4 +1,4 @@
-import { fetchPublicResource, publicWebsite, type PublicResource } from "@/lib/runtime/company-site";
+import { fetchPublicResource, PublicFetchError, publicWebsite, type PublicResource } from "@/lib/runtime/company-site";
 import { parseSitePage, type SitePage } from "./site-page";
 
 /*
@@ -10,6 +10,9 @@ import { parseSitePage, type SitePage } from "./site-page";
  *   HTTPS only, SSRF guard on every hop (private/reserved IPs refused, IP pinned).
  * - robots.txt is read once and respected for every page Orbi chooses to open
  *   (the home page is the address the owner typed, read once like a browser).
+ *   RFC 9309 § 2.3.1: a 4xx means "no rules" (everything allowed); a 5xx, a
+ *   timeout, a network error or an oversized file means the rules are unknown,
+ *   so Orbi reads the home page only (no sitemap, no other page).
  * - Hard limits: total time budget, per-page timeout, concurrency, per-page and
  *   total bytes, link and sitemap caps. When the budget is spent, Orbi stops and
  *   uses what it has.
@@ -52,13 +55,32 @@ export const CRAWL_DEFAULTS: Required<CrawlOptions> = {
 // ------------------------------------------------------------------ robots.txt
 
 type Rule = { allow: boolean; pattern: string };
+/** RFC 9309 § 2.5: crawlers must parse at least 500 KiB. */
+const ROBOTS_MAX_BYTES = 500_000;
+/** Rules for a robots.txt Orbi could not read: every page Orbi would choose is off limits. */
+const ROBOTS_UNREACHABLE = { rules: [{ allow: false, pattern: "/" }] as Rule[], sitemaps: [] as string[], unreachable: true };
+
+/**
+ * robots.txt fetch outcome → rules (RFC 9309 § 2.3.1). Content type is not
+ * checked: the RFC asks for text/plain, but crawlers parse what they get, and
+ * an HTML soft-404 yields no rule, like a 404.
+ */
+export async function readRobots(fetcher: Fetcher, url: string, signal: AbortSignal) {
+  try {
+    const r = await fetcher(url, { signal, accept: ["*/*"], maxBytes: ROBOTS_MAX_BYTES });
+    return { ...parseRobots(r.body), unreachable: false };
+  } catch (e) {
+    if (e instanceof PublicFetchError && e.status >= 400 && e.status < 500) return { ...parseRobots(""), unreachable: false };
+    return ROBOTS_UNREACHABLE;
+  }
+}
 /** Rules of the group that applies to Orbi's user agent (or "*"). */
 export function parseRobots(text: string, agent = "orbiscompanyreader") {
   const groups: { agents: string[]; rules: Rule[] }[] = [];
   const sitemaps: string[] = [];
   let current: { agents: string[]; rules: Rule[] } | null = null;
   let lastWasAgent = false;
-  for (const raw of text.slice(0, 100_000).split(/\r?\n/)) {
+  for (const raw of text.slice(0, ROBOTS_MAX_BYTES).split(/\r?\n/)) {
     const line = raw.replace(/#.*$/, "").trim();
     const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
     if (!m) continue;
@@ -193,14 +215,8 @@ export async function crawlSite(raw: string, options: CrawlOptions = {}, fetcher
   const start = publicWebsite(raw);
   const skipped: CrawlResult["skipped"] = [];
 
-  // Home and robots.txt in parallel; a missing robots.txt allows everything.
-  const robotsPromise = fetcher(new URL("/robots.txt", start).href, {
-    signal: timeout(4_000),
-    accept: ["text/plain"],
-    maxBytes: 100_000,
-  })
-    .then((r) => parseRobots(r.body))
-    .catch(() => parseRobots(""));
+  // Home and robots.txt in parallel; a missing robots.txt (4xx) allows everything.
+  const robotsPromise = readRobots(fetcher, new URL("/robots.txt", start).href, timeout(4_000));
   const homeResource = await fetcher(start.href, { signal: timeout(o.homeTimeoutMs), maxBytes: o.maxPageBytes });
   const home = parseSitePage(homeResource.body, homeResource.url);
   const homeUrl = new URL(homeResource.url);
@@ -210,7 +226,7 @@ export async function crawlSite(raw: string, options: CrawlOptions = {}, fetcher
   const robots = await robotsPromise;
 
   let candidates = pickPages(homeUrl, home.links, o.maxPages);
-  if (candidates.length < o.maxPages && remaining() > 3_000) {
+  if (candidates.length < o.maxPages && !robots.unreachable && remaining() > 3_000) {
     const sitemapUrls = robots.sitemaps.length ? robots.sitemaps : [new URL("/sitemap.xml", homeUrl).href];
     try {
       const sitemapUrl = sitemapUrls.find((s) => {
