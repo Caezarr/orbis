@@ -31,7 +31,7 @@ Status: built on branch `feat/launch-hardening` (stacked on `feat/followups-pipe
 - Anti-enumeration: magic link always answers « Si cette adresse peut se connecter, un lien vient de lui être envoyé… », whatever happened (except a 429). Sign-in errors are generic. Sign-up relies on Supabase's obfuscated response when confirmations are on (keep « Confirm email » enabled).
 - `returnTo`: relative paths only, under an allowlist of top-level app routes (`RETURN_TO_ALLOWLIST` in `auth.ts`). Control characters, backslashes, `//`, `/api`, `/login` and unknown routes fall back to `/today`. The destination after email/OAuth comes only from an httpOnly cookie, never from the provider URL.
 - The OAuth redirect URL must be https and on the Supabase project origin.
-- Callback: PKCE `code` or `token_hash` + `type ∈ {email, magiclink, signup}`. A magic link must be opened in the browser that requested it (PKCE verifier cookie). The login page says so on failure.
+- Callback: PKCE `code` only. A magic link must be opened in the browser that requested it (PKCE verifier cookie). The login page says so on failure. `token_hash` URLs are refused (28/10): `verifyOtp` needs no cookie, so a link built from an attacker's own token signed any visitor into the attacker's account (login CSRF), and a mailbox connected next on `/start` was bound to the attacker's workspace. Email templates must keep `{{ .ConfirmationURL }}`; a `token_hash` template would need a nonce cookie bound to the requesting browser first.
 
 ## 3. Account lifecycle (GDPR)
 
