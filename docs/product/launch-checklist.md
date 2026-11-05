@@ -106,6 +106,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | Roles: migration owner (CREATEROLE, owns `public`), runtime role (LOGIN, no superuser, **NOBYPASSRLS**); connect the runtime through the pooler with that role | Fait (03/10) |
 | `node --import tsx scripts/migrate.ts` (001–015) then `node --import tsx scripts/check-platform.ts --database` → **PASS** | Fait (03/10) : PASS sur Supabase eu-west-1 |
 | Same for **016** (retention of Orbi's questions + contact domain) after merging its PR → **PASS** | À faire (PASS sur Postgres 16 jetable le 26/10) |
+| Same for **017** (retention of draft citations + offered slots) after merging its PR → **PASS** | À faire |
 | Auth → URL config: Site URL = `APP_ORIGIN`; redirect allowlist = `APP_ORIGIN/api/auth/callback` (exact) | Fait (03/10) |
 | Auth → Email: keep « Confirm email » ON (anti-enumeration relies on it); enable email OTP / magic link; set link expiry (≤1 h) | À faire |
 | Custom SMTP sender on your domain (SPF/DKIM/DMARC); the default Supabase sender is rate-limited and not for production. Translate the email templates to French | Bloquant |

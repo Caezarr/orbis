@@ -187,8 +187,9 @@ export async function requestAction(id: string, input: z.infer<typeof actionSche
     );
     // The thread's reply previews (subject, draft greeting, questions) name the
     // contact too: without this they stayed in Today and in the export for 30 days.
+    // Citations and offered slots go with them: nothing of that draft is kept.
     await ctx.db.query(
-      `UPDATE inbox_messages m SET subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb, updated_at=now()
+      `UPDATE inbox_messages m SET subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb, citations='[]'::jsonb, proposed_slots=NULL, updated_at=now()
        FROM pipeline_items i WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3
          AND m.workspace_id=i.workspace_id AND m.tenant_id=i.tenant_id AND m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id`,
       [id, ...p(ctx)],

@@ -25,7 +25,7 @@ describe("erase_contact", () => {
     await requestAction("item", { action: "erase_contact" });
     const inbox = calls().find((c) => c.sql.startsWith("UPDATE inbox_messages"));
     const regen = calls().find((c) => c.sql.startsWith("UPDATE brain_jobs"));
-    expect(inbox?.sql).toContain("subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb");
+    expect(inbox?.sql).toContain("subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb, citations='[]'::jsonb, proposed_slots=NULL");
     expect(inbox?.sql).toContain("m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id");
     expect(regen?.sql).toContain("draft_preview=NULL");
     expect(regen?.sql).toContain("j.inbox_message_id=m.id");

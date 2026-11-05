@@ -173,6 +173,8 @@ describe("inbox worker job", () => {
     const purge = mock.query.mock.calls.find(([sql]) => String(sql).startsWith("UPDATE inbox_messages SET subject_preview=NULL"));
     expect(String(purge![0])).toContain("questions='[]'::jsonb");
     expect(String(purge![0])).toContain("OR questions<>'[]'::jsonb");
+    expect(String(purge![0])).toContain("citations='[]'::jsonb,proposed_slots=NULL");
+    expect(String(purge![0])).toContain("OR citations<>'[]'::jsonb OR proposed_slots IS NOT NULL");
     expect(purge![1]).toEqual(["ws-a", "tenant-a"]);
   });
 });
