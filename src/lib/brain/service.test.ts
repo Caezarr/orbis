@@ -108,7 +108,7 @@ describe("one question, asked once", () => {
       sql.startsWith("SELECT id,canonical_key,status FROM brain_questions") ? { rows: [] } :
       sql.startsWith("SELECT id FROM brain_questions") ? { rows: [{ id: "q-new" }] } : undefined;
     const r = await recordDraftQuestions(db, ids, "row-1", [{ canonicalKey: key, label: "prix de la pose au m²" }]);
-    expect(r).toEqual({ created: 1, matched: 0, alreadyAnswered: 0 });
+    expect(r).toEqual({ created: 1, matched: 0, alreadyAnswered: 0, grouped: 0 });
     expect(sqls().some((s) => s.startsWith("INSERT INTO brain_questions"))).toBe(true);
   });
   it("an answered question is matched (even reworded) and never re-asked", async () => {
@@ -119,7 +119,7 @@ describe("one question, asked once", () => {
     const r = await recordDraftQuestions(db, ids, "row-2", [
       { canonicalKey: canonicalKey("Quel est le tarif de pose par mètre carré ?"), label: "tarif pose" },
     ]);
-    expect(r).toEqual({ created: 0, matched: 0, alreadyAnswered: 1 });
+    expect(r).toEqual({ created: 0, matched: 0, alreadyAnswered: 1, grouped: 0 });
     expect(sqls().some((s) => s.startsWith("INSERT INTO brain_questions"))).toBe(false);
   });
   it("answering creates an APPROVED fact sourced from the user's answer and closes the question", async () => {

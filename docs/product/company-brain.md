@@ -70,7 +70,18 @@ FORCE RLS with the same membership policy as 007/008 on every table. The runtime
 ## Known limits / open questions
 
 - Prompts and extraction quality have not been measured on real mail. Redaction is pattern-based, so a name without a greeting, a title or a matching recipient address can pass. The owner reviews every quote.
-- Question dedup is lexical (token Jaccard ≥ 0.6, with a small FR/EN synonym map). Two semantically identical questions with no shared content words stay separate, and two different ones that share most words may merge.
+- Question dedup is lexical first (token Jaccard ≥ 0.6, with a small FR/EN synonym map). Two different questions that share most words may merge. Two semantically identical questions with no shared content words stay separate, unless model grouping is on (below).
+
+## Model-assisted question grouping (opt-in, `ORBIS_BRAIN_QUESTION_GROUPING=true`)
+
+Off by default. When on, a new question that matches nothing lexically is compared by the classifier model (`ORBIS_AI_CLASSIFIER_MODEL`, else `ORBIS_AI_MODEL`) with the workspace's **open** questions (40 most recent). If the model says it asks for exactly the same fact, the draft is linked to that open question instead of creating a new one (`grouped` in the result). Code: `src/lib/brain/grouping.ts`, called from the inbox batch and from regeneration.
+
+- **Open questions only.** An answered question is never a model candidate, and a hint pointing to an answered, dismissed or unknown question is ignored inside the locked transaction. A wrong model link can therefore never silently drop a question the owner did not answer; at worst one open question covers two drafts.
+- **Untrusted labels.** Labels come from drafts written over untrusted mail. They are sent as JSON inside a random boundary, with no tools and a strict schema. The model sees short refs (`q1`, `n1`), never database ids; refs are mapped back and checked in code; contradictory duplicates are dropped.
+- **No call when not needed.** No model call when every new question already matches lexically, when the workspace has no open question, or when the monthly cap is reached.
+- **Cost.** One call per draft that raises an unmatched question, estimated `ORBIS_BRAIN_EST_CENTS_GROUP` (default 1¢). The reservation and the tokens are added to the inbox message row of that draft, so they count in the same monthly cap. No migration.
+- **Failure.** Any budget, model, schema or timeout failure (10 s, so a batch keeps its serverless time budget) falls back to lexical dedup; recording the questions never depends on the model.
+- **Not measured.** Grouping quality has not been measured on real questions. Keep it off until a few hundred real questions exist to compare.
 - Outcome detection compares against the stored draft preview (≤1,200 chars), runs only for real drafts created in the last 14 days, and decides on the first owner reply after the draft. When the budget is reached, `sent_edited` is recorded without proposals and is not retried.
 - An `uncertain` regeneration draft (provider timeout) completes the job as `uncertain` and does not reconcile automatically. The UI does not yet show regeneration errors in detail.
 - The sent-mail list is one provider page (no pagination). Gmail/Outlook may return fewer than 200 messages.

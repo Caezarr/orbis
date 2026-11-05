@@ -46,6 +46,7 @@ Set them in Vercel per environment (Preview ≠ Production). Mark the secret one
 | `ORBIS_INBOX_MODE` | `test` (simulated drafts) → `scoped_autonomy` (real drafts) after staging | Fait (03/10) : `test` |
 | `ORBIS_INBOX_FIRST_RUN_MAX_DRAFTS`, `ORBIS_INBOX_CONTINUOUS_MAX_DRAFTS`, `ORBIS_INBOX_POLL_MINUTES` | defaults 5 / 10 / 15 | Code ✅ |
 | `ORBIS_INBOX_EST_CENTS_CLASSIFY` / `_DRAFT`, `ORBIS_BRAIN_EST_CENTS_EXTRACT` / `_EXPLAIN`, `ORBIS_PIPELINE_EST_CENTS_EXTRACT` | set from the measured real cost | Décision |
+| `ORBIS_BRAIN_QUESTION_GROUPING=true` | model-assisted grouping of « Questions d'Orbi » (open questions only, [company-brain.md](company-brain.md#model-assisted-question-grouping-opt-in-orbis_brain_question_groupingtrue)); off by default. `ORBIS_BRAIN_EST_CENTS_GROUP` default 1¢ | Décision |
 | `ORBIS_FOLLOWUP_MAX_THREADS` | default 10 | Code ✅ |
 | `ORBIS_SCHEDULER_BUDGET_MS`, `_RESERVE_MS`, `_MAX_BATCHES`, `_MAX_PER_WORKSPACE`, `_MAX_WORKSPACES` | defaults are fine on Vercel Pro (60 s) | Code ✅ |
 | `ORBIS_OPERATIONS_MONTHLY_CAP_CENTS` | hard per-workspace ceiling; must be ≥ the highest plan cap | Fait (03/10) |

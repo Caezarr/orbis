@@ -24,6 +24,11 @@ import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
 import { enqueueExtraction } from "@/lib/brain/store";
 import { factSources } from "@/lib/brain/facts";
 import { providerBrainModel, type BrainModel } from "@/lib/brain/model";
+import {
+  providerQuestionGrouper,
+  questionGroupingEnabled,
+  type QuestionGrouper,
+} from "@/lib/brain/grouping";
 import { checkDraftOutcomes, type OutcomeStats } from "@/lib/brain/outcomes";
 import {
   BRAIN_COSTS,
@@ -80,6 +85,8 @@ export type InboxWorkerDeps = {
   model?: InboxModel;
   /** Company brain model (draft-vs-sent explanations). */
   brainModel?: BrainModel;
+  /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
+  questionGrouper?: QuestionGrouper;
   mailbox?: (
     ...args: Parameters<typeof mailboxClient>
   ) => Parameters<typeof processMailboxBatch>[0]["mailbox"] &
@@ -226,9 +233,16 @@ export async function runOneInboxBatch(
       },
       { mode: claimed.mode },
     );
-    const inboxStore = postgresInboxStore(run, batch, {
-      token: claimed.lease_token,
-    });
+    const inboxStore = postgresInboxStore(
+      run,
+      batch,
+      { token: claimed.lease_token },
+      {
+        questionGrouper: questionGroupingEnabled()
+          ? (deps.questionGrouper ?? providerQuestionGrouper)
+          : undefined,
+      },
+    );
     const followupModel = deps.followupModel ?? providerFollowupModel;
     const context = replyContext(state, factSources(facts));
     // Opt-ins (migration 014). Deployment flags off → nothing changes.

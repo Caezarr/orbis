@@ -140,14 +140,16 @@ type QuestionRow = { id: string; canonical_key: string; status: string };
  * Register the questions raised by one draft. A question matching an existing
  * one (same or similar canonical key) is the SAME question: occurrence counted,
  * draft linked, status unchanged — an answered question is never asked again.
+ * `groupWith` (model grouping, grouping.ts) links an otherwise unmatched
+ * question to that id only while it is still an OPEN question of this workspace.
  */
 export async function recordDraftQuestions(
   db: PoolClient,
   ids: Ids,
   inboxMessageId: string,
-  questions: { canonicalKey: string; label: string }[],
+  questions: { canonicalKey: string; label: string; groupWith?: string }[],
 ) {
-  const result = { created: 0, matched: 0, alreadyAnswered: 0 };
+  const result = { created: 0, matched: 0, alreadyAnswered: 0, grouped: 0 };
   if (!questions.length) return result;
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `orbis-brain-questions:${ids.workspaceId}`,
@@ -160,7 +162,11 @@ export async function recordDraftQuestions(
     )
   ).rows.map((r) => ({ ...r, canonicalKey: r.canonical_key }));
   for (const q of questions) {
-    const match = matchQuestion(q.canonicalKey, existing);
+    const lexical = matchQuestion(q.canonicalKey, existing);
+    const grouped = lexical
+      ? undefined
+      : existing.find((e) => e.id === q.groupWith && e.status === "open");
+    const match = lexical ?? grouped;
     let questionId: string;
     if (match) {
       questionId = match.id;
@@ -169,6 +175,7 @@ export async function recordDraftQuestions(
         [match.id, ...p(ids)],
       );
       if (match.status === "answered") result.alreadyAnswered++;
+      else if (grouped) result.grouped++;
       else result.matched++;
     } else {
       questionId = randomUUID();
