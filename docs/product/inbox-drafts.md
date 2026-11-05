@@ -118,6 +118,17 @@ The migration owner is granted the two NOLOGIN roles `WITH INHERIT FALSE, SET TR
 - [Managed vs custom auth](https://docs.composio.dev/docs/custom-app-vs-managed-app): managed apps suit development; for production, switch to your own credentials (consent screen shows "Composio" otherwise; managed apps share rate-limit quota).
 - Composio's docs that were reviewed **do not state** which default scopes the managed Gmail app requests, whether that app is verified for `gmail.readonly`/`gmail.compose`, or whether using it removes the need for a CASA assessment on our side. This is an open question for Composio support; do not assume coverage. Google's own policy on restricted Gmail scopes should be checked directly before launch.
 
+## Model-assisted claim check (opt-in, `ORBIS_INBOX_CLAIM_CHECK=true`)
+
+The pattern guard (`guardDraft`) only catches phrasings it knows. Free paraphrases (« pas de souci, on gère ça pour vous », « on ne vous comptera pas le déplacement », « on vous fera un petit prix », « vous serez dépanné dans la journée ») slip through. With the flag on, each draft gets one extra classifier call after the guard (`src/lib/inbox/claim-check.ts`):
+
+- **Input.** The guarded draft and the same company sources, each in a random-boundary data block; no tools, strict schema (`commitment` | `free_offer` | `discount` | `delay`, a verbatim quote, at most 6 items).
+- **Flags only.** The body is never rewritten. A verified kind adds the flag `claim_check:unsupported_<kind>` and the same reviewer question as the pattern guard (`REVIEW_QUESTIONS`, fixed text from code); the questions banner is prepended only when the draft has no placeholder yet, like the guard. In `/start`, the label is the pattern guard's.
+- **Verified quotes.** A claim counts only if its quote is draft text outside `[[…]]` placeholders (case/whitespace folded, at least 4 characters). The quote itself is never stored or shown. A kind the pattern guard already flagged is not flagged twice.
+- **Fail-safe.** No budget → `claim_check:budget`; model, schema or timeout error → `claim_check:unavailable`. In both cases the draft goes out with the pattern guard's result, and these internal flags are not shown to the owner.
+- **Cost.** Estimated `ORBIS_INBOX_EST_CENTS_CLAIM_CHECK` (default 1¢) reserved on the same inbox message row (same monthly cap); tokens added to that row. Never active with the local demo model. No migration.
+- **Limits.** A model can miss a promise or flag a courtesy; the human still reads every draft. Quality is unmeasured on real drafts: measure before turning it on in production. Not wired into `/start` preview, follow-up drafts or brain regenerations (pattern guard only there).
+
 ## Known limits / follow-ups
 
 - Calendar-aware drafts (slots from free/busy) and visible triage (Orbis labels/categories): see [inbox-calendar-labels.md](inbox-calendar-labels.md).
