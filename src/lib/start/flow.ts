@@ -528,6 +528,8 @@ export function flagLabel(flag: string) {
     return "Promesse de délai vague (« rapidement »…) : précisez un délai réel ou retirez-la.";
   if (flag === "guard:unsupported_commitment")
     return "Engagement pris en votre nom (« nous passerons »…) : vérifiez qu’il est tenable ou retirez-le.";
+  if (flag === "guard:unsupported_free_offer")
+    return "Gratuité ou remboursement promis (« offert »…) : vérifiez que vos conditions le prévoient ou retirez-le.";
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
   if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
