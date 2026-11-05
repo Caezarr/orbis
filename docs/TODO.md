@@ -22,12 +22,13 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 - [ ] Mail de connexion Supabase en anglais par défaut : template FR dans `supabase/templates/`, à coller dans le projet Supabase prod + SMTP sur le domaine Orbis.
 - [x] Profil `/start` sans IA : rate la zone « de Lille à Tournai » (#32, mergée via #34).
 
-- [ ] 4 commits de `fix/start-ai-fallback-reason` poussés après le merge de #36 (IA muette en prod sur Claude 5, fonctions à Dublin) : jamais arrivés sur main → PR #37 (04/10), à merger par Gabriel.
+- [ ] 4 commits de `fix/start-ai-fallback-reason` poussés après le merge de #36 (IA muette en prod sur Claude 5, fonctions à Dublin) : jamais arrivés sur main → PR #37 (04/10), à merger par Gabriel (toujours ouverte le 07/10).
 - [ ] Regroupement des questions : mesurer la qualité sur de vraies questions avant d'activer le flag en prod.
 - [x] Aperçu `/start` par description : « Orbi ne trouve pas la réponse sur votre site » affiché sans site → « dans votre description » (trouvé par l'E2E, PR #39).
 - [ ] E2E en CI : workflow GitHub Actions qui monte la pile locale (Supabase CLI, images Docker Hub) et lance `pnpm test:e2e`. Note : depuis le sandbox cloud, les images Supabase sur ECR sont bloquées ; `SUPABASE_INTERNAL_IMAGE_REGISTRY=docker.io pnpm local:up` passe.
 - [ ] Niveau 9 : 5 décisions de Gabriel (seuils d'éligibilité, délai d'annulation, plafond quotidien, plan concerné, signature) — spec § 10. Pas urgent : rien ne sera codé avant la prod des niveaux 2/5/8.
-- [ ] Garde des brouillons : aucun détecteur général de date/heure inventée hors brouillons de RDV (limite notée dans inbox-drafts.md). Préalable de l'auto-envoi, utile dès maintenant pour signaler une date promise par le modèle.
+- [x] Garde des brouillons : date/heure absente des sources → `[[À CONFIRMER : date]]` + question, hors brouillons de RDV (déjà contrôlés par les créneaux) — PR #41 (07/10, [inbox-drafts.md](product/inbox-drafts.md)).
+- [ ] Garde des brouillons : délais inventés (« sous 48h », « en 3 jours ») et promesses vagues (« rapidement ») non détectés. Préalable de l'auto-envoi (niveau 9).
 - [ ] E2E : étape 4 avec un modèle factice local (brouillons visibles dans `/dev/demo-mailbox`), sans appel payant. Demande un faux fournisseur refusé en production, comme la boîte de démo.
 
 ## Décisions de Gabriel

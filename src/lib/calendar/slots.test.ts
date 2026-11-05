@@ -177,10 +177,11 @@ describe("validateMeetingDraft (critique step)", () => {
     const ok = validateMeetingDraft("Bonjour, quelles sont vos disponibilités ?", ask);
     expect(ok.issues).toEqual([]);
   });
-  it("slot labels survive the contact/amount guard", () => {
+  it("slot labels survive the contact/amount guard (date check left to this step)", () => {
     const g = guardDraft(
       { body: "Bonjour, lundi 5 octobre de 9h à 10h ou mardi 6 octobre de 9h à 10h ?", questions: [], citations: [] },
       { sources: [], message: { from: { address: "c@example.com" } } as never },
+      { dates: false },
     );
     expect(g.body).toContain("lundi 5 octobre de 9h à 10h");
     expect(g.issues).toEqual([]);

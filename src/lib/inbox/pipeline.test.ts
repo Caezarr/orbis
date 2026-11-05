@@ -253,6 +253,14 @@ describe("inbox batch pipeline", () => {
     });
     expect(rows.get("m1")?.receipt?.draftId).toBe("draft-1");
   });
+  it("an invented date never reaches the mailbox draft", async () => {
+    const { store, rows } = memoryStore();
+    await run(model("Bonjour, nous passerons le 12 mars à 10h30."), store);
+    const body = drafts()[0].args.body as string;
+    expect(body).not.toMatch(/12 mars|10h30/);
+    expect(body).toContain("[[À CONFIRMER : date]]");
+    expect(rows.get("m1")?.flags).toContain("guard:unsupported_date");
+  });
   it("is idempotent: a re-run creates no second draft and makes no model call", async () => {
     const { store } = memoryStore();
     await run(model(), store);
