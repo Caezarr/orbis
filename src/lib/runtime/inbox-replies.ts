@@ -512,6 +512,10 @@ const COMMITMENT = new RegExp(
     "(?:nous\\s+vous|je\\s+vous|on\\s+vous)\\s+(?:rappellerons|rappellerai|rappellera|rappelons|rappelle)(?!\\s+(?:que|qu'|qu’))",
     "we\\s+guarantee|consider\\s+it\\s+done|your\\s+(?:appointment|booking|order)\\s+is\\s+confirmed",
     "we(?:'ll|’ll|\\s+will)\\s+(?:call\\s+you\\s+back|do\\s+(?:whatever\\s+it\\s+takes|what(?:'s|’s|\\s+is)\\s+necessary|our\\s+best))",
+    // Open-ended arrangements: the reviewer has to say which one, if any.
+    "(?:on\\s+(?:va\\s+)?s'|on\\s+(?:va\\s+)?s’|nous\\s+allons\\s+nous\\s+)arrang\\p{L}*",
+    "(?:nous|on)\\s+(?:trouverons|trouvera|allons\\s+trouver|va\\s+trouver)\\s+(?:une\\s+solution|un\\s+arrangement|un\\s+terrain\\s+d'entente|un\\s+terrain\\s+d’entente)",
+    "we(?:'ll|’ll|\\s+will)\\s+(?:find\\s+a\\s+(?:solution|way)|work\\s+something\\s+out|sort\\s+it\\s+out)",
   ]
     .map((p) => `(?<!\\p{L})(?:${p})(?!\\p{L})`)
     .join("|"),
@@ -532,6 +536,31 @@ const FREE_OFFER = new RegExp(
     "[àa]\\s+(?:nos|mes)\\s+frais|[àa]\\s+(?:notre|ma)\\s+charge",
     "(?:nous\\s+(?:vous\\s+)?(?:rembourserons|remboursons|allons\\s+(?:vous\\s+)?rembourser)|je\\s+vous\\s+rembourse(?:rai)?|vous\\s+serez\\s+rembours[ée]e?s?)",
     "free\\s+of\\s+charge|for\\s+free|at\\s+no\\s+(?:extra\\s+|additional\\s+)?cost|on\\s+the\\s+house|full\\s+refund|we(?:'ll|’ll|\\s+will)\\s+refund",
+  ]
+    .map((p) => `(?<!\\p{L})(?:${p})(?!\\p{L})`)
+    .join("|"),
+  "giu",
+);
+/**
+ * Discounts and commercial gestures granted in the business's name (« nous
+ * vous accordons une remise », « une remise de 10 % », « à titre de geste
+ * commercial », « prix d'ami », « c'est cadeau », « we'll give you a
+ * discount »): the amount guard only replaces the figure, the concession
+ * itself stays, so it is kept in the body but flagged. A customer's « demande
+ * de remise » or « pouvez-vous faire un geste ? » is not a promise.
+ */
+// « remise en état », « remise à neuf », « remise des clés » are work, not a concession.
+const CONCESSION = "(?:remise(?!\\s+(?:en|[àa]|des|du|de\\s+(?:la|l'|l’|vos|votre|nos|notre)))|r[ée]duction|ristourne|rabais|escompte|geste(?:\\s+commercial)?|prix\\s+d'ami|prix\\s+d’ami|tarif\\s+pr[ée]f[ée]rentiel|prix\\s+pr[ée]f[ée]rentiel)";
+const DISCOUNT = new RegExp(
+  [
+    `(?:nous|je|on)\\s+(?:vous\\s+)?(?:accordons|accorderons|accorde|accorderai|accordera|faisons|ferons|fais|ferai|fera|fait|proposons|proposerons|consentons|appliquons|appliquerons|applique|appliquerai|appliquera|allons\\s+(?:vous\\s+)?(?:accorder|faire|appliquer)|va\\s+(?:vous\\s+)?(?:accorder|faire|appliquer))\\s+(?:une?\\s+|la\\s+|le\\s+|cette\\s+|ce\\s+|notre\\s+)?(?:petite?\\s+|exceptionnel(?:le)?\\s+)?${CONCESSION}`,
+    // « une remise de 10 % » / « 15 % de réduction » survive the amount guard as « remise de [[…]] ».
+    "(?:remise|r[ée]duction|ristourne|rabais)\\s+(?:exceptionnelle\\s+)?de\\s+(?=\\d|\\[\\[)",
+    // Lookbehind: the placeholder itself must stay outside the match.
+    "(?<=(?:%|\\]\\])\\s*)de\\s+(?:remise|r[ée]duction|ristourne|rabais)",
+    "(?:[àa]\\s+titre\\s+de|en\\s+guise\\s+de|en|par)\\s+geste\\s+commercial",
+    "prix\\s+d'ami|prix\\s+d’ami|c'est\\s+cadeau|c’est\\s+cadeau|en\\s+cadeau",
+    "(?:we(?:'ll|’ll|\\s+will|\\s+can)?|i(?:'ll|’ll|\\s+will|\\s+can)?)\\s+(?:give|offer|apply)\\s+you\\s+(?:a\\s+)?(?:\\[\\[[^\\]]*\\]\\]\\s+|\\S+\\s+)?discount|as\\s+a\\s+goodwill\\s+gesture|special\\s+price\\s+for\\s+you",
   ]
     .map((p) => `(?<!\\p{L})(?:${p})(?!\\p{L})`)
     .join("|"),
@@ -650,6 +679,10 @@ export function guardDraft(
   if (flagUnsupported(FREE_OFFER, "unsupported_free_offer", body, trusted, issues))
     questions.push(
       "Gratuité ou remboursement promis (« offert », « à nos frais »…) : vérifier que vos conditions le prévoient ou le retirer",
+    );
+  if (flagUnsupported(DISCOUNT, "unsupported_discount", body, trusted, issues))
+    questions.push(
+      "Remise ou geste commercial promis (« remise », « geste commercial »…) : vérifier que vous l'accordez ou le retirer",
     );
   if (injectionSignals(body).length) issues.push("injection_echo");
   const citations = draft.citations.filter((c) => {

@@ -224,6 +224,7 @@ describe("flagLabel", () => {
     expect(flagLabel("guard:vague_delay")).toMatch(/délai vague/);
     expect(flagLabel("guard:unsupported_commitment")).toMatch(/Engagement pris en votre nom/);
     expect(flagLabel("guard:unsupported_free_offer")).toMatch(/Gratuité ou remboursement promis/);
+    expect(flagLabel("guard:unsupported_discount")).toMatch(/Remise ou geste commercial/);
     expect(flagLabel("guard:unsupported_delay")).toBe(
       "Des informations non sourcées ont été remplacées par des questions.",
     );
