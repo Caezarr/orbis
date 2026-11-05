@@ -177,13 +177,17 @@ async function reader(location: Location) {
     return result.data;
   };
 }
-const object = (v: unknown): Record<string, any> => {
+// Untyped JSON from Microsoft Graph, Google Drive and Notion. Every field read
+// from it is coerced (String(), Number(), safeLink()) or checked at use.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiJson = Record<string, any>;
+const object = (v: unknown): ApiJson => {
   if (!v || typeof v !== "object" || Array.isArray(v))
     throw new PlatformError("Unexpected file response.", 502);
-  return v as Record<string, any>;
+  return v as ApiJson;
 };
 function item(
-  raw: Record<string, any>,
+  raw: ApiJson,
   location: Location,
   kind?: RemoteItem["kind"],
 ): RemoteItem {
@@ -192,8 +196,8 @@ function item(
     name: String(
       raw.name ??
         raw.displayName ??
-        raw.properties?.title?.title?.map((t: any) => t.plain_text).join("") ??
-        raw.title?.map((t: any) => t.plain_text).join("") ??
+        raw.properties?.title?.title?.map((t: ApiJson) => t.plain_text).join("") ??
+        raw.title?.map((t: ApiJson) => t.plain_text).join("") ??
         "Untitled",
     ),
     kind: kind ?? (raw.folder ? "folder" : "file"),
@@ -219,7 +223,7 @@ export async function browseRemote(
         `${graph}${path}${path.includes("?") ? "&" : "?"}$top=50${location.cursor ? `&$skiptoken=${enc(location.cursor)}` : ""}`,
       ),
     );
-    const items = (data.value ?? []).map((r: Record<string, any>) =>
+    const items = (data.value ?? []).map((r: ApiJson) =>
       !location.siteId
         ? {
             ...item(r, location, "site"),
@@ -257,7 +261,7 @@ export async function browseRemote(
     });
     const data = object(await read(`${gdrive}/files?${params}`));
     return {
-      items: (data.files ?? []).map((r: Record<string, any>) =>
+      items: (data.files ?? []).map((r: ApiJson) =>
         item(
           r,
           location,
@@ -285,7 +289,7 @@ export async function browseRemote(
     ),
   );
   return {
-    items: (data.results ?? []).map((r: Record<string, any>) =>
+    items: (data.results ?? []).map((r: ApiJson) =>
       item(r, location, r.object === "database" ? "database" : "page"),
     ),
     cursor: data.has_more ? data.next_cursor : undefined,
@@ -296,7 +300,7 @@ export async function readRemote(
 ): Promise<{ resource: RemoteItem; text: string }> {
   if (!location.itemId) throw new PlatformError("Choose a file first.", 400);
   const read = await reader(location);
-  let metadata: Record<string, any>, text: unknown;
+  let metadata: ApiJson, text: unknown;
   if (location.provider === "sharepoint") {
     if (!location.driveId)
       throw new PlatformError("Choose a document library.", 400);
@@ -361,7 +365,7 @@ export async function readRemote(
           );
         lines.push(
           (block[block.type]?.rich_text ?? [])
-            .map((t: any) => t.plain_text ?? t.text?.content ?? "")
+            .map((t: ApiJson) => t.plain_text ?? t.text?.content ?? "")
             .join(""),
         );
       }

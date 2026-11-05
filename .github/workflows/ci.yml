@@ -1,6 +1,6 @@
 name: CI
 
-# Typecheck + unit tests, then the browser tests of /start against the local
+# Typecheck + lint + unit tests, then the browser tests of /start against the local
 # production-like stack (Supabase in Docker, Mailpit, demo mailbox).
 # No live service and no secret: no model is ever called (the second E2E pass
 # uses the local demo model), the mailbox is the in-process fake, and every
@@ -35,6 +35,8 @@ jobs:
       # next-env.d.ts and route types are generated, not committed.
       - run: pnpm exec next typegen
       - run: pnpm exec tsc --noEmit
+      # Errors fail the job; warnings are reported only.
+      - run: pnpm lint
       - run: pnpm test
 
   e2e:
