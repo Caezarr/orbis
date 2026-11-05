@@ -216,7 +216,7 @@ describe("draft guard: never invent prices, contacts or links", () => {
   it("allows the sender's own address", () => {
     const result = guardDraft(
       {
-        body: "We will answer client@example.com shortly.",
+        body: "We will answer client@example.com.",
         questions: [],
         citations: [],
       },
@@ -283,5 +283,92 @@ describe("draft guard: never invent dates or times", () => {
   it("is skipped for meeting drafts (checked against code-computed slots)", () => {
     const result = guard("Je vous propose mardi 14 octobre à 10h00.", { dates: false });
     expect(result.body).toBe("Je vous propose mardi 14 octobre à 10h00.");
+  });
+});
+
+describe("draft guard: never invent delays", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Nous répondons à toute demande de devis sous 48h. Intervention en urgence dans la journée.",
+    },
+  ];
+  const guard = (body: string, options?: { dates?: boolean }) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() }, options);
+  const DELAY_Q = "Délai à confirmer (proposé par le brouillon, non vérifié)";
+  const VAGUE_Q = "Promesse de délai vague (« rapidement »…) : préciser un délai réel ou la retirer";
+
+  it.each([
+    "Vous recevrez le devis sous 72h.",
+    "Les travaux seront terminés en 3 jours.",
+    "Nous revenons vers vous dans les 24 heures.",
+    "Réponse dans un délai de 5 jours ouvrés.",
+    "Livraison sous huitaine.",
+    "Nous vous rappelons dans la semaine.",
+    "Le chantier démarre d’ici 2 semaines.",
+    "Comptez sous 10 jours de délai.",
+    "We will reply within 2 business days.",
+    "You will hear from us in 3 days.",
+  ])("replaces an unsourced delay: %s", (body) => {
+    const result = guard(body);
+    expect(result.body).toContain("[[À CONFIRMER : délai]]");
+    expect(result.issues).toContain("unsupported_delay");
+    expect(result.questions).toContain(DELAY_Q);
+  });
+
+  it("keeps delays written in trusted sources", () => {
+    const result = guard("Nous répondons sous 48H. Intervention possible dans la journée.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
+  it("leaves work durations and quantities alone", () => {
+    const result = guard("Comptez 2 jours de travaux, sous 2h de route, en 3 jours de chantier. Nous avons 3 équipes.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).toEqual([]);
+  });
+
+  it("does not echo the proposed delay into stored questions", () => {
+    const result = guard("Devis envoyé sous 72h.");
+    expect(result.body).not.toContain("72h");
+    expect(result.questions.join(" ")).not.toContain("72");
+  });
+
+  it.each([
+    "Nous revenons vers vous rapidement.",
+    "Nous traitons votre demande dans les plus brefs délais.",
+    "Un technicien vous contacte au plus vite.",
+    "We will get back to you shortly.",
+  ])("flags a vague speed promise without rewriting it: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("vague_delay");
+    expect(result.questions).toContain(VAGUE_Q);
+    expect(result.body).toContain(body);
+    // Visible to the reviewer even without another placeholder in the body.
+    expect(result.body.startsWith("[[À CONFIRMER")).toBe(true);
+  });
+
+  it("does not flag a vague wording the business itself uses", () => {
+    const result = guardDraft(
+      { body: "Nous intervenons rapidement.", questions: [], citations: [] },
+      {
+        sources: [{ id: "s", kind: "memory", name: "Fiche", content: "Dépannage rapide : nous intervenons rapidement." }],
+        message: mail(),
+      },
+    );
+    expect(result.issues).not.toContain("vague_delay");
+  });
+
+  it("also applies to meeting drafts (slot checks do not cover delays)", () => {
+    const result = guard("Je vous confirme le créneau sous 72h.", { dates: false });
+    expect(result.body).toContain("[[À CONFIRMER : délai]]");
+  });
+
+  it("leaves a delay already inside a placeholder alone", () => {
+    const result = guard("[[À CONFIRMER : sous 72h ?]] Merci.");
+    expect(result.body).toContain("[[À CONFIRMER : sous 72h ?]]");
+    expect(result.issues).not.toContain("unsupported_delay");
   });
 });
