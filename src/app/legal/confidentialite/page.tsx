@@ -238,7 +238,8 @@ export default function Page() {
         </li>
         <li>
           <strong>Effacer un contact</strong> : depuis la liste « Demandes », l’action « Effacer le contact » supprime ses
-          données de contact.
+          données de contact, ainsi que les aperçus (objet, brouillon, questions) des e-mails de cette conversation
+          conservés par Orbis.
         </li>
         <li>
           <strong>Rectification, opposition et autres demandes</strong> : écrivez à{" "}
