@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { SentryEvent, SentryFrame } from "./observability";
+import { routeTemplate } from "./route-template";
+
+export { routeTemplate };
 
 /*
  * Server side of browser error capture (see src/lib/platform/browser-errors.ts).
@@ -24,16 +27,6 @@ export const browserReportSchema = z
   })
   .strict();
 export type BrowserReport = z.infer<typeof browserReportSchema>;
-
-const SLUG = /^[a-z][a-z-]{0,39}$/;
-const ROUTE_GROUP = /^\([a-z-]{1,40}\)$/;
-
-/** "/workspace/7f3c…/inbox?x=1" → "/workspace/[id]/inbox". At most 5 segments. */
-export function routeTemplate(path: string) {
-  const clean = path.split(/[?#]/)[0];
-  const segments = clean.split("/").filter(Boolean).slice(0, 5);
-  return "/" + segments.map((segment) => (SLUG.test(segment) || ROUTE_GROUP.test(segment) ? segment : "[id]")).join("/");
-}
 
 // Chrome/Edge: "    at fn (https://host/_next/static/chunks/a.js:1:200)" or "at https://…:1:2".
 const V8 = /^\s*at (?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/;
