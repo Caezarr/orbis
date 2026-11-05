@@ -35,8 +35,9 @@ import { TIME_MENTION, type MeetingPlan } from "@/lib/calendar/slots";
  *    see src/lib/security/untrusted-text.ts). Dates and times of day absent
  *    from trusted sources get the same treatment in the body (meeting drafts
  *    are checked against code-computed slots instead). Response delays
- *    (« sous 48h ») absent from sources are placeholdered in every draft;
- *    vague speed promises (« rapidement ») are flagged for the reviewer.
+ *    (« sous 48h », « avant la fin du mois ») absent from sources are
+ *    placeholdered in every draft; vague speed promises (« rapidement ») and
+ *    verbal commitments (« nous passerons ») are flagged for the reviewer.
  */
 export const INBOX_CONTRACT = {
   slug: "inbox-replies",
@@ -460,9 +461,14 @@ function scrubDates(body: string, trusted: string, issues: string[]) {
 /**
  * Response or completion delays a draft could commit the business to (« sous
  * 48h », « en 3 jours », « dans la semaine », « sous huitaine », « within 2
- * days »). A duration followed by « de … » (« 2h de route », « 3 jours de
- * travaux ») describes the work, not a promise, and is left alone.
+ * days »), including calendar-bound deadlines (« avant la fin du mois », « en
+ * fin de semaine », « à la mi-novembre », « la semaine prochaine », « by the
+ * end of the week »). A duration followed by « de … » (« 2h de route », « 3
+ * jours de travaux ») describes the work, not a promise, and is left alone.
  */
+const MONTH =
+  "(?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)";
+const PERIOD = `(?:semaine|mois|ann[ée]e|trimestre|${MONTH})`;
 const DELAY_NUMBER =
   "(?:\\d{1,3}|un|une|deux|trois|quatre|cinq|six|sept|huit|dix|quinze|one|two|three|four|five|ten)";
 const DELAY_UNIT =
@@ -471,6 +477,9 @@ const DELAY_MENTION = new RegExp(
   [
     `(?<!\\p{L})(?:sous|en|dans|d'ici|d’ici|within|in)\\s+(?:les\\s+|un\\s+d[ée]lai\\s+de\\s+|the\\s+next\\s+)?${DELAY_NUMBER}\\s*${DELAY_UNIT}(?!\\p{L})(?!\\s+(?:de\\s+|d'|d’)(?!d[ée]lai))`,
     "(?<!\\p{L})(?:sous\\s+(?:huitaine|quinzaine)|dans\\s+(?:la\\s+journ[ée]e|la\\s+semaine|l'heure|l’heure)|within\\s+(?:the\\s+)?(?:day|week|hour))(?!\\p{L})",
+    `(?<!\\p{L})(?:avant|d'ici|d’ici|pour|en|[aà]|d[eè]s)\\s+(?:la\\s+)?(?:fin|d[ée]but|mi)(?:-|\\s+)(?:(?:de\\s+la|de\\s+l'|de\\s+l’|de|du|d'|d’)\\s*)?${PERIOD}(?:\\s+prochaine?)?(?!\\p{L})`,
+    "(?<!\\p{L})(?:la\\s+semaine|le\\s+mois)\\s+prochain(?:e)?(?!\\p{L})",
+    "(?<!\\p{L})(?:by\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+|this\\s+|next\\s+)?(?:week|month|year)|(?:next|later\\s+this)\\s+(?:week|month))(?!\\p{L})",
   ].join("|"),
   "giu",
 );
@@ -480,6 +489,27 @@ const DELAY_MENTION = new RegExp(
  */
 const VAGUE_DELAY = new RegExp(
   "(?<!\\p{L})(?:rapidement|tr[eè]s\\s+vite|au\\s+plus\\s+(?:vite|t[ôo]t)|dans\\s+les\\s+(?:plus\\s+brefs|meilleurs)\\s+d[ée]lais|sous\\s+peu|sans\\s+(?:d[ée]lai|tarder)|asap|as\\s+soon\\s+as\\s+possible|shortly|quickly|right\\s+away)(?!\\p{L})",
+  "giu",
+);
+/**
+ * Commitments made in the business's name that no pattern above can verify
+ * (« nous nous en occupons », « c'est noté, nous passerons », « nous vous
+ * garantissons », « votre intervention est confirmée »): kept in the body, but
+ * the reviewer is asked to check they can be kept or remove them. Courtesies
+ * (« nous revenons vers vous », « c'est bien noté ») are not flagged.
+ */
+const COMMITMENT = new RegExp(
+  [
+    "(?:nous\\s+nous|je\\s+m'|je\\s+m’|on\\s+s'|on\\s+s’)\\s*en\\s+(?:occup|charg)\\p{L}*",
+    "(?:nous|on)\\s+(?:passerons|passera|viendrons|viendra|interviendrons|interviendra|allons\\s+(?:passer|venir|intervenir|nous\\s+en\\s+occuper)|va\\s+(?:passer|venir|intervenir))",
+    "(?:nous\\s+(?:vous\\s+)?garantissons|je\\s+vous\\s+garantis)",
+    "(?:nous\\s+acceptons|j'accepte|j’accepte)\\s+(?:votre|le|la|ce|cette)",
+    "(?:votre|le|la)\\s+(?:rendez-vous|rdv|intervention|commande|r[ée]servation|chantier)\\s+est\\s+(?:bien\\s+)?(?:confirm[ée]e?|valid[ée]e?|r[ée]serv[ée]e?)",
+    "we(?:'ll|’ll|\\s+will)\\s+(?:take\\s+care\\s+of|handle|come|be\\s+there|send\\s+someone)",
+    "we\\s+guarantee|consider\\s+it\\s+done|your\\s+(?:appointment|booking|order)\\s+is\\s+confirmed",
+  ]
+    .map((p) => `(?<!\\p{L})(?:${p})(?!\\p{L})`)
+    .join("|"),
   "giu",
 );
 /**
@@ -505,6 +535,19 @@ function scrubDelays(body: string, trusted: string, issues: string[]) {
     return m;
   });
   return { body: out, found, vague };
+}
+/** Flags (never rewrites) a commitment absent from trusted sources. */
+function flagCommitments(body: string, trusted: string, issues: string[]) {
+  const known = foldDate(trusted);
+  let flagged = false;
+  replaceEach(body, COMMITMENT, (m, inside) => {
+    if (!inside && !known.includes(foldDate(m))) {
+      flagged = true;
+      issues.push("unsupported_commitment");
+    }
+    return m;
+  });
+  return flagged;
 }
 /** Question/placeholder text that tries to instruct the model or the reviewer. */
 const NEUTRAL_QUESTION = "information à confirmer";
@@ -569,6 +612,10 @@ export function guardDraft(
   if (delayed.found) questions.push("Délai à confirmer (proposé par le brouillon, non vérifié)");
   if (delayed.vague)
     questions.push("Promesse de délai vague (« rapidement »…) : préciser un délai réel ou la retirer");
+  if (flagCommitments(body, trusted, issues))
+    questions.push(
+      "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer",
+    );
   if (injectionSignals(body).length) issues.push("injection_echo");
   const citations = draft.citations.filter((c) => {
     const source = input.sources.find((s) => s.id === c.sourceId);

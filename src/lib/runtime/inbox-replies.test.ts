@@ -311,6 +311,14 @@ describe("draft guard: never invent delays", () => {
     "Comptez sous 10 jours de délai.",
     "We will reply within 2 business days.",
     "You will hear from us in 3 days.",
+    "Le devis vous parviendra avant la fin du mois.",
+    "Nous passons en fin de semaine.",
+    "Le chantier démarre à la mi-novembre.",
+    "Démarrage d’ici la fin de l’année.",
+    "Nous livrons en début de semaine prochaine.",
+    "Le technicien passe la semaine prochaine.",
+    "We will send it by the end of the week.",
+    "Expect our quote next week.",
   ])("replaces an unsourced delay: %s", (body) => {
     const result = guard(body);
     expect(result.body).toContain("[[À CONFIRMER : délai]]");
@@ -361,6 +369,22 @@ describe("draft guard: never invent delays", () => {
     expect(result.issues).not.toContain("vague_delay");
   });
 
+  it("keeps a calendar-bound deadline written in trusted sources", () => {
+    const result = guardDraft(
+      { body: "Les travaux seront terminés avant la fin du mois.", questions: [], citations: [] },
+      {
+        sources: [{ id: "s", kind: "memory", name: "Fiche", content: "Chantier Dupont : fin des travaux avant la fin du mois." }],
+        message: mail(),
+      },
+    );
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
+  it("leaves past or descriptive month mentions alone", () => {
+    const result = guard("Merci pour votre message de la semaine dernière. Notre facture de fin de mois est jointe.");
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
   it("also applies to meeting drafts (slot checks do not cover delays)", () => {
     const result = guard("Je vous confirme le créneau sous 72h.", { dates: false });
     expect(result.body).toContain("[[À CONFIRMER : délai]]");
@@ -370,5 +394,56 @@ describe("draft guard: never invent delays", () => {
     const result = guard("[[À CONFIRMER : sous 72h ?]] Merci.");
     expect(result.body).toContain("[[À CONFIRMER : sous 72h ?]]");
     expect(result.issues).not.toContain("unsupported_delay");
+  });
+});
+
+describe("draft guard: flag verbal commitments", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Pour toute fuite, nous interviendrons sur place. Devis gratuit.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const COMMIT_Q =
+    "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer";
+
+  it.each([
+    "Bonjour, nous nous en occupons.",
+    "C'est noté, nous passerons voir le chantier.",
+    "Je m’en charge personnellement.",
+    "Nous vous garantissons un travail soigné.",
+    "Votre intervention est bien confirmée.",
+    "Nous acceptons votre demande de remise.",
+    "On va passer chez vous.",
+    "We'll take care of it.",
+    "Your booking is confirmed.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_commitment");
+    expect(result.questions).toContain(COMMIT_Q);
+    expect(result.body).toContain(body);
+    expect(result.body.startsWith("[[À CONFIRMER")).toBe(true);
+  });
+
+  it("does not flag a commitment the business itself states", () => {
+    const result = guard("Pour votre fuite, nous interviendrons sur place.");
+    expect(result.issues).not.toContain("unsupported_commitment");
+  });
+
+  it.each([
+    "Merci, c'est bien noté. Nous revenons vers vous avec un devis.",
+    "Pouvez-vous nous envoyer des photos ?",
+    "Nous nous permettons de vous demander l'adresse du chantier.",
+  ])("leaves courtesies and questions alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_commitment");
+  });
+
+  it("leaves a commitment inside a placeholder alone", () => {
+    const result = guard("[[À CONFIRMER : nous passerons ?]] Merci.");
+    expect(result.issues).not.toContain("unsupported_commitment");
   });
 });

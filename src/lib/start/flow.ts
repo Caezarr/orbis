@@ -526,6 +526,8 @@ export function flagLabel(flag: string) {
     return "Le mail contient des instructions suspectes : elles ont été ignorées.";
   if (flag === "guard:vague_delay")
     return "Promesse de délai vague (« rapidement »…) : précisez un délai réel ou retirez-la.";
+  if (flag === "guard:unsupported_commitment")
+    return "Engagement pris en votre nom (« nous passerons »…) : vérifiez qu’il est tenable ou retirez-le.";
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
   if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
