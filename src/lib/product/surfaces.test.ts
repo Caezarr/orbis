@@ -18,6 +18,8 @@ describe("frozenRedirect", () => {
     expect(frozenRedirect("/analytics", false)).toBe("/rapport");
     expect(frozenRedirect("/connections", false)).toBe("/settings");
     expect(frozenRedirect("/chat", false)).toBe("/today");
+    expect(frozenRedirect("/for", false)).toBe("/start");
+    expect(frozenRedirect("/for/airbnb-hosts/guest-messaging", false)).toBe("/start");
   });
   it("keeps the wedge, account and public pages reachable", () => {
     for (const path of [
@@ -35,6 +37,7 @@ describe("frozenRedirect", () => {
       "/api/v1/inbox/today",
       "/catalogue-x",
       "/chatter",
+      "/format",
     ])
       expect(frozenRedirect(path, false)).toBeNull();
   });
