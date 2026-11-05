@@ -1,6 +1,7 @@
 "use client";
 
-import { flagLabels, splitPlaceholders } from "@/lib/start/flow";
+import { splitPlaceholders } from "@/lib/start/flow";
+import { uncertainties } from "@/lib/inbox/today-view";
 import type { RequestView } from "@/lib/followups/service";
 import type { PipelineStatus } from "@/lib/followups/detect";
 import { OrbiEmpty } from "@/components/product/OrbiSays";
@@ -47,16 +48,33 @@ export const dateFr = (iso: string | null, withTime = false) =>
 function statusClass(status: PipelineStatus) {
   return status === "gagne" ? s.ok : status === "perdu" ? s.bad : status === "nouveau" ? s.warn : s.badge;
 }
-/** What the guards flagged on a follow-up draft (patterns, opt-in claim check, recipient). */
-function ReviewerNotes({ flags }: { flags: string[] }) {
-  const notes = flagLabels(flags);
-  if (!notes.length) return null;
+/**
+ * What the owner must check before sending a follow-up: Orbi's open questions and
+ * [[À CONFIRMER]] spots (same list as /start), then what the guards flagged.
+ */
+function ReviewerNotes({ followup: f }: { followup: Pick<RequestView["followups"][number], "questions" | "preview" | "flags"> }) {
+  const { items, warnings } = uncertainties({ questions: f.questions, draftPreview: f.preview ?? undefined, flags: f.flags });
+  if (!items.length && !warnings.length) return null;
   return (
-    <ul className={s.notes} aria-label="Points à vérifier">
-      {notes.map((label) => (
-        <li key={label}>{label}</li>
-      ))}
-    </ul>
+    <>
+      {items.length > 0 && (
+        <div className={s.confirm}>
+          <h4>À confirmer avant d’envoyer</h4>
+          <ul>
+            {items.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <ul className={s.notes} aria-label="Points à vérifier">
+          {warnings.map((label) => (
+            <li key={label}>{label}</li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 function Body({ text }: { text: string }) {
@@ -251,7 +269,7 @@ export function RequestsView({
                       {f.draftedAt ? ` · ${dateFr(f.draftedAt, true)}` : ""}
                     </span>
                     {f.preview && <Body text={f.preview} />}
-                    <ReviewerNotes flags={f.flags} />
+                    <ReviewerNotes followup={f} />
                     {f.status === "drafted" && (
                       <p className={s.fine}>
                         {f.simulated
