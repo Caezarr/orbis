@@ -1,7 +1,7 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { dataBlock, type ModelUsage } from "@/lib/runtime/inbox-replies";
-import { getModel } from "@/lib/runtime/provider";
+import { generationSettings, getModel } from "@/lib/runtime/provider";
 import { factCategories } from "./facts";
 
 /*
@@ -102,7 +102,7 @@ export const providerBrainModel: BrainModel = {
       system,
       prompt,
       output: Output.object({ schema: extractionSchema }),
-      maxOutputTokens: 2500,
+      ...generationSettings(2500, { effort: "medium" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(45_000),
     });
@@ -115,7 +115,7 @@ export const providerBrainModel: BrainModel = {
       system,
       prompt,
       output: Output.object({ schema: editProposalSchema }),
-      maxOutputTokens: 600,
+      ...generationSettings(600, { purpose: "classifier" }),
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(30_000),
     });

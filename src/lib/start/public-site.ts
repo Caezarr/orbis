@@ -1,7 +1,7 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { analyzeCompany } from "@/lib/runtime/company-analysis";
-import { getModel, providerStatus } from "@/lib/runtime/provider";
+import { generationSettings, getModel, providerStatus } from "@/lib/runtime/provider";
 import { DEFAULT_UNKNOWNS, profileFromDescription, type StartProfile } from "./flow";
 import { crawlSite, type CrawlResult } from "./site-crawl";
 import { profileFromCrawl, synthesisPrompt, synthesisSchema, validateSynthesis } from "./site-profile";
@@ -94,7 +94,7 @@ function logFallback(reason: string) {
   console.warn(JSON.stringify({ event: "start_profile_ai_fallback", reason }));
 }
 
-const SYNTHESIS_TIMEOUT_MS = 15_000;
+const SYNTHESIS_TIMEOUT_MS = 20_000;
 /** Provider-backed synthesis. No tools, no retries. */
 export async function providerSynthesis(prompt: { system: string; prompt: string }, signal: AbortSignal) {
   const result = await generateText({
@@ -102,7 +102,7 @@ export async function providerSynthesis(prompt: { system: string; prompt: string
     system: prompt.system,
     prompt: prompt.prompt,
     output: Output.object({ schema: synthesisSchema }),
-    maxOutputTokens: 700,
+    ...generationSettings(700),
     maxRetries: 0,
     abortSignal: signal,
   });
