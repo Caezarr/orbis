@@ -451,6 +451,29 @@ describe("adversarial emails", () => {
     expect(rows.get("rt")).toMatchObject({ status: "needs_review" });
     expect(rows.get("rt")?.flags).toContain("reply_to_diverges");
   });
+  it("an address placed in the display name never becomes the draft recipient", async () => {
+    inbox = [
+      gmailMessage("dn", { sender: '"boss@client.fr" <attacker@evil.test>' }),
+    ];
+    const { store } = memoryStore();
+    await run(model(), store);
+    expect(drafts()).toHaveLength(1);
+    expect(drafts()[0].args.recipient_email).toBe("attacker@evil.test");
+  });
+  it("a From with several angle-addresses is not drafted at all (fail closed)", async () => {
+    inbox = [
+      gmailMessage("dn2", { sender: '"<boss@client.fr>" <attacker@evil.test>' }),
+      gmailMessage("dn3", {
+        sender: "Support <boss@client.fr> via X <attacker@evil.test>",
+      }),
+    ];
+    const { store } = memoryStore();
+    const m = model();
+    await run(m, store);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(m.draft).not.toHaveBeenCalled();
+    expect(drafts()).toHaveLength(0);
+  });
   it("email content never reaches system instructions or tool arguments other than the body", async () => {
     inbox = [
       gmailMessage("x", {
