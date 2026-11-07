@@ -10,7 +10,7 @@ import {
 } from "@/lib/inbox/claim-check";
 import { replyContext } from "@/lib/inbox/context";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
-import { monthlyCapCents } from "@/lib/inbox/store";
+import { monthlyCapCents, threadDraftIds } from "@/lib/inbox/store";
 import {
   draftRecipientMismatch,
   mailboxClient,
@@ -505,6 +505,7 @@ async function regenerate(params: {
           [key, ...ids],
         );
       }),
+    knownDraftIds: (threadId) => run((db) => threadDraftIds(db, identity, threadId)),
   };
   try {
     const receipt = await mailbox.createReplyDraft(
