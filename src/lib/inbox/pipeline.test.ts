@@ -357,7 +357,12 @@ describe("inbox batch pipeline", () => {
         ? {
             successful: true,
             data: {
-              drafts: [{ id: "draft-x", message: { threadId: "thread-m1" } }],
+              drafts: [
+                {
+                  id: "draft-x",
+                  message: { threadId: "thread-m1", internalDate: String(Date.now()) },
+                },
+              ],
             },
           }
         : base(slug, body),

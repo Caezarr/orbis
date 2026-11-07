@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
-import { RECONCILE_INTERVAL, workspaceBudgetAllows, type Scoped } from "@/lib/inbox/store";
+import { RECONCILE_INTERVAL, threadDraftIds, workspaceBudgetAllows, type Scoped } from "@/lib/inbox/store";
 import type { ModelUsage } from "@/lib/runtime/inbox-replies";
 import type { PipelineStatus } from "./detect";
 import type { FollowupSettings, FollowupStore, RequestStore, TrackedItem, UsageKind } from "./tracker";
@@ -199,6 +199,7 @@ export function postgresFollowupStore(
           [key, ...p(ids)],
         );
       }),
+    knownDraftIds: (threadId) => run((db) => threadDraftIds(db, ids, threadId)),
   });
   return {
     settings: () => run((db) => loadPipelineSettings(db, ids)) as Promise<FollowupSettings>,

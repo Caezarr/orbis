@@ -138,7 +138,7 @@ function headerMap(list: unknown): Record<string, string> {
   }
   return out;
 }
-function messagesArray(data: unknown): Obj[] {
+export function messagesArray(data: unknown): Obj[] {
   const d = obj(parseData(data));
   const candidates = [
     d.messages,

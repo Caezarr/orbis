@@ -15,6 +15,7 @@ import {
 } from "./action-broker";
 import {
   normalizeGmailMessages,
+  messagesArray,
   normalizeOutlookMessages,
   parseData,
   type MailMessage,
@@ -290,6 +291,12 @@ export type DraftLedger = {
   retry(key: string): Promise<boolean>;
   record(key: string, receipt: DraftReceipt): Promise<void>;
   markUncertain(key: string): Promise<void>;
+  /**
+   * Draft ids already recorded by any ledger row (any message, follow-up or
+   * regeneration) of this thread in the workspace. Reconciliation never adopts
+   * one of them as the draft of another attempt.
+   */
+  knownDraftIds?(threadId: string): Promise<string[]>;
 };
 export type MailboxIdentity = {
   tenantId: string;
@@ -298,6 +305,20 @@ export type MailboxIdentity = {
 };
 export const RECONCILE_RETRY_AFTER_MS = 10 * 60_000;
 export const MAX_DRAFT_ATTEMPTS = 3;
+/** Tolerated gap between the database clock (claim) and the provider's. */
+export const RECONCILE_CLOCK_SKEW_MS = 2 * 60_000;
+/** Epoch ms from a provider timestamp (ms number/string or ISO), else undefined. */
+function providerTime(value: unknown): number | undefined {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^\d{10,16}$/.test(value)
+        ? Number(value)
+        : typeof value === "string" && value.length <= 100
+          ? Date.parse(value)
+          : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 function configuration(provider: MailboxProvider) {
   if (typeof window !== "undefined")
@@ -434,22 +455,60 @@ export function mailboxClient(
       ? normalizeGmailMessages(data)
       : normalizeOutlookMessages(data);
 
-  async function findDraftInThread(threadId: string) {
+  /**
+   * Reconciliation after an unconfirmed draft creation: which draft in the
+   * thread did the timed-out call create? A thread can already hold the owner's
+   * own manual draft, or Orbi's draft for another message of the same thread,
+   * so "any draft in the thread" is not proof. A draft is adopted only when it
+   * is the single candidate that (1) no other ledger row already owns and
+   * (2) the provider dates at or after this attempt's claim. Several candidates,
+   * or a candidate without a readable date, are ambiguous: nothing is adopted
+   * and nothing new is created (no duplicate), the attempt stays uncertain.
+   */
+  async function reconcileDraft(
+    threadId: string,
+    claimedAt: Date,
+    known: ReadonlySet<string>,
+  ): Promise<
+    { kind: "found"; draftId: string } | { kind: "none" } | { kind: "ambiguous" }
+  > {
     const data = await read("list_drafts", { threadId });
+    const candidates: { id: string; at: number | undefined }[] = [];
     if (provider === "gmail") {
       const drafts = Array.isArray((data as { drafts?: unknown[] })?.drafts)
         ? (data as { drafts: Record<string, unknown>[] }).drafts
         : [];
-      const found = drafts.find((d) => {
+      for (const d of drafts) {
         const message = (d.message ?? {}) as Record<string, unknown>;
-        return (message.threadId ?? d.threadId ?? d.thread_id) === threadId;
-      });
-      return found ? String(found.id ?? found.draft_id ?? "") : undefined;
+        if ((message.threadId ?? d.threadId ?? d.thread_id) !== threadId)
+          continue;
+        const id = String(d.id ?? d.draft_id ?? "");
+        if (!id) continue;
+        candidates.push({
+          id,
+          at: providerTime(
+            message.internalDate ??
+              message.messageTimestamp ??
+              d.messageTimestamp ??
+              d.internalDate,
+          ),
+        });
+      }
+    } else {
+      const created = new Map(
+        messagesArray(data).map((m) => [String(m.id ?? ""), m.createdDateTime]),
+      );
+      for (const m of normalizeOutlookMessages(data, { includeDrafts: true }))
+        if (m.threadId === threadId && m.isDraft)
+          candidates.push({ id: m.id, at: providerTime(created.get(m.id)) });
     }
-    const found = normalizeOutlookMessages(data, { includeDrafts: true }).find(
-      (m) => m.threadId === threadId && m.isDraft,
+    const notBefore = claimedAt.getTime() - RECONCILE_CLOCK_SKEW_MS;
+    const open = candidates.filter(
+      (c) => !known.has(c.id) && (c.at === undefined || c.at >= notBefore),
     );
-    return found?.id;
+    if (open.length === 0) return { kind: "none" };
+    if (open.length > 1 || open[0].at === undefined) return { kind: "ambiguous" };
+    return { kind: "found", draftId: open[0].id };
   }
   /**
    * Outlook only: the recipients of a draft as Graph reports them, re-read from
@@ -571,8 +630,17 @@ export function mailboxClient(
         return { ...receipt, created: false };
       }
       if (claim.state === "uncertain") {
-        const existing = await findDraftInThread(payload.threadId);
-        if (existing) {
+        const found = await reconcileDraft(
+          payload.threadId,
+          claim.claimedAt,
+          new Set(await (ledger.knownDraftIds?.(payload.threadId) ?? [])),
+        );
+        if (found.kind === "ambiguous")
+          throw new MailboxUncertainError(
+            "A previous draft attempt is unconfirmed and the thread's drafts cannot be told apart; nothing was adopted or created.",
+          );
+        if (found.kind === "found") {
+          const existing = found.draftId;
           const receipt = {
             ...base,
             draftId: existing,
