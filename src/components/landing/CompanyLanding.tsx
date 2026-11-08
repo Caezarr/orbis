@@ -187,7 +187,7 @@ const chapters = [
   {
     title: "Busywork goes in. Useful work comes out.",
     description:
-      "A customer request. A brief. A stack of documents. Give Orbis a clear mission and the right context. Get work you can actually review.",
+      "A customer email. A brief. A pile of documents. Hand them over with one clear mission, and get back work you can actually check.",
     foot: "From scattered inputs to a clear next step.",
     Scene: IntakeScene,
   },
@@ -206,9 +206,9 @@ const chapters = [
     Scene: DayScene,
   },
   {
-    title: "Gets better with your feedback.",
+    title: "Correct it once. It remembers.",
     description:
-      "Your expertise shouldn’t disappear after every conversation. Keep the corrections that matter, test them, and carry them into the next run.",
+      "You shouldn’t have to explain the same thing twice. Approve a correction once, and every next run starts from it.",
     foot: "A weekly learning loop. A memory you can inspect and approve.",
     Scene: MemoryScene,
   },
@@ -350,7 +350,7 @@ export function CompanyLanding() {
             Login
           </Link>
           <LandingCta href="/login?returnTo=%2Faudit" enabled={enabled}>
-            Launch your first agents
+            Put Orbi to work
           </LandingCta>
           <button
             className={s.menuToggle}
@@ -488,7 +488,7 @@ export function CompanyLanding() {
           </Link>
         </section>
         <section className={`${s.section} ${s.faq}`}>
-          <h2>A few things worth knowing.</h2>
+          <h2>Before you start.</h2>
           <div>
             {[
               {

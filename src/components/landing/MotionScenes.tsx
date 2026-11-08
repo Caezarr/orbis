@@ -357,7 +357,7 @@ export function ScrollSetup({ enabled }: { enabled: boolean }) {
                   <p>{stage.text}</p>
                   <small>{stage.note}</small>
                   <Link href={i === 1 ? "/catalog" : "/audit"}>
-                    {i === 1 ? "Find my missions" : "Launch your first agents"}
+                    {i === 1 ? "Find my missions" : "Put Orbi to work"}
                     <ArrowUpRight size={15} />
                   </Link>
                 </div>
@@ -454,7 +454,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           price: `€${149 * multiplier}`,
           unit: annual ? "/ year" : "/ month",
           copy: "Your first missions, with your own expertise.",
-          cta: "Launch your first agents",
+          cta: "Put Orbi to work",
           href: "/login?returnTo=%2Faudit",
           features: [
             "One operator",
@@ -468,7 +468,7 @@ export function LandingPricing({ enabled }: { enabled: boolean }) {
           price: `€${business * multiplier}`,
           unit: annual ? "/ year" : "/ month",
           copy: "Choose the people who work with your agents.",
-          cta: "Launch your first agents",
+          cta: "Put Orbi to work",
           href: `/login?returnTo=${encodeURIComponent(`/audit?seats=${seats}`)}`,
           features: [
             "5 seats included in the proposed base",

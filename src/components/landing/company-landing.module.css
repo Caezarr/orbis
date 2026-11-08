@@ -283,7 +283,7 @@
 }
 .chapterNumber {
   font-size: 15px;
-  color: var(--blue);
+  color: #e85f17;
   display: flex;
   gap: 7px;
   margin-bottom: 25px;
