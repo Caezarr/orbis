@@ -17,6 +17,7 @@ import type { InboxModel, ReplySource } from "@/lib/runtime/inbox-replies";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import {
   processMailboxBatch,
+  unansweredEarlier,
   type InboxBatch,
   type InboxStore,
   type MessageRow,
@@ -759,5 +760,126 @@ describe("owner's own messages (Outlook inbox copies carry no fromOwner)", () =>
     const { store } = memoryStore();
     const stats = await runWith(stub.mailbox, model(), store);
     expect(stats.drafted).toBe(1);
+  });
+});
+
+describe("one draft per conversation (several unanswered messages)", () => {
+  const first = () =>
+    gmailMessage("old", {
+      threadId: "thread-x",
+      messageText: "Bonjour, quel est votre tarif pour une vitre ?",
+      messageTimestamp: "2026-10-01T09:00:00Z",
+    });
+  const second = () =>
+    gmailMessage("new", {
+      threadId: "thread-x",
+      messageText: "Et pouvez-vous passer jeudi ?",
+      messageTimestamp: "2026-10-01T10:00:00Z",
+    });
+  beforeEach(() => {
+    inbox = [first(), second()];
+    thread = [first(), second()];
+  });
+  it("drafts only the newest message; the older one is answered in it, without a model call", async () => {
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(stats).toMatchObject({ drafted: 1, skipped: 1, draftsCreated: 1 });
+    expect(m.classify).toHaveBeenCalledTimes(1);
+    expect(m.draft).toHaveBeenCalledTimes(1);
+    expect(m.draft.mock.calls[0][0]).toMatchObject({
+      message: { id: "new" },
+      earlierUnanswered: 1,
+    });
+    // Sources are looked up for both questions.
+    expect(String((context.sourcesFor.mock.calls[0] as unknown[])[0])).toContain("tarif");
+    expect(rows.get("new")?.status).toBe("drafted");
+    expect(rows.get("old")).toMatchObject({
+      status: "skipped",
+      skipReason: "superseded",
+    });
+  });
+  it("the older message is still drafted when the newer one is not actionable", async () => {
+    const { store, rows } = memoryStore();
+    const m = model();
+    m.classify.mockImplementation(async (msg: { id: string }) => ({
+      output: {
+        classification: msg.id === "new" ? ("noise" as const) : ("customer_request" as const),
+        reason: "",
+      },
+      usage: { inputTokens: 10, outputTokens: 2 },
+    }));
+    await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(m.draft.mock.calls[0][0]).toMatchObject({ message: { id: "old" } });
+    expect(m.draft.mock.calls[0][0].earlierUnanswered).toBeUndefined();
+    expect(rows.get("old")?.status).toBe("drafted");
+  });
+  it("another sender in the same thread keeps its own draft", async () => {
+    inbox = [
+      first(),
+      gmailMessage("new", {
+        threadId: "thread-x",
+        sender: "Collègue <collegue@example.com>",
+        messageTimestamp: "2026-10-01T10:00:00Z",
+      }),
+    ];
+    const { store } = memoryStore();
+    await run(model(), store);
+    expect(drafts().map((d) => d.args.recipient_email).sort()).toEqual([
+      "client@example.com",
+      "collegue@example.com",
+    ]);
+  });
+  it("a draft made by an earlier batch also covers the older message", async () => {
+    const { store, rows } = memoryStore();
+    inbox = [second()];
+    await run(model(), store);
+    inbox = [first(), second()];
+    const m = model();
+    await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(rows.get("old")?.skipReason).toBe("superseded");
+  });
+  it("while the newer draft is uncertain, the older message waits (no second draft)", async () => {
+    const { store, rows } = memoryStore();
+    const base = sdk.execute.getMockImplementation()!;
+    sdk.execute.mockImplementation(async (slug: string, body: never) =>
+      slug === "GMAIL_CREATE_EMAIL_DRAFT"
+        ? Promise.reject(new Error("timeout"))
+        : base(slug, body),
+    );
+    const m = model();
+    await run(m, store);
+    expect(m.draft).toHaveBeenCalledTimes(1);
+    expect(rows.get("new")?.status).toBe("uncertain");
+    expect(rows.get("old")?.status).toBe("seen"); // retried next batch
+  });
+});
+
+describe("unansweredEarlier", () => {
+  const msg = (id: string, at: string, extra: Partial<MailMessage> = {}) =>
+    ({
+      id,
+      threadId: "t",
+      from: { address: "client@example.com" },
+      subject: "",
+      text: id,
+      receivedAt: at,
+      ...extra,
+    }) as MailMessage;
+  it("keeps only the sender's messages after the owner's last reply", () => {
+    const current = msg("c", "2026-10-01T12:00:00Z");
+    const thread = [
+      msg("a", "2026-10-01T08:00:00Z"),
+      msg("reply", "2026-10-01T09:00:00Z", { fromOwner: true }),
+      msg("b", "2026-10-01T10:00:00Z"),
+      msg("other", "2026-10-01T11:00:00Z", { from: { address: "x@y.test" } }),
+      msg("draft", "2026-10-01T11:30:00Z", { isDraft: true }),
+      current,
+    ];
+    expect(unansweredEarlier(current, thread).map((m) => m.id)).toEqual(["b"]);
   });
 });

@@ -496,6 +496,7 @@ export const SKIP_LABELS: Record<string, string> = {
   promotional_category: "Promotions, réseaux sociaux, mises à jour",
   empty: "Messages vides",
   already_replied: "Déjà traités par vous dans le fil",
+  superseded: "Messages précédents du même client, repris dans un seul brouillon",
 };
 export const CLASSIFICATION_LABELS: Record<string, string> = {
   customer_request: "Demande client",

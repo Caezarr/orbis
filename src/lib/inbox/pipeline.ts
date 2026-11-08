@@ -258,6 +258,29 @@ export async function processMailboxBatch(params: {
     thread
       .filter((m) => m.fromOwner && !m.isDraft)
       .map((m) => m.from?.address.toLowerCase() ?? "");
+  /**
+   * One draft per conversation and sender. Messages are processed newest
+   * first; once the newest message of a sender in a thread has a draft (its
+   * prompt carries the earlier ones), older unanswered messages of the same
+   * sender in that thread are not drafted again: a second draft would compete
+   * with the first in the same conversation and cost a second quota unit.
+   */
+  const conversationKey = (m: MailMessage) =>
+    m.from?.address ? `${m.threadId}\n${m.from.address.toLowerCase()}` : null;
+  /** Conversation key → id of the message whose draft covers it. */
+  const drafted = new Map<string, string>();
+  /** Newer message whose draft may exist (uncertain): older ones wait. */
+  const pending = new Map<string, string>();
+  const markConversation = (m: MailMessage, map: Map<string, string>) => {
+    const key = conversationKey(m);
+    if (key && !map.has(key)) map.set(key, m.id);
+  };
+  /** Covered by another (newer) message of the same conversation. */
+  const coveredBy = (m: MailMessage, map: Map<string, string>) => {
+    const key = conversationKey(m);
+    const owner = key ? map.get(key) : undefined;
+    return owner !== undefined && owner !== m.id;
+  };
   for (const message of messages) {
     if (quotaUsed()) {
       // Graceful stop: results so far are kept, nothing else costs a model call.
@@ -273,6 +296,8 @@ export async function processMailboxBatch(params: {
       break;
     }
     const row = await store.upsertMessage(message, contentHash(message));
+    if (row.status === "drafted") markConversation(message, drafted);
+    if (row.status === "uncertain") markConversation(message, pending);
     if (
       TERMINAL.has(row.status) ||
       (row.status === "classified" &&
@@ -288,6 +313,19 @@ export async function processMailboxBatch(params: {
     if (skip) {
       await store.update(row.rowId, { status: "skipped", skipReason: skip });
       stats.skipped++;
+      continue;
+    }
+    if (coveredBy(message, drafted)) {
+      // Covered by the draft of the sender's newer message in this thread.
+      await store.update(row.rowId, {
+        status: "skipped",
+        skipReason: "superseded",
+      });
+      stats.skipped++;
+      continue;
+    }
+    if (coveredBy(message, pending)) {
+      // The newer message's draft may already exist: retried next batch.
       continue;
     }
     const flags = injectionSignals(`${message.subject}\n${message.text}`).map(
@@ -383,8 +421,13 @@ export async function processMailboxBatch(params: {
         stats.budgetExhausted = true;
         break;
       }
+      // Earlier messages of the same sender with no reply after them: this
+      // draft answers them too (older rows are then skipped as superseded).
+      const earlier = unansweredEarlier(message, thread);
       const sources = context.sourcesFor(
-        `${message.subject}\n${message.text}`.slice(0, 2000),
+        [`${message.subject}\n${message.text}`, ...earlier.map((m) => m.text)]
+          .join("\n")
+          .slice(0, 2000),
       );
       // Meeting detection is deterministic; the plan (slots or "ask") is code.
       const meetingKind = params.meetings
@@ -406,6 +449,7 @@ export async function processMailboxBatch(params: {
         sources,
         toneSamples: await toneSamples(),
         ...(meeting ? { meeting } : {}),
+        ...(earlier.length ? { earlierUnanswered: earlier.length } : {}),
       });
       await store.addUsage(row.rowId, generated.usage);
       // Strict schema check before the guard: wrong shape/oversized → failed,
@@ -465,6 +509,7 @@ export async function processMailboxBatch(params: {
         store.ledger(row.rowId),
       );
       stats.draftsCreated = (stats.draftsCreated ?? 0) + 1;
+      markConversation(message, drafted);
       const mismatch = draftRecipientMismatch(receipt, recipient);
       await store.update(row.rowId, {
         status: mismatch ? "needs_review" : "drafted",
@@ -486,6 +531,7 @@ export async function processMailboxBatch(params: {
     } catch (error) {
       if (error instanceof MailboxPolicyError) throw error;
       if (error instanceof MailboxUncertainError) {
+        markConversation(message, pending);
         await store.update(row.rowId, { status: "uncertain" });
         stats.uncertain++;
         continue;
@@ -496,4 +542,30 @@ export async function processMailboxBatch(params: {
     }
   }
   return stats;
+}
+
+/**
+ * Earlier messages of the same sender in the thread with no reply from the
+ * owner after them, oldest first. Same sender = same From address.
+ */
+export function unansweredEarlier(
+  message: MailMessage,
+  thread: MailMessage[],
+): MailMessage[] {
+  const sender = message.from?.address.toLowerCase();
+  if (!sender) return [];
+  const lastOwnerReply = thread
+    .filter((m) => m.fromOwner && !m.isDraft)
+    .reduce((max, m) => (m.receivedAt > max ? m.receivedAt : max), "");
+  return thread
+    .filter(
+      (m) =>
+        m.id !== message.id &&
+        !m.fromOwner &&
+        !m.isDraft &&
+        m.from?.address.toLowerCase() === sender &&
+        m.receivedAt < message.receivedAt &&
+        m.receivedAt > lastOwnerReply,
+    )
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
 }

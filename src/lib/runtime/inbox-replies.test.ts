@@ -128,6 +128,14 @@ describe("prompt injection", () => {
     expect(d.system).not.toContain("x@evil.test");
     expect(d.system).toContain("always goes only to the original sender");
   });
+  it("asks the single draft to answer the sender's earlier unanswered messages", () => {
+    const base = { message: mail(), thread: [], company: {}, sources, toneSamples: [] };
+    expect(draftPrompt(base).system).not.toContain("earlier message");
+    const d = draftPrompt({ ...base, earlierUnanswered: 2 });
+    expect(d.system).toContain("2 earlier message(s) from the same sender");
+    // Their content stays in the data block, never in the instructions.
+    expect(d.system).not.toContain(mail().text);
+  });
   it("never passes tools to the model", async () => {
     ai.generateText.mockResolvedValue({
       output: { classification: "noise", reason: "" },
