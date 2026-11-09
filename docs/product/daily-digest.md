@@ -18,8 +18,9 @@ The Réglages toggle says so on screen: « L’envoi n’est pas encore branché
 
 Counts since the previous digest (window: last digest → now, at most 7 days back; the first digest covers what happened after opt-in):
 
-- drafts prepared (inbox), of which drafts that carry a highlighted question;
-- follow-ups to review (same definition as the Today card);
+- drafts prepared (inbox) and **written to the mailbox** (`draft_state` not `simulated`), of which drafts that carry a highlighted question;
+- follow-ups to review (same definition as the Today card), test-mode follow-ups excluded;
+- test-mode drafts (`ORBIS_INBOX_MODE=test`: inbox drafts of the window + follow-ups waiting now, `draft_state='simulated'`), on their own line: « N brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte ». Before 09/11 they were counted in « brouillons prêts à relire dans votre boîte », which was false: nothing was written to the mailbox. A day with only test drafts still sends a digest, with the generic subject;
 - messages left for a human check (`needs_review`, `uncertain`);
 - open « Questions d’Orbi ».
 
