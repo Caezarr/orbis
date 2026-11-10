@@ -3,6 +3,7 @@ import { request } from "node:https";
 import ipaddr from "ipaddr.js";
 import { load } from "cheerio";
 import { brokerDecide } from "./broker";
+import { decodeBody } from "./decode-body";
 
 export function publicAddress(address: string) {
   try {
@@ -148,7 +149,7 @@ export async function fetchPublicResource(raw: string | URL, options: PublicFetc
               chunks.push(Buffer.from(chunk));
             });
             res.on("error", reject);
-            res.on("end", () => resolve({ status, body: Buffer.concat(chunks).toString("utf8"), contentType }));
+            res.on("end", () => resolve({ status, body: decodeBody(Buffer.concat(chunks), contentType), contentType }));
           },
         );
         req.on("error", reject);
