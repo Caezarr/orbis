@@ -1,0 +1,28 @@
+# Normalize line endings for text files committed to the repo.
+* text=auto eol=lf
+
+*.js   text
+*.mjs  text
+*.cjs  text
+*.ts   text
+*.tsx  text
+*.json text
+*.md   text diff=markdown
+*.yml  text
+*.yaml text
+*.css  text
+*.html text
+*.sh   text eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.mp4  binary
+*.woff2 binary
+
+# Generated lockfile: hide from diffs and language stats
+pnpm-lock.yaml -diff linguist-generated=true
+package-lock.json -diff linguist-generated=true
