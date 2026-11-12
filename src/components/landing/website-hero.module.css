@@ -128,7 +128,13 @@
   gap: 6px;
 }
 .assurances svg {
-  color: #648cb6;
+  color: #f26b21;
+}
+.orbi {
+  display: block;
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 14px;
 }
 .links {
   display: flex;

@@ -50,24 +50,34 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
   return (
     <section
       className={compact ? s.compact : s.hero}
-      aria-label={compact ? "Launch your first agents" : undefined}
+      aria-label={compact ? "Put Orbi to work" : undefined}
       aria-labelledby={compact ? undefined : "hero-title"}
     >
       {!compact && <div className={s.geometry} aria-hidden />}
       <div className={s.content}>
         {!compact && (
           <>
-            <p className={s.intro}>Your company. Your tools. Your AI team.</p>
+            <picture>
+              <source srcSet="/brand/orbi/welcome-256.avif" type="image/avif" />
+              <img
+                className={s.orbi}
+                src="/brand/orbi/welcome-256.webp"
+                alt=""
+                width={96}
+                height={96}
+              />
+            </picture>
+            <p className={s.intro}>Hi, I&apos;m Orbi. I take the busywork off your plate.</p>
             <h1 id="hero-title">
               A bigger business.
               <br />
               Not a bigger to-do list.
             </h1>
             <p className={s.description}>
-              AI agents that understand your business and the work you need
-              done.
-              <br className={s.desktop} /> Start with your website. Choose a
-              mission. Make it yours.
+              I read your website, learn how you work, and prepare the replies,
+              quotes and follow-ups you keep putting off.
+              <br className={s.desktop} /> You review. You send. Nothing goes
+              out without you.
             </p>
           </>
         )}
@@ -120,13 +130,13 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
               type="submit"
               disabled={busy || !value.trim()}
               aria-label={
-                busy ? "Reading your website" : "Launch your first agents"
+                busy ? "Reading your website" : "Put Orbi to work"
               }
             >
               {busy ? (
                 <LoaderCircle size={18} className={s.spin} />
               ) : (
-                "Launch your first agents"
+                "Put Orbi to work"
               )}
             </LandingCta>
           </div>
@@ -160,13 +170,13 @@ export function WebsiteHero({ compact = false }: { compact?: boolean }) {
           <>
             <div className={s.assurances}>
               <span>
-                <Check size={14} /> Choose your missions
+                <Check size={14} /> You pick the work
               </span>
               <span>
-                <Check size={14} /> Control the access
+                <Check size={14} /> You set the access
               </span>
               <span>
-                <Check size={14} /> Review the work
+                <Check size={14} /> You approve every output
               </span>
             </div>
             <div className={s.links}>
