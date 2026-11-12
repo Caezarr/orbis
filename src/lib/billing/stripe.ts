@@ -6,7 +6,7 @@ let client: Stripe | undefined;
 export function stripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_NOT_CONFIGURED");
-  client ??= new Stripe(key, { apiVersion: "2026-07-29.dahlia", maxNetworkRetries: 2, timeout: 15_000 });
+  client ??= new Stripe(key, { apiVersion: "2026-10-28.endive", maxNetworkRetries: 2, timeout: 15_000 });
   return client;
 }
 
