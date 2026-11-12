@@ -15,6 +15,7 @@ vi.mock("@composio/core", () => ({
 import {
   assertMailboxPolicy,
   buildArguments,
+  draftRecipientMismatch,
   mailboxClient,
   MAILBOX_TOOLS,
   MailboxPolicyError,
@@ -27,7 +28,7 @@ import {
 } from "./mailbox";
 import { integrationUser } from "./composio";
 
-export function memoryLedger() {
+export function memoryLedger(otherKnownDraftIds: string[] = []) {
   const rows = new Map<
     string,
     {
@@ -63,6 +64,12 @@ export function memoryLedger() {
     },
     async markUncertain(key) {
       rows.get(key)!.state = "uncertain";
+    },
+    async knownDraftIds() {
+      return [
+        ...otherKnownDraftIds,
+        ...[...rows.values()].flatMap((r) => (r.receipt ? [r.receipt.draftId] : [])),
+      ];
     },
   };
   return { ledger, rows };
@@ -367,7 +374,10 @@ describe("mailbox client", () => {
       data: {
         drafts: [
           { id: "other", message: { threadId: "elsewhere" } },
-          { id: "r-draft-7", message: { threadId: "thread1" } },
+          {
+            id: "r-draft-7",
+            message: { threadId: "thread1", internalDate: String(Date.now()) },
+          },
         ],
       },
     });
@@ -381,6 +391,115 @@ describe("mailbox client", () => {
       "GMAIL_CREATE_EMAIL_DRAFT",
       "GMAIL_LIST_DRAFTS",
     ]);
+  });
+  describe("reconciliation never adopts a draft that is not this attempt's", () => {
+    const timedOut = async (
+      provider: MailboxProvider,
+      known: string[] = [],
+    ) => {
+      if (provider === "outlook") setup("outlook");
+      const { ledger, rows } = memoryLedger(known);
+      const client = mailboxClient(provider, identity, {
+        mode: "scoped_autonomy",
+      });
+      sdk.execute.mockRejectedValueOnce(new Error("timeout"));
+      await expect(
+        client.createReplyDraft(draftRequest, ledger),
+      ).rejects.toThrow(MailboxUncertainError);
+      return { client, ledger, rows };
+    };
+    const hourAgo = () => String(Date.now() - 3_600_000);
+    const gmailDrafts = (...drafts: { id: string; at?: string }[]) => ({
+      successful: true,
+      data: {
+        drafts: drafts.map((d) => ({
+          id: d.id,
+          message: {
+            threadId: "thread1",
+            ...(d.at ? { internalDate: d.at } : {}),
+          },
+        })),
+      },
+    });
+    const creates = () =>
+      executedSlugs().filter(
+        (s) => s === "GMAIL_CREATE_EMAIL_DRAFT" || s === "OUTLOOK_CREATE_DRAFT_REPLY",
+      ).length;
+
+    it("Gmail: skips the owner's own older draft in the thread and adopts the fresh one", async () => {
+      const { client, ledger } = await timedOut("gmail");
+      sdk.execute.mockResolvedValueOnce(
+        gmailDrafts(
+          { id: "owner-manual", at: hourAgo() },
+          { id: "orbi-fresh", at: String(Date.now()) },
+        ),
+      );
+      expect(await client.createReplyDraft(draftRequest, ledger)).toMatchObject({
+        draftId: "orbi-fresh",
+        reconciled: true,
+      });
+    });
+    it("Gmail: an older draft alone is never adopted as this attempt's", async () => {
+      const { client, ledger, rows } = await timedOut("gmail");
+      sdk.execute.mockResolvedValue(gmailDrafts({ id: "owner-manual", at: hourAgo() }));
+      await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+        "unconfirmed",
+      );
+      expect(rows.get("key-1")?.receipt).toBeUndefined();
+    });
+    it("never adopts a draft already recorded for another message of the thread", async () => {
+      const { client, ledger, rows } = await timedOut("gmail", ["orbi-other-message"]);
+      sdk.execute.mockResolvedValue(
+        gmailDrafts({ id: "orbi-other-message", at: String(Date.now()) }),
+      );
+      await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+        "unconfirmed",
+      );
+      expect(rows.get("key-1")?.receipt).toBeUndefined();
+    });
+    it("several fresh candidates: adopts nothing and creates nothing, even after the retry window", async () => {
+      const { client, ledger, rows } = await timedOut("gmail");
+      rows.get("key-1")!.claimedAt = new Date(Date.now() - RECONCILE_RETRY_AFTER_MS - 1);
+      const now = String(Date.now());
+      sdk.execute.mockResolvedValue(
+        gmailDrafts({ id: "a", at: now }, { id: "b", at: now }),
+      );
+      await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+        "cannot be told apart",
+      );
+      expect(rows.get("key-1")?.receipt).toBeUndefined();
+      expect(creates()).toBe(1);
+    });
+    it("an undated candidate is ambiguous: no adoption, no duplicate", async () => {
+      const { client, ledger, rows } = await timedOut("gmail");
+      rows.get("key-1")!.claimedAt = new Date(Date.now() - RECONCILE_RETRY_AFTER_MS - 1);
+      sdk.execute.mockResolvedValue(gmailDrafts({ id: "undated" }));
+      await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+        "cannot be told apart",
+      );
+      expect(rows.get("key-1")?.receipt).toBeUndefined();
+      expect(creates()).toBe(1);
+    });
+    it("Outlook: a draft created before the claim is not adopted", async () => {
+      const { client, ledger, rows } = await timedOut("outlook");
+      sdk.execute.mockResolvedValue({
+        successful: true,
+        data: {
+          value: [
+            {
+              id: "AAMkOwner=",
+              conversationId: "thread1",
+              isDraft: true,
+              createdDateTime: new Date(Date.now() - 3_600_000).toISOString(),
+            },
+          ],
+        },
+      });
+      await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+        "unconfirmed",
+      );
+      expect(rows.get("key-1")?.receipt).toBeUndefined();
+    });
   });
   it("does not retry a recent uncertain attempt when reconciliation finds nothing; retries after the window", async () => {
     const { ledger, rows } = memoryLedger();
@@ -439,6 +558,86 @@ describe("mailbox client", () => {
       message_id: "msg1",
       comment: draftRequest.body,
     });
+  });
+  it("Outlook: a createReply response without readable recipients is unverified ([]), never unchecked", async () => {
+    setup("outlook");
+    sdk.execute.mockResolvedValue({ successful: true, data: { id: "AAMkDraft=" } });
+    const { ledger } = memoryLedger();
+    const receipt = await mailboxClient("outlook", identity, {
+      mode: "scoped_autonomy",
+    }).createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({ draftId: "AAMkDraft=", recipients: [] });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+  });
+  it("Outlook: reconciliation finds the draft (isDraft selected) and re-reads its recipients", async () => {
+    setup("outlook");
+    const { ledger } = memoryLedger();
+    const client = mailboxClient("outlook", identity, { mode: "scoped_autonomy" });
+    sdk.execute.mockRejectedValueOnce(new Error("timeout"));
+    await expect(client.createReplyDraft(draftRequest, ledger)).rejects.toThrow(
+      MailboxUncertainError,
+    );
+    // Graph returns only the $select-ed properties: emulate that.
+    sdk.execute.mockImplementation(async (_slug: string, call: { arguments: { select: string[] } }) => {
+      const full = {
+        id: "AAMkDraft=",
+        conversationId: "thread1",
+        isDraft: true,
+        createdDateTime: new Date().toISOString(),
+        toRecipients: [{ emailAddress: { address: "attacker@example.net" } }],
+      };
+      return {
+        successful: true,
+        data: {
+          value: [
+            Object.fromEntries(
+              Object.entries(full).filter(([k]) => call.arguments.select.includes(k)),
+            ),
+          ],
+        },
+      };
+    });
+    const receipt = await client.createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({
+      draftId: "AAMkDraft=",
+      reconciled: true,
+      created: false,
+      recipients: ["attacker@example.net"],
+    });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+    expect(
+      sdk.execute.mock.calls.filter(([slug]) => slug === "OUTLOOK_CREATE_DRAFT_REPLY"),
+    ).toHaveLength(1);
+  });
+  it("Outlook: a replayed receipt (ledger done, recipients not persisted) re-reads the recipients", async () => {
+    setup("outlook");
+    const { ledger, rows } = memoryLedger();
+    rows.set("key-1", {
+      state: "done",
+      claimedAt: new Date(),
+      attempts: 1,
+      receipt: {
+        draftId: "AAMkDraft=",
+        threadId: "thread1",
+        payloadHash: "h",
+        policyHash: "p",
+        simulated: false,
+        reconciled: false,
+      },
+    });
+    sdk.execute.mockResolvedValue({ successful: true, data: { value: [] } });
+    const receipt = await mailboxClient("outlook", identity, {
+      mode: "scoped_autonomy",
+    }).createReplyDraft(draftRequest, ledger);
+    expect(receipt).toMatchObject({ created: false, recipients: [] });
+    expect(draftRecipientMismatch(receipt, "client@example.com")).toBe(true);
+    expect(sdk.execute.mock.calls.map(([slug]) => slug)).toEqual(["OUTLOOK_LIST_MESSAGES"]);
+  });
+  it("draftRecipientMismatch: exact single recipient only; [] is unverified", () => {
+    expect(draftRecipientMismatch({ recipients: ["a@x.fr"] }, "a@x.fr")).toBe(false);
+    expect(draftRecipientMismatch({ recipients: ["a@x.fr", "b@y.fr"] }, "a@x.fr")).toBe(true);
+    expect(draftRecipientMismatch({ recipients: [] }, "a@x.fr")).toBe(true);
+    expect(draftRecipientMismatch({}, "a@x.fr")).toBe(false);
   });
   it("lists only active private workspace accounts", async () => {
     sdk.list.mockResolvedValue({

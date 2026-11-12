@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PoolClient } from "pg";
 import { appOrigin, composeDigest, isEmptyDigest, normalizeCounts, type DigestCounts } from "./compose";
 import { deliverDigest, digestDeliveryMode, digestIdempotencyKey, digestPolicyHash, isDeliverableAddress } from "./delivery";
-import { runDigestForSubscriber, runDigestPass, MAX_WINDOW_MS } from "./service";
+import { digestCounts, runDigestForSubscriber, runDigestPass, MAX_WINDOW_MS } from "./service";
 import { GET as cronGET } from "@/app/api/cron/digest/route";
+import { FOLLOWUP_READY_SQL } from "@/lib/followups/detect";
 
 afterEach(() => vi.unstubAllEnvs());
 
-const zero: DigestCounts = { draftsReady: 0, draftsWithQuestions: 0, needsReview: 0, orbiQuestions: 0, followupsReady: 0 };
-const some: DigestCounts = { draftsReady: 3, draftsWithQuestions: 1, needsReview: 2, orbiQuestions: 1, followupsReady: 1 };
+const zero: DigestCounts = { draftsReady: 0, draftsWithQuestions: 0, needsReview: 0, orbiQuestions: 0, followupsReady: 0, simulatedDrafts: 0 };
+const some: DigestCounts = { draftsReady: 3, draftsWithQuestions: 1, needsReview: 2, orbiQuestions: 1, followupsReady: 1, simulatedDrafts: 0 };
 const identity = { tenantId: "t1", workspaceId: "w1", userId: "u1" };
 
 describe("digest content", () => {
@@ -42,7 +43,17 @@ describe("digest content", () => {
       needsReview: 0,
       orbiQuestions: 9_999,
       followupsReady: 1,
+      simulatedDrafts: 0,
     });
+  });
+  it("never counts test-mode drafts as drafts in the mailbox", () => {
+    const m = composeDigest({ ...zero, simulatedDrafts: 2 }, "https://app.orbis.test");
+    expect(isEmptyDigest({ ...zero, simulatedDrafts: 2 })).toBe(false);
+    expect(m.subject).toBe("Orbi : votre résumé du jour");
+    expect(m.text).not.toContain("brouillon prêt");
+    expect(m.text).not.toContain("à relire dans votre boîte");
+    expect(m.text).toContain("2 brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte");
+    expect(composeDigest({ ...zero, simulatedDrafts: 1 }).text).toContain("1 brouillon d’essai (mode test) visible dans Orbis seulement");
   });
   it("only links to an https app origin", () => {
     expect(appOrigin("https://app.orbis.test/x?y")).toBe("https://app.orbis.test");
@@ -89,6 +100,42 @@ function fakeDb(sub: Sub, claim = 1) {
   };
   return { db: db as unknown as PoolClient, calls };
 }
+
+describe("digest counts", () => {
+  it("splits test-mode drafts out of the mailbox counts (inbox and follow-ups)", async () => {
+    const sqls: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        sqls.push(sql);
+        if (sql.includes("FROM inbox_messages")) return { rows: [{ drafts: "2", questions: "1", simulated: "3", review: "0" }] };
+        if (sql.includes("FROM brain_questions")) return { rows: [{ n: "0" }] };
+        return { rows: [{ n: "1", simulated: "4" }] };
+      }),
+    } as unknown as PoolClient;
+    const counts = await digestCounts(db, identity, new Date("2026-10-01T06:00:00Z"), new Date("2026-10-02T06:00:00Z"));
+    expect(counts).toEqual({ draftsReady: 2, draftsWithQuestions: 1, needsReview: 0, orbiQuestions: 0, followupsReady: 1, simulatedDrafts: 7 });
+    const inbox = sqls.find((q) => q.includes("FROM inbox_messages"))!;
+    expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS drafts/);
+    expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS questions/);
+    expect(sqls.find((q) => q.includes("FROM followups"))).toMatch(/draft_state<>'simulated'\)::text AS n/);
+  });
+  it("counts a follow-up only when a draft was written (not one held at the recipient check)", async () => {
+    const sqls: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        sqls.push(sql);
+        return { rows: [{ n: "0", simulated: "0", drafts: "0", questions: "0", review: "0" }] };
+      }),
+    } as unknown as PoolClient;
+    await digestCounts(db, identity, new Date("2026-10-01T06:00:00Z"), new Date("2026-10-02T06:00:00Z"));
+    const followups = sqls.find((q) => q.includes("FROM followups"))!;
+    expect(followups).toContain(FOLLOWUP_READY_SQL);
+    expect(followups).not.toContain("f.drafted_at IS NULL");
+    expect(FOLLOWUP_READY_SQL).toContain("f.drafted_at IS NOT NULL");
+    expect(FOLLOWUP_READY_SQL).toContain("NOT i.followups_dismissed");
+    expect(FOLLOWUP_READY_SQL).toContain("i.contact_erased_at IS NULL");
+  });
+});
 
 describe("one subscriber", () => {
   const now = new Date("2026-10-02T06:00:00Z");

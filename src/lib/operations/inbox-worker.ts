@@ -19,11 +19,23 @@ import {
   providerInboxModel,
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
+import {
+  claimCheckCents,
+  claimCheckEnabled,
+  providerClaimChecker,
+  type ClaimChecker,
+} from "@/lib/inbox/claim-check";
+import { demoBrainModel, demoFollowupModel, demoInboxModel, demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import { advanceCursor, pauseContinuous } from "@/lib/inbox/schedule";
 import { enqueueExtraction } from "@/lib/brain/store";
 import { factSources } from "@/lib/brain/facts";
 import { providerBrainModel, type BrainModel } from "@/lib/brain/model";
+import {
+  providerQuestionGrouper,
+  questionGroupingEnabled,
+  type QuestionGrouper,
+} from "@/lib/brain/grouping";
 import { checkDraftOutcomes, type OutcomeStats } from "@/lib/brain/outcomes";
 import {
   BRAIN_COSTS,
@@ -80,6 +92,10 @@ export type InboxWorkerDeps = {
   model?: InboxModel;
   /** Company brain model (draft-vs-sent explanations). */
   brainModel?: BrainModel;
+  /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
+  questionGrouper?: QuestionGrouper;
+  /** Claim check model (tests); used only when ORBIS_INBOX_CLAIM_CHECK=true. */
+  claimChecker?: ClaimChecker;
   mailbox?: (
     ...args: Parameters<typeof mailboxClient>
   ) => Parameters<typeof processMailboxBatch>[0]["mailbox"] &
@@ -109,7 +125,8 @@ export async function runOneInboxBatch(
   deps: InboxWorkerDeps = {},
 ) {
   if (!inboxDraftsEnabled()) return { processed: false, reason: "disabled" };
-  if (!providerStatus().configured)
+  const demo = demoModelActive();
+  if (!providerStatus().configured && !demo)
     throw new Error("AI provider not configured");
   if (!monthlyCapCents())
     throw new Error("Configure ORBIS_OPERATIONS_MONTHLY_CAP_CENTS first");
@@ -120,9 +137,11 @@ export async function runOneInboxBatch(
       "UPDATE inbox_batches SET status='failed',error='Worker lease expired after three attempts.',lease_token=NULL,lease_until=NULL WHERE workspace_id=$1 AND tenant_id=$2 AND status='running' AND lease_until<now() AND attempts>=3",
       [identity.workspaceId, identity.tenantId],
     );
-    // Retention: inbound subjects and draft previews are short-lived.
+    // Retention: inbound subjects, draft previews, Orbi's questions on the
+    // draft (they can name the contact), the source excerpts it cited and the
+    // calendar slots it offered are short-lived.
     await db.query(
-      "UPDATE inbox_messages SET subject_preview=NULL,draft_preview=NULL,updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (subject_preview IS NOT NULL OR draft_preview IS NOT NULL)",
+      "UPDATE inbox_messages SET subject_preview=NULL,draft_preview=NULL,questions='[]'::jsonb,citations='[]'::jsonb,proposed_slots=NULL,updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (subject_preview IS NOT NULL OR draft_preview IS NOT NULL OR questions<>'[]'::jsonb OR citations<>'[]'::jsonb OR proposed_slots IS NOT NULL)",
       [identity.workspaceId, identity.tenantId],
     );
     // One running batch per workspace (mailbox rate limits, fairness): claims of
@@ -226,10 +245,17 @@ export async function runOneInboxBatch(
       },
       { mode: claimed.mode },
     );
-    const inboxStore = postgresInboxStore(run, batch, {
-      token: claimed.lease_token,
-    });
-    const followupModel = deps.followupModel ?? providerFollowupModel;
+    const inboxStore = postgresInboxStore(
+      run,
+      batch,
+      { token: claimed.lease_token },
+      {
+        questionGrouper: questionGroupingEnabled()
+          ? (deps.questionGrouper ?? providerQuestionGrouper)
+          : undefined,
+      },
+    );
+    const followupModel = deps.followupModel ?? (demo ? demoFollowupModel : providerFollowupModel);
     const context = replyContext(state, factSources(facts));
     // Opt-ins (migration 014). Deployment flags off → nothing changes.
     let features: InboxFeatures = DEFAULT_FEATURES;
@@ -279,7 +305,7 @@ export async function runOneInboxBatch(
     stats = await processMailboxBatch({
       batch,
       mailbox,
-      model: deps.model ?? providerInboxModel,
+      model: deps.model ?? (demo ? demoInboxModel : providerInboxModel),
       store: inboxStore,
       context,
       requests: {
@@ -296,7 +322,13 @@ export async function runOneInboxBatch(
       costs: {
         classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
         draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
+        claimCheckCents: claimCheckCents(),
       },
+      // Never with the demo model: it writes canned drafts, nothing to check.
+      claimChecker:
+        claimCheckEnabled() && !demo
+          ? (deps.claimChecker ?? providerClaimChecker)
+          : undefined,
       shouldYield:
         deps.deadline === undefined
           ? undefined
@@ -367,7 +399,12 @@ export async function runOneInboxBatch(
           costs: {
             classifyCents: estimatedCents("ORBIS_INBOX_EST_CENTS_CLASSIFY", 1),
             draftCents: estimatedCents("ORBIS_INBOX_EST_CENTS_DRAFT", 5),
+            claimCheckCents: claimCheckCents(),
           },
+          claimChecker:
+            claimCheckEnabled() && !demo
+              ? (deps.claimChecker ?? providerClaimChecker)
+              : undefined,
           shouldYield:
             deps.deadline === undefined
               ? undefined
@@ -479,7 +516,7 @@ export async function runOneInboxBatch(
     const listThreadSent = mailbox.listThreadSent.bind(mailbox);
     outcomes = await checkDraftOutcomes({
       mailbox: { listThreadSent },
-      model: deps.brainModel ?? providerBrainModel,
+      model: deps.brainModel ?? (demo ? demoBrainModel : providerBrainModel),
       store: postgresOutcomeStore(run, identity, "orbi"),
       trustedText,
       cents: BRAIN_COSTS.explain(),

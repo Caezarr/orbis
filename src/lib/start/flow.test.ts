@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   decodePending,
+  flagLabel,
+  flagLabels,
   decodePreviewShown,
   encodePreviewShown,
   likelyQuestions,
@@ -215,5 +217,35 @@ describe("instant preview (client-safe helpers)", () => {
     expect(decodePreviewShown(encodePreviewShown(false, now), now + PENDING_TTL_MS + 1)).toBeNull();
     expect(decodePreviewShown('{"v":1,"ai":"yes","savedAt":1}', now)).toBeNull();
     expect(decodePreviewShown("{", now)).toBeNull();
+  });
+});
+
+describe("flagLabel", () => {
+  it("says a vague delay was flagged, not replaced", () => {
+    expect(flagLabel("guard:vague_delay")).toMatch(/délai vague/);
+    expect(flagLabel("guard:unsupported_commitment")).toMatch(/Engagement pris en votre nom/);
+    expect(flagLabel("guard:unsupported_free_offer")).toMatch(/Gratuité ou remboursement promis/);
+    expect(flagLabel("guard:unsupported_discount")).toMatch(/Remise ou geste commercial/);
+    expect(flagLabel("guard:unsupported_delay")).toBe(
+      "Des informations non sourcées ont été remplacées par des questions.",
+    );
+  });
+});
+
+describe("flagLabels", () => {
+  it("one note per distinct label, internal flags dropped", () => {
+    expect(
+      flagLabels([
+        "guard:unsupported_commitment",
+        "claim_check:unsupported_commitment",
+        "claim_check:budget",
+        "owner_message:quote",
+        "recipient_check",
+      ]),
+    ).toEqual([
+      flagLabel("guard:unsupported_commitment"),
+      "Destinataire inhabituel dans la conversation : aucune relance préparée, à vérifier.",
+    ]);
+    expect(flagLabels([])).toEqual([]);
   });
 });

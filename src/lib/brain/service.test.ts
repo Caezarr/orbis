@@ -15,6 +15,7 @@ import { workspaceBudgetAllows } from "@/lib/inbox/store";
 import {
   answerQuestion,
   answerSchema,
+  draftsWithNewInfo,
   factReviewSchema,
   regenerationSchema,
   requestRegeneration,
@@ -108,7 +109,7 @@ describe("one question, asked once", () => {
       sql.startsWith("SELECT id,canonical_key,status FROM brain_questions") ? { rows: [] } :
       sql.startsWith("SELECT id FROM brain_questions") ? { rows: [{ id: "q-new" }] } : undefined;
     const r = await recordDraftQuestions(db, ids, "row-1", [{ canonicalKey: key, label: "prix de la pose au m²" }]);
-    expect(r).toEqual({ created: 1, matched: 0, alreadyAnswered: 0 });
+    expect(r).toEqual({ created: 1, matched: 0, alreadyAnswered: 0, grouped: 0 });
     expect(sqls().some((s) => s.startsWith("INSERT INTO brain_questions"))).toBe(true);
   });
   it("an answered question is matched (even reworded) and never re-asked", async () => {
@@ -119,7 +120,7 @@ describe("one question, asked once", () => {
     const r = await recordDraftQuestions(db, ids, "row-2", [
       { canonicalKey: canonicalKey("Quel est le tarif de pose par mètre carré ?"), label: "tarif pose" },
     ]);
-    expect(r).toEqual({ created: 0, matched: 0, alreadyAnswered: 1 });
+    expect(r).toEqual({ created: 0, matched: 0, alreadyAnswered: 1, grouped: 0 });
     expect(sqls().some((s) => s.startsWith("INSERT INTO brain_questions"))).toBe(false);
   });
   it("answering creates an APPROVED fact sourced from the user's answer and closes the question", async () => {
@@ -206,5 +207,21 @@ describe("regeneration (new info available)", () => {
       sql.startsWith("SELECT id,provider,connected_account_id") ? { rows: [msg] } :
       sql.includes("AS pending") ? { rows: [{ n: "3", pending: "0" }] } : undefined;
     await expect(inSession(() => requestRegeneration(msg.id))).rejects.toMatchObject({ status: 409 });
+  });
+  it("exposes the regenerated draft's reviewer flags (strings only), scoped to the session tenant", async () => {
+    handler = (sql) =>
+      sql.includes("FROM brain_question_messages")
+        ? {
+            rows: [
+              { id: "m1", subject_preview: "Devis", drafted_at: new Date(), draft_state: "created", outcome: null,
+                regen_status: "completed", regen_draft_state: "created", regen_flags: ["guard:unsupported_discount", 3] },
+              { id: "m2", subject_preview: null, drafted_at: new Date(), draft_state: "simulated", outcome: null,
+                regen_status: "completed", regen_draft_state: "simulated", regen_flags: null },
+            ],
+          }
+        : undefined;
+    const rows = await inSession(() => draftsWithNewInfo());
+    expect(rows.map((r) => r.regeneration?.flags)).toEqual([["guard:unsupported_discount"], []]);
+    expect(query.mock.calls[0]![1]).toEqual(["ws-a", "tenant-a", 10]);
   });
 });

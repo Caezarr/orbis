@@ -15,6 +15,7 @@ import {
   inboxErrorKind,
   isPending,
   NOT_FOUND_LABEL,
+  NOT_FOUND_LABEL_DESCRIPTION,
   PENDING_KEY,
   PREVIEW_SHOWN_KEY,
   quotePreview,
@@ -45,7 +46,7 @@ type Provider = "gmail" | "outlook";
 type Readiness = {
   session: "authenticated" | "offline";
   profile: { name: string; summary: string; website?: string } | null;
-  inbox: { enabled: boolean; mode: "test" | "scoped_autonomy"; aiConfigured: boolean; budgetConfigured: boolean };
+  inbox: { enabled: boolean; mode: "test" | "scoped_autonomy"; aiConfigured: boolean; demoModel?: boolean; budgetConfigured: boolean };
   providers: Record<Provider, { configured: boolean }>;
 };
 const PROVIDERS: { id: Provider; name: string }[] = [
@@ -628,7 +629,7 @@ function PreviewStep({
             Questions proposées par Orbi à partir de {host ? `votre page ${host}` : "votre description"}. Une réponse
             n’apparaît que si elle figure mot pour mot dans {host ? "votre site" : "vos mots"}.
           </p>
-          <LikelyQuestions questions={preview.questions} />
+          <LikelyQuestions questions={preview.questions} fromSite={!!host} />
           {preview.flags.includes("source_instructions_ignored") && (
             <p className={s.fine}>
               Votre page contient un texte qui ressemble à des instructions : Orbi l’a traité comme du contenu, sans
@@ -714,7 +715,7 @@ function PreviewStep({
             brouillons apparaîtront avec vos vrais mails.
           </p>
           {preview.questions.length > 0 ? (
-            <LikelyQuestions questions={preview.questions} />
+            <LikelyQuestions questions={preview.questions} fromSite={!!host} />
           ) : (
             <p className={s.muted}>Aucune citation conservée dans votre profil.</p>
           )}
@@ -734,7 +735,7 @@ function questionsTitle(n: number) {
 }
 
 /** Each answer is a sourced quote; a question without one is highlighted « À CONFIRMER ». */
-function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
+function LikelyQuestions({ questions, fromSite }: { questions: PreviewQuestion[]; fromSite: boolean }) {
   return (
     <ol className={s.likely}>
       {questions.map((q, i) => (
@@ -753,7 +754,7 @@ function LikelyQuestions({ questions }: { questions: PreviewQuestion[] }) {
             </blockquote>
           ) : (
             <p className={s.missing}>
-              <mark className={s.placeholder}>[[À CONFIRMER]]</mark> {NOT_FOUND_LABEL}
+              <mark className={s.placeholder}>À confirmer</mark> {fromSite ? NOT_FOUND_LABEL : NOT_FOUND_LABEL_DESCRIPTION}
             </p>
           )}
         </li>
@@ -1053,11 +1054,21 @@ function DraftsStep({
 
   if (preBlocker && !batch) return <Blocker kind={preBlocker} onRetry={onRecheck} />;
 
-  const testBanner = testMode && (
-    <p className={s.test} role="note">
-      <strong>Mode test.</strong> Les brouillons ci-dessous sont simulés : rien n’est écrit dans votre boîte mail, et rien
-      n’est envoyé.
-    </p>
+  const testBanner = (testMode || readiness.inbox.demoModel) && (
+    <>
+      {testMode && (
+        <p className={s.test} role="note">
+          <strong>Mode test.</strong> Les brouillons ci-dessous sont simulés : rien n’est écrit dans votre boîte mail, et
+          rien n’est envoyé.
+        </p>
+      )}
+      {readiness.inbox.demoModel && (
+        <p className={s.test} role="note">
+          <strong>Modèle factice local.</strong> Les brouillons sont rédigés par un gabarit de démonstration, sans appel à
+          une IA. Ils ne reflètent pas la qualité réelle d’Orbi.
+        </p>
+      )}
+    </>
   );
 
   if (!batch)

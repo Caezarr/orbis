@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "local:up": "bash scripts/local-stack.sh up",
     "local:env": "bash scripts/local-stack.sh env",
     "local:down": "bash scripts/local-stack.sh down",
@@ -20,7 +21,7 @@
     "@composio/core": "^0.18.1",
     "@paper-design/shaders": "0.0.82",
     "@paper-design/shaders-react": "^0.0.80",
-    "@react-three/fiber": "^9.7.0",
+    "@react-three/fiber": "^9.8.2",
     "@shadergradient/react": "^2.4.20",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
@@ -44,6 +45,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.1",
     "@types/pg": "^8.23.1",

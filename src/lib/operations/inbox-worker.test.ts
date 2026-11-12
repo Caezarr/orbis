@@ -10,6 +10,7 @@ vi.mock("@/lib/platform/db", () => ({
   setTenantContext: mock.setTenant,
 }));
 vi.mock("@/lib/runtime/provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }),
   providerStatus: () => ({ configured: mock.configured }),
   getModel: vi.fn(),
 }));
@@ -165,6 +166,16 @@ describe("inbox worker job", () => {
       processed: false,
     });
     expect(mailbox).not.toHaveBeenCalled();
+  });
+  it("purges expired previews AND Orbi's questions on the draft (they can name the contact)", async () => {
+    claimed = null;
+    await runOneInboxBatch(identity, { mailbox, model });
+    const purge = mock.query.mock.calls.find(([sql]) => String(sql).startsWith("UPDATE inbox_messages SET subject_preview=NULL"));
+    expect(String(purge![0])).toContain("questions='[]'::jsonb");
+    expect(String(purge![0])).toContain("OR questions<>'[]'::jsonb");
+    expect(String(purge![0])).toContain("citations='[]'::jsonb,proposed_slots=NULL");
+    expect(String(purge![0])).toContain("OR citations<>'[]'::jsonb OR proposed_slots IS NOT NULL");
+    expect(purge![1]).toEqual(["ws-a", "tenant-a"]);
   });
 });
 

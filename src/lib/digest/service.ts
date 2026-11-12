@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { transaction } from "@/lib/platform/db";
-import { maskEmail } from "@/lib/followups/detect";
+import { FOLLOWUP_READY_SQL, maskEmail } from "@/lib/followups/detect";
 import { scoped, type Identity } from "@/lib/operations/worker";
 import { composeDigest, isEmptyDigest, normalizeCounts, type DigestCounts, type DigestMessage } from "./compose";
 import {
@@ -102,10 +102,11 @@ type Ids = { workspaceId: string; tenantId: string };
 export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until: Date): Promise<DigestCounts> {
   const p = [ids.workspaceId, ids.tenantId];
   const inbox = (
-    await db.query<{ drafts: string; questions: string; review: string }>(
+    await db.query<{ drafts: string; questions: string; simulated: string; review: string }>(
       `SELECT
-        count(*) FILTER (WHERE status='drafted' AND drafted_at>$3 AND drafted_at<=$4)::text AS drafts,
-        count(*) FILTER (WHERE status='drafted' AND drafted_at>$3 AND drafted_at<=$4 AND jsonb_array_length(questions)>0)::text AS questions,
+        count(*) FILTER (WHERE status='drafted' AND draft_state<>'simulated' AND drafted_at>$3 AND drafted_at<=$4)::text AS drafts,
+        count(*) FILTER (WHERE status='drafted' AND draft_state<>'simulated' AND drafted_at>$3 AND drafted_at<=$4 AND jsonb_array_length(questions)>0)::text AS questions,
+        count(*) FILTER (WHERE status='drafted' AND draft_state='simulated' AND drafted_at>$3 AND drafted_at<=$4)::text AS simulated,
         count(*) FILTER (WHERE status IN ('needs_review','uncertain') AND updated_at>$3 AND updated_at<=$4)::text AS review
        FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND updated_at>$3`,
       [...p, since, until],
@@ -117,12 +118,14 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
       p,
     )
   ).rows[0];
-  // Same definition as the Today card (followups/service.ts todaySummary).
+  // Same definition as the Today card (followups/service.ts todaySummary),
+  // split on test mode: a simulated follow-up was never written to the mailbox.
   const followups = (
-    await db.query<{ n: string }>(
-      `SELECT count(*)::text AS n FROM followups f JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
-       WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND f.status IN ('drafted','needs_review') AND i.status NOT IN ('gagne','perdu')
-         AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)`,
+    await db.query<{ n: string; simulated: string }>(
+      `SELECT count(*) FILTER (WHERE f.draft_state<>'simulated')::text AS n,
+         count(*) FILTER (WHERE f.draft_state='simulated')::text AS simulated
+       FROM followups f JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
+       WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND ${FOLLOWUP_READY_SQL}`,
       p,
     )
   ).rows[0];
@@ -132,6 +135,7 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
     needsReview: Number(inbox?.review ?? 0),
     orbiQuestions: Number(questions?.n ?? 0),
     followupsReady: Number(followups?.n ?? 0),
+    simulatedDrafts: Number(inbox?.simulated ?? 0) + Number(followups?.simulated ?? 0),
   });
 }
 

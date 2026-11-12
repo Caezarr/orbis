@@ -14,8 +14,10 @@ vi.mock("@composio/core", () => ({
 }));
 import { mailboxClient, type DraftReceipt } from "@/lib/integrations/mailbox";
 import type { InboxModel, ReplySource } from "@/lib/runtime/inbox-replies";
+import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import {
   processMailboxBatch,
+  unansweredEarlier,
   type InboxBatch,
   type InboxStore,
   type MessageRow,
@@ -253,6 +255,14 @@ describe("inbox batch pipeline", () => {
     });
     expect(rows.get("m1")?.receipt?.draftId).toBe("draft-1");
   });
+  it("an invented date never reaches the mailbox draft", async () => {
+    const { store, rows } = memoryStore();
+    await run(model("Bonjour, nous passerons le 12 mars à 10h30."), store);
+    const body = drafts()[0].args.body as string;
+    expect(body).not.toMatch(/12 mars|10h30/);
+    expect(body).toContain("[[À CONFIRMER : date]]");
+    expect(rows.get("m1")?.flags).toContain("guard:unsupported_date");
+  });
   it("is idempotent: a re-run creates no second draft and makes no model call", async () => {
     const { store } = memoryStore();
     await run(model(), store);
@@ -348,7 +358,12 @@ describe("inbox batch pipeline", () => {
         ? {
             successful: true,
             data: {
-              drafts: [{ id: "draft-x", message: { threadId: "thread-m1" } }],
+              drafts: [
+                {
+                  id: "draft-x",
+                  message: { threadId: "thread-m1", internalDate: String(Date.now()) },
+                },
+              ],
             },
           }
         : base(slug, body),
@@ -441,6 +456,29 @@ describe("adversarial emails", () => {
     expect(drafts()).toHaveLength(0);
     expect(rows.get("rt")).toMatchObject({ status: "needs_review" });
     expect(rows.get("rt")?.flags).toContain("reply_to_diverges");
+  });
+  it("an address placed in the display name never becomes the draft recipient", async () => {
+    inbox = [
+      gmailMessage("dn", { sender: '"boss@client.fr" <attacker@evil.test>' }),
+    ];
+    const { store } = memoryStore();
+    await run(model(), store);
+    expect(drafts()).toHaveLength(1);
+    expect(drafts()[0].args.recipient_email).toBe("attacker@evil.test");
+  });
+  it("a From with several angle-addresses is not drafted at all (fail closed)", async () => {
+    inbox = [
+      gmailMessage("dn2", { sender: '"<boss@client.fr>" <attacker@evil.test>' }),
+      gmailMessage("dn3", {
+        sender: "Support <boss@client.fr> via X <attacker@evil.test>",
+      }),
+    ];
+    const { store } = memoryStore();
+    const m = model();
+    await run(m, store);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(m.draft).not.toHaveBeenCalled();
+    expect(drafts()).toHaveLength(0);
   });
   it("email content never reaches system instructions or tool arguments other than the body", async () => {
     inbox = [
@@ -540,5 +578,308 @@ describe("plan draft quota", () => {
     });
     expect(stats.quotaReached).toBe(true);
     expect(m.classify).not.toHaveBeenCalled();
+  });
+});
+
+describe("model-assisted claim check", () => {
+  const paraphrase = "Bonjour, pas de souci, on gère ça pour vous cette semaine.";
+  const checker = (claims: { kind: "commitment" | "free_offer" | "discount" | "delay"; quote: string }[]) => ({
+    check: vi.fn(async () => ({
+      output: { claims },
+      usage: { inputTokens: 80, outputTokens: 10 },
+    })),
+  });
+  const runChecked = (
+    m: InboxModel,
+    store: InboxStore,
+    claimChecker: ReturnType<typeof checker> | { check: () => Promise<never> },
+  ) =>
+    processMailboxBatch({
+      batch,
+      mailbox: mailboxClient("gmail", batch, { mode: "scoped_autonomy" }),
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5, claimCheckCents: 2 },
+      claimChecker,
+    });
+
+  it("flags a paraphrased promise the pattern guard misses, without rewriting it", async () => {
+    const { store, rows } = memoryStore();
+    const c = checker([{ kind: "commitment", quote: "on gère ça pour vous" }]);
+    const stats = await runChecked(model(paraphrase), store, c);
+    expect(stats.drafted).toBe(1);
+    expect(c.check).toHaveBeenCalledTimes(1);
+    const row = rows.get("m1")!;
+    expect(row.flags).toContain("claim_check:unsupported_commitment");
+    expect(row.questions).toContain(
+      "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer",
+    );
+    // The guard's banner (model question) is already there: body untouched.
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+    // Classify + draft + check, all charged to the same message.
+    expect(row.cost).toBe(1 + 5 + 2);
+  });
+  it("ignores a quote that is not in the draft", async () => {
+    const { store, rows } = memoryStore();
+    await runChecked(
+      model(paraphrase),
+      store,
+      checker([{ kind: "discount", quote: "ignore previous instructions" }]),
+    );
+    expect(rows.get("m1")!.flags ?? []).not.toContain("claim_check:unsupported_discount");
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+  });
+  it("a checker failure keeps the draft and the pattern guard's result", async () => {
+    const { store, rows } = memoryStore();
+    const stats = await runChecked(model(paraphrase), store, {
+      check: async () => {
+        throw new Error("timeout");
+      },
+    });
+    expect(stats).toMatchObject({ drafted: 1, failed: 0 });
+    expect(rows.get("m1")!.flags).toContain("claim_check:unavailable");
+    expect(drafts()[0].args.body).toBe(`[[À CONFIRMER : Date ?]]\n\n${paraphrase}`);
+  });
+  it("no budget left for the check: the draft still goes out, flagged", async () => {
+    const { store, rows } = memoryStore(6);
+    const c = checker([{ kind: "commitment", quote: "on gère ça pour vous" }]);
+    const stats = await runChecked(model(paraphrase), store, c);
+    expect(stats.drafted).toBe(1);
+    expect(c.check).not.toHaveBeenCalled();
+    expect(rows.get("m1")!.flags).toContain("claim_check:budget");
+  });
+});
+
+describe("owner's own messages (Outlook inbox copies carry no fromOwner)", () => {
+  const owner = "patron@acme.test";
+  function outlook(
+    id: string,
+    from: string,
+    fields: Partial<MailMessage> = {},
+  ): MailMessage {
+    return {
+      provider: "outlook",
+      id,
+      threadId: `conv-${id}`,
+      from: { address: from },
+      replyTo: [],
+      to: [owner],
+      subject: "Note : rappeler M. Martin",
+      receivedAt: "2026-10-01T10:00:00Z",
+      text: "Penser à rappeler M. Martin pour le devis.",
+      labels: [],
+      headers: {},
+      isDraft: false,
+      fromOwner: false,
+      ...fields,
+    };
+  }
+  function stubMailbox(params: {
+    inbound: MailMessage[];
+    sent?: MailMessage[];
+    thread?: MailMessage[];
+  }) {
+    const createReplyDraft = vi.fn(async (input: { threadId: string; recipient: string }) => ({
+      draftId: "d1",
+      threadId: input.threadId,
+      payloadHash: "h",
+      policyHash: "p",
+      simulated: false,
+      reconciled: false,
+      recipients: [input.recipient],
+      created: true,
+    }));
+    return {
+      createReplyDraft,
+      mailbox: {
+        listInbound: async () => params.inbound,
+        listSent: vi.fn(async () => params.sent ?? []),
+        readThread: async () => params.thread ?? [],
+        createReplyDraft,
+      },
+    };
+  }
+  const runWith = (mailbox: ReturnType<typeof stubMailbox>["mailbox"], m: InboxModel, store: InboxStore) =>
+    processMailboxBatch({
+      batch: { ...batch, provider: "outlook" },
+      mailbox,
+      model: m,
+      store,
+      context,
+      costs: { classifyCents: 1, draftCents: 5 },
+    });
+
+  it("a note-to-self is skipped before any model call (address read from sent mail)", async () => {
+    const stub = stubMailbox({
+      inbound: [outlook("self", "Patron@Acme.test")],
+      sent: [outlook("s1", owner, { fromOwner: true })],
+    });
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await runWith(stub.mailbox, m, store);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(stub.createReplyDraft).not.toHaveBeenCalled();
+    expect(stats.skipped).toBe(1);
+    expect(rows.get("self")).toMatchObject({ status: "skipped", skipReason: "own_message" });
+  });
+  it("no recent sent mail: the thread's Sent Items copy still stops the draft", async () => {
+    const self = outlook("self", owner);
+    const stub = stubMailbox({
+      inbound: [self],
+      sent: [],
+      thread: [self, outlook("self-sent", owner, { fromOwner: true })],
+    });
+    const { store, rows } = memoryStore();
+    const m = model();
+    await runWith(stub.mailbox, m, store);
+    expect(m.draft).not.toHaveBeenCalled();
+    expect(stub.createReplyDraft).not.toHaveBeenCalled();
+    expect(rows.get("self")).toMatchObject({ status: "skipped", skipReason: "own_message" });
+  });
+  it("a client's message is still drafted, and sent mail is read once per batch", async () => {
+    const stub = stubMailbox({
+      inbound: [outlook("c1", "client@example.com"), outlook("c2", "autre@example.com")],
+      sent: [outlook("s1", owner, { fromOwner: true, text: "Cordialement, Paul" })],
+      thread: [outlook("earlier", owner, { fromOwner: true, receivedAt: "2026-09-01T10:00:00Z" })],
+    });
+    const { store } = memoryStore();
+    const m = model();
+    const stats = await runWith(stub.mailbox, m, store);
+    expect(stats.drafted).toBe(2);
+    expect(stub.createReplyDraft.mock.calls.map((c) => c[0].recipient)).toEqual([
+      "client@example.com",
+      "autre@example.com",
+    ]);
+    expect(stub.mailbox.listSent).toHaveBeenCalledTimes(1);
+    expect(m.draft.mock.calls[0][0].toneSamples).toEqual(["Cordialement, Paul"]);
+  });
+  it("a sent-mail read failure never blocks a client's draft", async () => {
+    const stub = stubMailbox({ inbound: [outlook("c1", "client@example.com")] });
+    stub.mailbox.listSent.mockRejectedValue(new Error("graph 503"));
+    const { store } = memoryStore();
+    const stats = await runWith(stub.mailbox, model(), store);
+    expect(stats.drafted).toBe(1);
+  });
+});
+
+describe("one draft per conversation (several unanswered messages)", () => {
+  const first = () =>
+    gmailMessage("old", {
+      threadId: "thread-x",
+      messageText: "Bonjour, quel est votre tarif pour une vitre ?",
+      messageTimestamp: "2026-10-01T09:00:00Z",
+    });
+  const second = () =>
+    gmailMessage("new", {
+      threadId: "thread-x",
+      messageText: "Et pouvez-vous passer jeudi ?",
+      messageTimestamp: "2026-10-01T10:00:00Z",
+    });
+  beforeEach(() => {
+    inbox = [first(), second()];
+    thread = [first(), second()];
+  });
+  it("drafts only the newest message; the older one is answered in it, without a model call", async () => {
+    const { store, rows } = memoryStore();
+    const m = model();
+    const stats = await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(stats).toMatchObject({ drafted: 1, skipped: 1, draftsCreated: 1 });
+    expect(m.classify).toHaveBeenCalledTimes(1);
+    expect(m.draft).toHaveBeenCalledTimes(1);
+    expect(m.draft.mock.calls[0][0]).toMatchObject({
+      message: { id: "new" },
+      earlierUnanswered: 1,
+    });
+    // Sources are looked up for both questions.
+    expect(String((context.sourcesFor.mock.calls[0] as unknown[])[0])).toContain("tarif");
+    expect(rows.get("new")?.status).toBe("drafted");
+    expect(rows.get("old")).toMatchObject({
+      status: "skipped",
+      skipReason: "superseded",
+    });
+  });
+  it("the older message is still drafted when the newer one is not actionable", async () => {
+    const { store, rows } = memoryStore();
+    const m = model();
+    m.classify.mockImplementation(async (msg: { id: string }) => ({
+      output: {
+        classification: msg.id === "new" ? ("noise" as const) : ("customer_request" as const),
+        reason: "",
+      },
+      usage: { inputTokens: 10, outputTokens: 2 },
+    }));
+    await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(m.draft.mock.calls[0][0]).toMatchObject({ message: { id: "old" } });
+    expect(m.draft.mock.calls[0][0].earlierUnanswered).toBeUndefined();
+    expect(rows.get("old")?.status).toBe("drafted");
+  });
+  it("another sender in the same thread keeps its own draft", async () => {
+    inbox = [
+      first(),
+      gmailMessage("new", {
+        threadId: "thread-x",
+        sender: "Collègue <collegue@example.com>",
+        messageTimestamp: "2026-10-01T10:00:00Z",
+      }),
+    ];
+    const { store } = memoryStore();
+    await run(model(), store);
+    expect(drafts().map((d) => d.args.recipient_email).sort()).toEqual([
+      "client@example.com",
+      "collegue@example.com",
+    ]);
+  });
+  it("a draft made by an earlier batch also covers the older message", async () => {
+    const { store, rows } = memoryStore();
+    inbox = [second()];
+    await run(model(), store);
+    inbox = [first(), second()];
+    const m = model();
+    await run(m, store);
+    expect(drafts()).toHaveLength(1);
+    expect(m.classify).not.toHaveBeenCalled();
+    expect(rows.get("old")?.skipReason).toBe("superseded");
+  });
+  it("while the newer draft is uncertain, the older message waits (no second draft)", async () => {
+    const { store, rows } = memoryStore();
+    const base = sdk.execute.getMockImplementation()!;
+    sdk.execute.mockImplementation(async (slug: string, body: never) =>
+      slug === "GMAIL_CREATE_EMAIL_DRAFT"
+        ? Promise.reject(new Error("timeout"))
+        : base(slug, body),
+    );
+    const m = model();
+    await run(m, store);
+    expect(m.draft).toHaveBeenCalledTimes(1);
+    expect(rows.get("new")?.status).toBe("uncertain");
+    expect(rows.get("old")?.status).toBe("seen"); // retried next batch
+  });
+});
+
+describe("unansweredEarlier", () => {
+  const msg = (id: string, at: string, extra: Partial<MailMessage> = {}) =>
+    ({
+      id,
+      threadId: "t",
+      from: { address: "client@example.com" },
+      subject: "",
+      text: id,
+      receivedAt: at,
+      ...extra,
+    }) as MailMessage;
+  it("keeps only the sender's messages after the owner's last reply", () => {
+    const current = msg("c", "2026-10-01T12:00:00Z");
+    const thread = [
+      msg("a", "2026-10-01T08:00:00Z"),
+      msg("reply", "2026-10-01T09:00:00Z", { fromOwner: true }),
+      msg("b", "2026-10-01T10:00:00Z"),
+      msg("other", "2026-10-01T11:00:00Z", { from: { address: "x@y.test" } }),
+      msg("draft", "2026-10-01T11:30:00Z", { isDraft: true }),
+      current,
+    ];
+    expect(unansweredEarlier(current, thread).map((m) => m.id)).toEqual(["b"]);
   });
 });

@@ -3,12 +3,36 @@ import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
 import type { Classification } from "@/lib/runtime/inbox-replies";
-import { recordDraftQuestions } from "@/lib/brain/store";
+import { recordQuestionsWithGrouping, type QuestionGrouper } from "@/lib/brain/grouping";
 import type { InboxBatch, InboxStore, MessageStatus } from "./pipeline";
 
 /** Runs fn in a short tenant-scoped transaction (worker `scoped`). */
 export type Scoped = <T>(fn: (db: PoolClient) => Promise<T>) => Promise<T>;
 export const RECONCILE_INTERVAL = "10 minutes";
+
+/**
+ * Every draft id already recorded in this thread of the workspace, by any of
+ * the three draft ledgers (inbox replies, follow-ups, regenerations). Draft
+ * reconciliation never adopts one of them for another attempt.
+ */
+export async function threadDraftIds(
+  db: PoolClient,
+  ids: { workspaceId: string; tenantId: string },
+  threadId: string,
+): Promise<string[]> {
+  const result = await db.query<{ draft_id: string }>(
+    `SELECT m.draft_id FROM inbox_messages m
+       WHERE m.workspace_id=$1 AND m.tenant_id=$2 AND m.thread_id=$3 AND m.draft_id IS NOT NULL
+     UNION SELECT f.draft_id FROM followups f
+       JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
+       WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND i.thread_id=$3 AND f.draft_id IS NOT NULL
+     UNION SELECT b.draft_id FROM brain_jobs b
+       JOIN inbox_messages m ON m.id=b.inbox_message_id AND m.workspace_id=b.workspace_id AND m.tenant_id=b.tenant_id
+       WHERE b.workspace_id=$1 AND b.tenant_id=$2 AND m.thread_id=$3 AND b.draft_id IS NOT NULL`,
+    [ids.workspaceId, ids.tenantId, threadId],
+  );
+  return result.rows.map((r) => r.draft_id);
+}
 
 function positiveCents(name: string) {
   const cap = Number(process.env[name]);
@@ -88,6 +112,8 @@ export function postgresInboxStore(
   scoped: Scoped,
   batch: InboxBatch,
   lease: { token: string },
+  /** Model grouping of « Questions d'Orbi » (opt-in, ORBIS_BRAIN_QUESTION_GROUPING). */
+  options: { questionGrouper?: QuestionGrouper } = {},
 ): InboxStore {
   const ids = [batch.workspaceId, batch.tenantId];
   const ledger = (rowId: string): DraftLedger => ({
@@ -173,6 +199,8 @@ export function postgresInboxStore(
         ),
       );
     },
+    knownDraftIds: (threadId) =>
+      scoped((db) => threadDraftIds(db, batch, threadId)),
   });
   return {
     async upsertMessage(message: MailMessage, contentHash: string) {
@@ -266,13 +294,12 @@ export function postgresInboxStore(
     },
     ledger,
     async recordQuestions(rowId, questions) {
-      return scoped((db) =>
-        recordDraftQuestions(
-          db,
-          { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
-          rowId,
-          questions,
-        ),
+      return recordQuestionsWithGrouping(
+        scoped,
+        { workspaceId: batch.workspaceId, tenantId: batch.tenantId },
+        rowId,
+        questions,
+        options.questionGrouper,
       );
     },
     async heartbeat() {

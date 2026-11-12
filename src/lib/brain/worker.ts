@@ -1,10 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { StoreState } from "@/lib/domain/types";
+import {
+  claimCheckCents,
+  claimCheckEnabled,
+  providerClaimChecker,
+  runClaimCheck,
+  type ClaimChecker,
+} from "@/lib/inbox/claim-check";
 import { replyContext } from "@/lib/inbox/context";
 import { inboxDraftsEnabled } from "@/lib/inbox/flags";
-import { monthlyCapCents } from "@/lib/inbox/store";
+import { monthlyCapCents, threadDraftIds } from "@/lib/inbox/store";
 import {
+  draftRecipientMismatch,
   mailboxClient,
   MailboxPolicyError,
   MailboxUncertainError,
@@ -19,6 +27,7 @@ import {
   replyToDiverges,
   type InboxModel,
 } from "@/lib/runtime/inbox-replies";
+import { demoBrainModel, demoInboxModel, demoModelActive } from "@/lib/runtime/demo-model";
 import { providerStatus } from "@/lib/runtime/provider";
 import { scoped, type Identity } from "@/lib/operations/worker";
 import { currentEntitlement } from "@/lib/billing/entitlements-store";
@@ -27,11 +36,16 @@ import { processExtraction, type ExtractionStats } from "./extract";
 import { factSources } from "./facts";
 import { providerBrainModel, type BrainModel } from "./model";
 import type { OutcomeStore } from "./outcomes";
+import {
+  providerQuestionGrouper,
+  questionGroupingEnabled,
+  recordQuestionsWithGrouping,
+  type QuestionGrouper,
+} from "./grouping";
 import { draftQuestions } from "./questions";
 import {
   addBrainUsage,
   loadActiveFacts,
-  recordDraftQuestions,
   reserveBrainBudget,
   saveCandidates,
   type Ids,
@@ -70,6 +84,10 @@ type Mailbox = {
 export type BrainWorkerDeps = {
   model?: BrainModel;
   inboxModel?: InboxModel;
+  /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */
+  questionGrouper?: QuestionGrouper;
+  /** Claim check model (tests); used only when ORBIS_INBOX_CLAIM_CHECK=true. */
+  claimChecker?: ClaimChecker;
   mailbox?: (...args: Parameters<typeof mailboxClient>) => Mailbox;
   deadline?: number;
   /** Plan entitlement loader (tests); defaults to the PostgreSQL entitlement service. */
@@ -162,7 +180,8 @@ export function postgresOutcomeStore(
  */
 export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps = {}) {
   if (!inboxDraftsEnabled()) return { processed: false, reason: "disabled" };
-  if (!providerStatus().configured) throw new Error("AI provider not configured");
+  const demo = demoModelActive();
+  if (!providerStatus().configured && !demo) throw new Error("AI provider not configured");
   if (!monthlyCapCents()) throw new Error("Configure ORBIS_OPERATIONS_MONTHLY_CAP_CENTS first");
   const run = <T>(fn: (db: PoolClient) => Promise<T>) => scoped<T>(identity, fn);
   const ids = [identity.workspaceId, identity.tenantId];
@@ -248,7 +267,7 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
       stats = await processExtraction({
         job: { windowDays: claimed.window_days, maxMessages: claimed.max_messages },
         mailbox,
-        model: deps.model ?? providerBrainModel,
+        model: deps.model ?? (demo ? demoBrainModel : providerBrainModel),
         company: state.profile?.name,
         trustedText: trustedProfileText(state),
         cents: BRAIN_COSTS.extract(),
@@ -309,9 +328,17 @@ export async function runOneBrainJob(identity: Identity, deps: BrainWorkerDeps =
         identity,
         run,
         mailbox,
-        model: deps.inboxModel ?? providerInboxModel,
+        model: deps.inboxModel ?? (demo ? demoInboxModel : providerInboxModel),
         sources: replyContext(state, factSources(facts)),
         heartbeat,
+        questionGrouper: questionGroupingEnabled()
+          ? (deps.questionGrouper ?? providerQuestionGrouper)
+          : undefined,
+        // Never with the demo model: it writes canned drafts, nothing to check.
+        claimChecker:
+          claimCheckEnabled() && !demo
+            ? (deps.claimChecker ?? providerClaimChecker)
+            : undefined,
       });
   } catch (error) {
     failure = error instanceof MailboxPolicyError ? "policy" : "transient";
@@ -364,6 +391,8 @@ async function regenerate(params: {
   model: InboxModel;
   sources: ReturnType<typeof replyContext>;
   heartbeat: () => Promise<boolean>;
+  questionGrouper?: QuestionGrouper;
+  claimChecker?: ClaimChecker;
 }) {
   const { job, identity, run, mailbox } = params;
   const ids = [identity.workspaceId, identity.tenantId];
@@ -398,6 +427,18 @@ async function regenerate(params: {
   });
   await run((db) => addBrainUsage(db, identity, usageId, generated.usage));
   const guarded = guardDraft(generated.output, { sources, message });
+  let claimFlags: string[] = [];
+  if (params.claimChecker) {
+    let checkUsageId: string | null = null;
+    claimFlags = await runClaimCheck(guarded, sources, {
+      checker: params.claimChecker,
+      reserve: async () =>
+        !!(checkUsageId = await run((db) =>
+          reserveBrainBudget(db, identity, "regenerate", job.id, claimCheckCents()),
+        )),
+      addUsage: (usage) => run((db) => addBrainUsage(db, identity, checkUsageId!, usage)),
+    });
+  }
   if (!(await params.heartbeat())) return { leaseLost: true };
   const ledger: DraftLedger = {
     claim: (key, payloadHash) =>
@@ -464,6 +505,7 @@ async function regenerate(params: {
           [key, ...ids],
         );
       }),
+    knownDraftIds: (threadId) => run((db) => threadDraftIds(db, identity, threadId)),
   };
   try {
     const receipt = await mailbox.createReplyDraft(
@@ -487,16 +529,18 @@ async function regenerate(params: {
       },
       ledger,
     );
-    const mismatch =
-      receipt.recipients !== undefined &&
-      (receipt.recipients.length !== 1 || receipt.recipients[0] !== recipient);
+    const mismatch = draftRecipientMismatch(receipt, recipient);
     const questions = draftQuestions(guarded.body, guarded.questions, {
       thirdParties: [recipient, ...(message.from?.name ? [message.from.name] : [])],
     });
-    await run((db) => recordDraftQuestions(db, identity, target.id, questions));
+    await recordQuestionsWithGrouping(run, identity, target.id, questions, params.questionGrouper);
     return {
       outcome: mismatch ? "recipient_mismatch" : receipt.simulated ? "simulated" : "drafted",
       questions: questions.length,
+      // Reviewer notes shown next to « Nouveau brouillon prêt » (pattern guard + claim check).
+      ...(guarded.issues.length || claimFlags.length
+        ? { flags: [...guarded.issues.map((i) => `guard:${i}`), ...claimFlags] }
+        : {}),
     };
   } catch (error) {
     if (error instanceof MailboxUncertainError) return { outcome: "uncertain" };

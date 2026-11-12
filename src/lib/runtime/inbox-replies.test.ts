@@ -5,6 +5,7 @@ vi.mock("ai", () => ({
   Output: { object: (o: unknown) => o },
 }));
 vi.mock("./provider", () => ({
+  generationSettings: (n: number) => ({ maxOutputTokens: n }),
   getModel: (p?: string) => `model:${p ?? "default"}`,
 }));
 import type { MailMessage } from "@/lib/integrations/mailbox-normalize";
@@ -127,6 +128,14 @@ describe("prompt injection", () => {
     expect(d.system).not.toContain("x@evil.test");
     expect(d.system).toContain("always goes only to the original sender");
   });
+  it("asks the single draft to answer the sender's earlier unanswered messages", () => {
+    const base = { message: mail(), thread: [], company: {}, sources, toneSamples: [] };
+    expect(draftPrompt(base).system).not.toContain("earlier message");
+    const d = draftPrompt({ ...base, earlierUnanswered: 2 });
+    expect(d.system).toContain("2 earlier message(s) from the same sender");
+    // Their content stays in the data block, never in the instructions.
+    expect(d.system).not.toContain(mail().text);
+  });
   it("never passes tools to the model", async () => {
     ai.generateText.mockResolvedValue({
       output: { classification: "noise", reason: "" },
@@ -215,12 +224,393 @@ describe("draft guard: never invent prices, contacts or links", () => {
   it("allows the sender's own address", () => {
     const result = guardDraft(
       {
-        body: "We will answer client@example.com shortly.",
+        body: "We will answer client@example.com.",
         questions: [],
         citations: [],
       },
       { sources, message: mail() },
     );
     expect(result.issues).toEqual([]);
+  });
+});
+
+describe("draft guard: never invent dates or times", () => {
+  const dated: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Ouvert du lundi au vendredi de 9h à 18h. Fermeture annuelle le 15 août. Salon le 2026-11-20.",
+    },
+  ];
+  const guard = (body: string, options?: { dates?: boolean }) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: dated, message: mail() }, options);
+
+  it.each([
+    "Nous passerons le 12 mars.",
+    "Livraison prévue mardi 14.",
+    "Je vous rappelle à 15h.",
+    "Rendez-vous à 10h30.",
+    "Intervention le 12/03.",
+    "Devis envoyé le 2026-10-12.",
+    "Nous viendrons demain.",
+    "Nous vous répondons d’ici vendredi.",
+    "On passe lundi prochain.",
+    "We will come next Monday.",
+    "We can be there at 3 pm.",
+  ])("replaces an unsourced date or time: %s", (body) => {
+    const result = guard(body);
+    expect(result.body).toContain("[[À CONFIRMER : date]]");
+    expect(result.issues).toContain("unsupported_date");
+    expect(result.questions).toContain(
+      "Date ou horaire à confirmer (proposé par le brouillon, non vérifié)",
+    );
+  });
+
+  it("keeps dates and hours written in trusted sources (accent/case-folded)", () => {
+    const result = guard("Nous sommes ouverts de 9h à 18h, fermés le 15 Aout, présents au salon le 2026-11-20.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).not.toContain("unsupported_date");
+  });
+
+  it("does not echo the proposed date into stored questions", () => {
+    const result = guard("Nous passerons le 12 mars à 10h30.");
+    expect(result.body).not.toMatch(/12 mars|10h30/);
+    expect(result.questions.join(" ")).not.toMatch(/12 mars|10h30/);
+  });
+
+  it("leaves durations, quantities and dates inside placeholders alone", () => {
+    const result = guard(
+      "Comptez 2 jours de travaux, sous 2h de route. [[À CONFIRMER : le 12 mars ?]] Nous avons 3 équipes.",
+    );
+    expect(result.body).toContain("Comptez 2 jours de travaux, sous 2h de route.");
+    expect(result.body).toContain("[[À CONFIRMER : le 12 mars ?]]");
+    expect(result.issues).not.toContain("unsupported_date");
+  });
+
+  it("is skipped for meeting drafts (checked against code-computed slots)", () => {
+    const result = guard("Je vous propose mardi 14 octobre à 10h00.", { dates: false });
+    expect(result.body).toBe("Je vous propose mardi 14 octobre à 10h00.");
+  });
+});
+
+describe("draft guard: never invent delays", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Nous répondons à toute demande de devis sous 48h. Intervention en urgence dans la journée.",
+    },
+  ];
+  const guard = (body: string, options?: { dates?: boolean }) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() }, options);
+  const DELAY_Q = "Délai à confirmer (proposé par le brouillon, non vérifié)";
+  const VAGUE_Q = "Promesse de délai vague (« rapidement »…) : préciser un délai réel ou la retirer";
+
+  it.each([
+    "Vous recevrez le devis sous 72h.",
+    "Les travaux seront terminés en 3 jours.",
+    "Nous revenons vers vous dans les 24 heures.",
+    "Réponse dans un délai de 5 jours ouvrés.",
+    "Livraison sous huitaine.",
+    "Nous vous rappelons dans la semaine.",
+    "Le chantier démarre d’ici 2 semaines.",
+    "Comptez sous 10 jours de délai.",
+    "We will reply within 2 business days.",
+    "You will hear from us in 3 days.",
+    "Le devis vous parviendra avant la fin du mois.",
+    "Nous passons en fin de semaine.",
+    "Le chantier démarre à la mi-novembre.",
+    "Démarrage d’ici la fin de l’année.",
+    "Nous livrons en début de semaine prochaine.",
+    "Le technicien passe la semaine prochaine.",
+    "We will send it by the end of the week.",
+    "Expect our quote next week.",
+  ])("replaces an unsourced delay: %s", (body) => {
+    const result = guard(body);
+    expect(result.body).toContain("[[À CONFIRMER : délai]]");
+    expect(result.issues).toContain("unsupported_delay");
+    expect(result.questions).toContain(DELAY_Q);
+  });
+
+  it("keeps delays written in trusted sources", () => {
+    const result = guard("Nous répondons sous 48H. Intervention possible dans la journée.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
+  it("leaves work durations and quantities alone", () => {
+    const result = guard("Comptez 2 jours de travaux, sous 2h de route, en 3 jours de chantier. Nous avons 3 équipes.");
+    expect(result.body).not.toContain("À CONFIRMER");
+    expect(result.issues).toEqual([]);
+  });
+
+  it("does not echo the proposed delay into stored questions", () => {
+    const result = guard("Devis envoyé sous 72h.");
+    expect(result.body).not.toContain("72h");
+    expect(result.questions.join(" ")).not.toContain("72");
+  });
+
+  it.each([
+    "Nous revenons vers vous rapidement.",
+    "Nous traitons votre demande dans les plus brefs délais.",
+    "Un technicien vous contacte au plus vite.",
+    "We will get back to you shortly.",
+  ])("flags a vague speed promise without rewriting it: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("vague_delay");
+    expect(result.questions).toContain(VAGUE_Q);
+    expect(result.body).toContain(body);
+    // Visible to the reviewer even without another placeholder in the body.
+    expect(result.body.startsWith("[[À CONFIRMER")).toBe(true);
+  });
+
+  it("does not flag a vague wording the business itself uses", () => {
+    const result = guardDraft(
+      { body: "Nous intervenons rapidement.", questions: [], citations: [] },
+      {
+        sources: [{ id: "s", kind: "memory", name: "Fiche", content: "Dépannage rapide : nous intervenons rapidement." }],
+        message: mail(),
+      },
+    );
+    expect(result.issues).not.toContain("vague_delay");
+  });
+
+  it("keeps a calendar-bound deadline written in trusted sources", () => {
+    const result = guardDraft(
+      { body: "Les travaux seront terminés avant la fin du mois.", questions: [], citations: [] },
+      {
+        sources: [{ id: "s", kind: "memory", name: "Fiche", content: "Chantier Dupont : fin des travaux avant la fin du mois." }],
+        message: mail(),
+      },
+    );
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
+  it("leaves past or descriptive month mentions alone", () => {
+    const result = guard("Merci pour votre message de la semaine dernière. Notre facture de fin de mois est jointe.");
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+
+  it("also applies to meeting drafts (slot checks do not cover delays)", () => {
+    const result = guard("Je vous confirme le créneau sous 72h.", { dates: false });
+    expect(result.body).toContain("[[À CONFIRMER : délai]]");
+  });
+
+  it("leaves a delay already inside a placeholder alone", () => {
+    const result = guard("[[À CONFIRMER : sous 72h ?]] Merci.");
+    expect(result.body).toContain("[[À CONFIRMER : sous 72h ?]]");
+    expect(result.issues).not.toContain("unsupported_delay");
+  });
+});
+
+describe("draft guard: more vague speed promises", () => {
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: [], message: mail() });
+  it.each([
+    "On vous rappelle dès que possible.",
+    "Nous passerons le plus vite possible.",
+    "Nous intervenons en urgence.",
+    "Votre dossier est traité en priorité.",
+    "We'll reply as soon as we can.",
+  ])("flags: %s", (body) => {
+    expect(guard(body).issues).toContain("vague_delay");
+  });
+});
+
+describe("draft guard: flag verbal commitments", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Pour toute fuite, nous interviendrons sur place. Devis gratuit.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const COMMIT_Q =
+    "Engagement pris au nom de l'entreprise (« nous passerons »…) : vérifier qu'il est tenable ou le retirer";
+
+  it.each([
+    "Bonjour, nous nous en occupons.",
+    "C'est noté, nous passerons voir le chantier.",
+    "Je m’en charge personnellement.",
+    "Nous vous garantissons un travail soigné.",
+    "Votre intervention est bien confirmée.",
+    "Nous acceptons votre demande de remise.",
+    "On va passer chez vous.",
+    "We'll take care of it.",
+    "Your booking is confirmed.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_commitment");
+    expect(result.questions).toContain(COMMIT_Q);
+    expect(result.body).toContain(body);
+    expect(result.body.startsWith("[[À CONFIRMER")).toBe(true);
+  });
+
+  it("does not flag a commitment the business itself states", () => {
+    const result = guard("Pour votre fuite, nous interviendrons sur place.");
+    expect(result.issues).not.toContain("unsupported_commitment");
+  });
+
+  it.each([
+    "Merci, c'est bien noté. Nous revenons vers vous avec un devis.",
+    "Pouvez-vous nous envoyer des photos ?",
+    "Nous nous permettons de vous demander l'adresse du chantier.",
+  ])("leaves courtesies and questions alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_commitment");
+  });
+
+  it("leaves a commitment inside a placeholder alone", () => {
+    const result = guard("[[À CONFIRMER : nous passerons ?]] Merci.");
+    expect(result.issues).not.toContain("unsupported_commitment");
+  });
+  it.each([
+    "Nous ferons le nécessaire pour votre toiture.",
+    "On fait le nécessaire.",
+    "Nous allons faire tout notre possible.",
+    "On vous rappelle demain matin.",
+    "Je vous rappellerai pour fixer la visite.",
+    "We'll call you back.",
+  ])("flags phrasings outside the first patterns: %s", (body) => {
+    expect(guard(body).issues).toContain("unsupported_commitment");
+  });
+
+  it.each([
+    "Pas de souci, on s'arrange.",
+    "On va s’arranger pour la date.",
+    "Nous trouverons une solution ensemble.",
+    "On va trouver un arrangement.",
+    "We'll work something out.",
+  ])("flags open-ended arrangements: %s", (body) => {
+    expect(guard(body).issues).toContain("unsupported_commitment");
+  });
+
+  it.each(["Je vous rappelle que le chantier est fermé le dimanche.", "Nous vous rappelons qu’un acompte est demandé."])(
+    "leaves reminders alone: %s",
+    (body) => {
+      expect(guard(body).issues).not.toContain("unsupported_commitment");
+    },
+  );
+});
+
+describe("draft guard: flag free services and refunds", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Devis gratuit sous conditions. Remboursement selon nos CGV.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const FREE_Q =
+    "Gratuité ou remboursement promis (« offert », « à nos frais »…) : vérifier que vos conditions le prévoient ou le retirer";
+
+  it.each([
+    "Le déplacement est offert.",
+    "Nous effectuerons un déplacement gratuit.",
+    "La reprise se fera sans frais supplémentaires.",
+    "Le remplacement de la pièce est à nos frais.",
+    "Nous vous rembourserons l'acompte.",
+    "Vous serez remboursé sous peu.",
+    "We will fix it free of charge.",
+    "We'll refund the deposit.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_free_offer");
+    expect(result.questions).toContain(FREE_Q);
+    expect(result.body).toContain(body);
+  });
+
+  it("does not flag a free service the business itself states", () => {
+    expect(guard("Bonjour, devis gratuit sous conditions, bien sûr.").issues).not.toContain(
+      "unsupported_free_offer",
+    );
+  });
+
+  it("does not let one free item vouch for another", () => {
+    expect(guard("Devis gratuit et déplacement gratuit.").issues).toContain("unsupported_free_offer");
+  });
+
+  it.each([
+    "Concernant votre demande de remboursement, pouvez-vous nous envoyer la facture ?",
+    "Pouvez-vous préciser si la pièce est sous garantie ?",
+    "Merci de votre offre de collaboration.",
+  ])("leaves questions and customer requests alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_free_offer");
+  });
+
+  it("leaves an offer inside a placeholder alone", () => {
+    expect(guard("[[À CONFIRMER : déplacement offert ?]] Merci.").issues).not.toContain(
+      "unsupported_free_offer",
+    );
+  });
+});
+
+describe("draft guard: flag discounts and commercial gestures", () => {
+  const sheet: ReplySource[] = [
+    {
+      id: "sheet",
+      kind: "memory",
+      name: "Fiche entreprise",
+      content: "Remise de 10 % pour les clients fidèles. Tarifs : main d'œuvre 55 € HT/h.",
+    },
+  ];
+  const guard = (body: string) =>
+    guardDraft({ body, questions: [], citations: [] }, { sources: sheet, message: mail() });
+  const DISCOUNT_Q =
+    "Remise ou geste commercial promis (« remise », « geste commercial »…) : vérifier que vous l'accordez ou le retirer";
+
+  it.each([
+    "Nous vous accordons une remise sur la main d'œuvre.",
+    "Je vous fais un petit geste.",
+    "Nous allons vous faire une réduction.",
+    "Nous vous proposons un tarif préférentiel.",
+    "À titre de geste commercial, la dépose est incluse.",
+    "Pour vous, ce sera un prix d'ami.",
+    "Les joints, c'est cadeau.",
+    "We'll give you a discount on the labour.",
+    "As a goodwill gesture, we include the removal.",
+  ])("flags without rewriting: %s", (body) => {
+    const result = guard(body);
+    expect(result.issues).toContain("unsupported_discount");
+    expect(result.questions).toContain(DISCOUNT_Q);
+    expect(result.body).toContain(body);
+  });
+
+  it("flags the concession that survives the amount guard", () => {
+    const result = guard("Nous appliquerons une remise de 15 % sur le devis.");
+    expect(result.issues).toEqual(
+      expect.arrayContaining(["unsupported_amount", "unsupported_discount"]),
+    );
+    expect(result.body).not.toContain("15 %");
+    expect(guard("Vous bénéficiez de 20 % de réduction.").issues).toContain("unsupported_discount");
+  });
+
+  it("does not flag a discount the business itself states", () => {
+    const result = guard("Vous êtes client fidèle : remise de 10 % sur ce devis.");
+    expect(result.issues).not.toContain("unsupported_discount");
+    expect(result.body).toContain("10 %");
+  });
+
+  it.each([
+    "Concernant votre demande de remise, nous revenons vers vous.",
+    "Nous ferons la remise en état du mur.",
+    "Nous effectuerons la remise à neuf du parquet.",
+    "La remise des clés est prévue en fin de chantier.",
+    "Pouvez-vous préciser le geste attendu ?",
+  ])("leaves customer requests and work descriptions alone: %s", (body) => {
+    expect(guard(body).issues).not.toContain("unsupported_discount");
+  });
+
+  it("leaves a discount inside a placeholder alone", () => {
+    expect(guard("[[À CONFIRMER : remise accordée ?]] Merci.").issues).not.toContain(
+      "unsupported_discount",
+    );
   });
 });

@@ -260,6 +260,7 @@ type AffectedRow = {
   outcome: string | null;
   regen_status: string | null;
   regen_draft_state: string | null;
+  regen_flags: unknown;
 };
 /**
  * Drafts that asked a now-answered question and were not sent yet: "nouvelle
@@ -269,12 +270,12 @@ export async function draftsWithNewInfo(ctx: Ctx = context(), limit = 10) {
   const rows = (
     await ctx.db.query<AffectedRow>(
       `SELECT DISTINCT ON (m.id) m.id, m.subject_preview, m.drafted_at, m.draft_state, o.outcome,
-         j.status AS regen_status, j.draft_state AS regen_draft_state
+         j.status AS regen_status, j.draft_state AS regen_draft_state, j.stats->'flags' AS regen_flags
        FROM brain_question_messages qm
        JOIN brain_questions q ON q.id=qm.question_id AND q.workspace_id=qm.workspace_id AND q.tenant_id=qm.tenant_id
        JOIN inbox_messages m ON m.id=qm.inbox_message_id AND m.workspace_id=qm.workspace_id AND m.tenant_id=qm.tenant_id
        LEFT JOIN brain_draft_outcomes o ON o.inbox_message_id=m.id AND o.workspace_id=m.workspace_id AND o.tenant_id=m.tenant_id
-       LEFT JOIN LATERAL (SELECT status, draft_state FROM brain_jobs b WHERE b.inbox_message_id=m.id AND b.workspace_id=m.workspace_id AND b.tenant_id=m.tenant_id ORDER BY b.created_at DESC LIMIT 1) j ON true
+       LEFT JOIN LATERAL (SELECT status, draft_state, stats FROM brain_jobs b WHERE b.inbox_message_id=m.id AND b.workspace_id=m.workspace_id AND b.tenant_id=m.tenant_id ORDER BY b.created_at DESC LIMIT 1) j ON true
        WHERE qm.workspace_id=$1 AND qm.tenant_id=$2 AND q.status='answered' AND q.answered_at > m.drafted_at
          AND m.status='drafted' AND m.draft_state IN ('created','simulated')
          AND m.drafted_at > now()-interval '14 days'
@@ -289,7 +290,13 @@ export async function draftsWithNewInfo(ctx: Ctx = context(), limit = 10) {
     draftedAt: r.drafted_at?.toISOString(),
     simulated: r.draft_state === "simulated",
     regeneration: r.regen_status
-      ? { status: r.regen_status, draftState: r.regen_draft_state ?? "none" }
+      ? {
+          status: r.regen_status,
+          draftState: r.regen_draft_state ?? "none",
+          flags: Array.isArray(r.regen_flags)
+            ? r.regen_flags.filter((f): f is string => typeof f === "string")
+            : [],
+        }
       : undefined,
   }));
 }

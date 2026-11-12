@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  draftRecipientMismatch,
   MailboxPolicyError,
   MailboxUncertainError,
   type DraftLedger,
@@ -27,6 +28,7 @@ import {
   type MeetingPlan,
   type Slot,
 } from "@/lib/calendar/slots";
+import { runClaimCheck, type ClaimChecker } from "./claim-check";
 import type { ReplyContext } from "./context";
 
 export type InboxBatch = {
@@ -164,7 +166,7 @@ export async function processMailboxBatch(params: {
   model: InboxModel;
   store: InboxStore;
   context: ReplyContext;
-  costs: { classifyCents: number; draftCents: number };
+  costs: { classifyCents: number; draftCents: number; claimCheckCents?: number };
   now?: Date;
   /** Checked before each message; true = stop cleanly, the batch is resumed later. */
   shouldYield?: () => boolean;
@@ -183,6 +185,12 @@ export async function processMailboxBatch(params: {
   };
   /** Meeting requests: code-computed slots (calendar) or ask for availabilities. */
   meetings?: MeetingPlanner;
+  /**
+   * Model-assisted claim check (opt-in, ./claim-check.ts): adds reviewer flags
+   * for paraphrased promises the pattern guard misses. Never rewrites the body;
+   * any failure keeps the guard's result.
+   */
+  claimChecker?: ClaimChecker;
 }): Promise<BatchStats> {
   const { batch, mailbox, model, store, context, costs } = params;
   const stats: BatchStats = {
@@ -216,17 +224,62 @@ export async function processMailboxBatch(params: {
     .filter((m) => !batch.since || !m.receivedAt || m.receivedAt >= batch.since)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
   stats.listed = messages.length;
-  let tone: string[] | undefined;
-  const toneSamples = async () => {
-    if (tone) return tone;
-    try {
-      tone = (await mailbox.listSent({ windowDays: 31, maxMessages: 3 }))
-        .map((m) => m.text.slice(0, 1200))
-        .filter(Boolean);
-    } catch {
-      tone = []; // Tone is optional; never block a draft on it.
-    }
-    return tone;
+  // One sent-mail read per batch, shared by tone samples and owner addresses.
+  let sentSample: Promise<MailMessage[]> | undefined;
+  const recentSent = () =>
+    (sentSample ??= mailbox
+      .listSent({ windowDays: 31, maxMessages: 3 })
+      // Optional context: never block a draft on it.
+      .catch((): MailMessage[] => []));
+  const toneSamples = async () =>
+    (await recentSent()).map((m) => m.text.slice(0, 1200)).filter(Boolean);
+  /**
+   * The owner's own addresses. Outlook inbox messages never carry
+   * `fromOwner` (only the Sent Items copy does), so a note-to-self or a mail
+   * sent from the owner's address would otherwise be drafted as a "reply" to
+   * the owner. Read from sent mail (From = the mailbox owner).
+   */
+  let owners: Promise<Set<string>> | undefined;
+  const ownerAddresses = () =>
+    (owners ??= recentSent().then(
+      (sent) =>
+        new Set(
+          sent
+            .map((m) => m.from?.address.toLowerCase())
+            .filter((a): a is string => !!a),
+        ),
+    ));
+  const fromOwnAddress = (m: MailMessage, extra: Iterable<string> = []) => {
+    const address = m.from?.address.toLowerCase();
+    return !!address && new Set(extra).has(address);
+  };
+  /** Addresses of the thread's sent copies (Outlook: Sent Items). */
+  const ownerAddressesIn = (thread: MailMessage[]) =>
+    thread
+      .filter((m) => m.fromOwner && !m.isDraft)
+      .map((m) => m.from?.address.toLowerCase() ?? "");
+  /**
+   * One draft per conversation and sender. Messages are processed newest
+   * first; once the newest message of a sender in a thread has a draft (its
+   * prompt carries the earlier ones), older unanswered messages of the same
+   * sender in that thread are not drafted again: a second draft would compete
+   * with the first in the same conversation and cost a second quota unit.
+   */
+  const conversationKey = (m: MailMessage) =>
+    m.from?.address ? `${m.threadId}\n${m.from.address.toLowerCase()}` : null;
+  /** Conversation key → id of the message whose draft covers it. */
+  const drafted = new Map<string, string>();
+  /** Newer message whose draft may exist (uncertain): older ones wait. */
+  const pending = new Map<string, string>();
+  const markConversation = (m: MailMessage, map: Map<string, string>) => {
+    const key = conversationKey(m);
+    if (key && !map.has(key)) map.set(key, m.id);
+  };
+  /** Covered by another (newer) message of the same conversation. */
+  const coveredBy = (m: MailMessage, map: Map<string, string>) => {
+    const key = conversationKey(m);
+    const owner = key ? map.get(key) : undefined;
+    return owner !== undefined && owner !== m.id;
   };
   for (const message of messages) {
     if (quotaUsed()) {
@@ -243,6 +296,8 @@ export async function processMailboxBatch(params: {
       break;
     }
     const row = await store.upsertMessage(message, contentHash(message));
+    if (row.status === "drafted") markConversation(message, drafted);
+    if (row.status === "uncertain") markConversation(message, pending);
     if (
       TERMINAL.has(row.status) ||
       (row.status === "classified" &&
@@ -252,10 +307,25 @@ export async function processMailboxBatch(params: {
       stats.reused++;
       continue;
     }
-    const skip = skipReason(message);
+    const skip =
+      skipReason(message) ??
+      (fromOwnAddress(message, await ownerAddresses()) ? "own_message" : null);
     if (skip) {
       await store.update(row.rowId, { status: "skipped", skipReason: skip });
       stats.skipped++;
+      continue;
+    }
+    if (coveredBy(message, drafted)) {
+      // Covered by the draft of the sender's newer message in this thread.
+      await store.update(row.rowId, {
+        status: "skipped",
+        skipReason: "superseded",
+      });
+      stats.skipped++;
+      continue;
+    }
+    if (coveredBy(message, pending)) {
+      // The newer message's draft may already exist: retried next batch.
       continue;
     }
     const flags = injectionSignals(`${message.subject}\n${message.text}`).map(
@@ -283,10 +353,29 @@ export async function processMailboxBatch(params: {
       }
       if (!ACTIONABLE.has(classification)) continue;
       stats.actionable++;
-      if (params.requests)
+      let thread: MailMessage[] | undefined;
+      if (params.requests) {
+        // Before a request sheet (level 7) is created: a note-to-self whose
+        // owner address was not in the recent sent sample (nothing sent for
+        // 31 days, or an alias) must not become a "client request". A failed
+        // read keeps the previous behaviour (tracked; the draft path below
+        // reads the thread again and fails the row as before).
+        thread = await mailbox.readThread(message.threadId).catch((error) => {
+          if (error instanceof MailboxPolicyError) throw error;
+          return undefined;
+        });
+        if (thread && fromOwnAddress(message, ownerAddressesIn(thread))) {
+          await store.update(row.rowId, {
+            status: "skipped",
+            skipReason: "own_message",
+          });
+          stats.skipped++;
+          continue;
+        }
         await params.requests
           .track({ rowId: row.rowId, message, classification })
           .catch(() => {});
+      }
       if (stats.drafted >= batch.maxDrafts) {
         // Stays non-terminal: a later batch with remaining quota drafts it.
         await store.update(row.rowId, {
@@ -303,7 +392,7 @@ export async function processMailboxBatch(params: {
         stats.needsReview++;
         continue;
       }
-      const thread = await mailbox.readThread(message.threadId);
+      thread ??= await mailbox.readThread(message.threadId);
       if (
         thread.some(
           (m) => m.fromOwner && !m.isDraft && m.receivedAt > message.receivedAt,
@@ -316,12 +405,29 @@ export async function processMailboxBatch(params: {
         stats.skipped++;
         continue;
       }
+      // Same check against the thread's sent copies (Outlook marks them via
+      // Sent Items): catches an owner address absent from the recent sample.
+      if (
+        fromOwnAddress(message, ownerAddressesIn(thread))
+      ) {
+        await store.update(row.rowId, {
+          status: "skipped",
+          skipReason: "own_message",
+        });
+        stats.skipped++;
+        continue;
+      }
       if (!(await store.reserveBudget(row.rowId, costs.draftCents))) {
         stats.budgetExhausted = true;
         break;
       }
+      // Earlier messages of the same sender with no reply after them: this
+      // draft answers them too (older rows are then skipped as superseded).
+      const earlier = unansweredEarlier(message, thread);
       const sources = context.sourcesFor(
-        `${message.subject}\n${message.text}`.slice(0, 2000),
+        [`${message.subject}\n${message.text}`, ...earlier.map((m) => m.text)]
+          .join("\n")
+          .slice(0, 2000),
       );
       // Meeting detection is deterministic; the plan (slots or "ask") is code.
       const meetingKind = params.meetings
@@ -343,6 +449,7 @@ export async function processMailboxBatch(params: {
         sources,
         toneSamples: await toneSamples(),
         ...(meeting ? { meeting } : {}),
+        ...(earlier.length ? { earlierUnanswered: earlier.length } : {}),
       });
       await store.addUsage(row.rowId, generated.usage);
       // Strict schema check before the guard: wrong shape/oversized → failed,
@@ -350,7 +457,8 @@ export async function processMailboxBatch(params: {
       // never read anyway: the recipient is computed by code above.
       const parsedDraft = replyDraftSchema.safeParse(generated.output);
       if (!parsedDraft.success) throw new InvalidModelOutput();
-      const guarded = guardDraft(parsedDraft.data, { sources, message });
+      // Meeting drafts: dates are checked against the offered slots below.
+      const guarded = guardDraft(parsedDraft.data, { sources, message }, { dates: !meeting });
       const allFlags = [...flags, ...guarded.issues.map((i) => `guard:${i}`)];
       if (meeting) {
         // Critique step for meetings: only code-computed slots may appear.
@@ -366,6 +474,14 @@ export async function processMailboxBatch(params: {
           ...check.issues.map((i) => `meeting:${i}`),
         );
       }
+      if (params.claimChecker)
+        allFlags.push(
+          ...(await runClaimCheck(guarded, sources, {
+            checker: params.claimChecker,
+            reserve: () => store.reserveBudget(row.rowId, costs.claimCheckCents ?? 1),
+            addUsage: (usage) => store.addUsage(row.rowId, usage),
+          })),
+        );
       await store.update(row.rowId, {
         status: "drafting",
         flags: allFlags,
@@ -393,10 +509,8 @@ export async function processMailboxBatch(params: {
         store.ledger(row.rowId),
       );
       stats.draftsCreated = (stats.draftsCreated ?? 0) + 1;
-      const mismatch =
-        receipt.recipients !== undefined &&
-        (receipt.recipients.length !== 1 ||
-          receipt.recipients[0] !== recipient);
+      markConversation(message, drafted);
+      const mismatch = draftRecipientMismatch(receipt, recipient);
       await store.update(row.rowId, {
         status: mismatch ? "needs_review" : "drafted",
         flags: mismatch ? [...allFlags, "recipient_mismatch"] : allFlags,
@@ -417,6 +531,7 @@ export async function processMailboxBatch(params: {
     } catch (error) {
       if (error instanceof MailboxPolicyError) throw error;
       if (error instanceof MailboxUncertainError) {
+        markConversation(message, pending);
         await store.update(row.rowId, { status: "uncertain" });
         stats.uncertain++;
         continue;
@@ -427,4 +542,30 @@ export async function processMailboxBatch(params: {
     }
   }
   return stats;
+}
+
+/**
+ * Earlier messages of the same sender in the thread with no reply from the
+ * owner after them, oldest first. Same sender = same From address.
+ */
+export function unansweredEarlier(
+  message: MailMessage,
+  thread: MailMessage[],
+): MailMessage[] {
+  const sender = message.from?.address.toLowerCase();
+  if (!sender) return [];
+  const lastOwnerReply = thread
+    .filter((m) => m.fromOwner && !m.isDraft)
+    .reduce((max, m) => (m.receivedAt > max ? m.receivedAt : max), "");
+  return thread
+    .filter(
+      (m) =>
+        m.id !== message.id &&
+        !m.fromOwner &&
+        !m.isDraft &&
+        m.from?.address.toLowerCase() === sender &&
+        m.receivedAt < message.receivedAt &&
+        m.receivedAt > lastOwnerReply,
+    )
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
 }

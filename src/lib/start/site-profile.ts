@@ -99,11 +99,26 @@ export function validateSynthesis(output: SynthesisOutput, profile: StartProfile
   const byId = new Map(profile.facts.filter((f) => f.id).map((f) => [f.id as string, f]));
   const cited = [...new Set(output.sources)].filter((id) => byId.has(id));
   if (!cited.length) throw new Error("summary cites no known fact");
-  const summary = output.summary.replace(/\s+/g, " ").trim();
-  if (/[—–]/.test(summary) || injectionSignals(summary).length || hasContactData(summary)) throw new Error("summary rejected");
-  const support = cited.map((id) => `${byId.get(id)?.quote} ${byId.get(id)?.value ?? ""}`).join(" ");
-  const allowed = new Set([...support.matchAll(NUM)].map((m) => numKey(m[0])));
-  if ([...summary.matchAll(NUM)].some((m) => !allowed.has(numKey(m[0])))) throw new Error("unsupported figure");
+  // Dashes are a style rule, not a safety one: turn them into commas instead of
+  // discarding a grounded summary.
+  const summary = output.summary
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .replace(/,\s*([.,])/g, "$1")
+    .trim();
+  if (injectionSignals(summary).length || hasContactData(summary)) throw new Error("summary rejected");
+  // Every figure must exist in a fact of the site. A figure taken from a fact
+  // the model forgot to cite is accepted and that fact is added to the sources.
+  const text = (f: StartProfile["facts"][number]) => `${f.quote} ${f.value ?? ""}`;
+  const numbersOf = (t: string) => new Set([...t.matchAll(NUM)].map((m) => numKey(m[0])));
+  const support = numbersOf(cited.map((id) => text(byId.get(id)!)).join(" "));
+  for (const key of [...summary.matchAll(NUM)].map((m) => numKey(m[0]))) {
+    if (support.has(key)) continue;
+    const backing = [...byId.entries()].find(([, f]) => numbersOf(text(f)).has(key));
+    if (!backing) throw new Error("unsupported figure");
+    cited.push(backing[0]);
+    support.add(key);
+  }
   const corpus = fold([profile.name, ...profile.facts.map((f) => `${f.quote} ${f.value ?? ""}`)].join(" "));
   const name = output.name.replace(/\s+/g, " ").trim();
   return {

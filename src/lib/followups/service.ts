@@ -4,7 +4,7 @@ import { DEMO_MAILBOX_PAGE, demoMailboxActive } from "@/lib/integrations/demo-ma
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { parseLocalDate } from "./calendar";
-import { PIPELINE_STATUSES, STATUS_LABELS, type PipelineStatus } from "./detect";
+import { FOLLOWUP_READY_SQL, PIPELINE_STATUSES, STATUS_LABELS, type PipelineStatus } from "./detect";
 import { computeReport, loadReportInput, reportWeek, type WeeklyReport } from "./report";
 import { loadPipelineSettings } from "./store";
 
@@ -134,7 +134,7 @@ export async function listRequests(filters: z.infer<typeof listSchema>) {
   }
   if (filters.followup === "ready")
     where.push(
-      "EXISTS (SELECT 1 FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id AND f.status IN ('drafted','needs_review') AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)) AND i.status NOT IN ('gagne','perdu')",
+      `EXISTS (SELECT 1 FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id AND ${FOLLOWUP_READY_SQL})`,
     );
   const rows = (
     await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.first_customer_at DESC NULLS LAST, i.created_at DESC LIMIT 200`, args)
@@ -170,21 +170,39 @@ export async function requestAction(id: string, input: z.infer<typeof actionSche
     dismiss_followups: "UPDATE pipeline_items SET followups_dismissed=true, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
     resume_followups: "UPDATE pipeline_items SET followups_dismissed=false, snoozed_until=NULL, next_check_at=now(), updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND status NOT IN ('gagne','perdu') AND $4::text IS NOT NULL",
     erase_contact:
-      "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), next_check_at=NULL, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
+      "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, contact_domain=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), next_check_at=NULL, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3 AND $4::text IS NOT NULL",
   };
   const result = await ctx.db.query(sql[input.action], input.action === "snooze" ? [...args, input.days] : args);
   if (!result.rowCount) throw new PlatformError("Demande introuvable ou action impossible dans son état actuel.", 404);
   if (input.action === "dismiss_followups" || input.action === "won" || input.action === "lost" || input.action === "erase_contact")
     // Proposed follow-ups that produced no draft are closed; drafts already in the mailbox stay there.
     await ctx.db.query(
-      "UPDATE followups SET status='dismissed', updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3 AND draft_state='none' AND status IN ('drafting','failed','not_needed')",
+      "UPDATE followups SET status='dismissed', updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3 AND draft_state='none' AND status IN ('drafting','failed','not_needed','needs_review')",
       [id, ...p(ctx)],
     );
-  if (input.action === "erase_contact")
+  if (input.action === "erase_contact") {
     await ctx.db.query(
       "UPDATE followups SET draft_preview=NULL, questions='[]'::jsonb, updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3",
       [id, ...p(ctx)],
     );
+    // The thread's reply previews (subject, draft greeting, questions) name the
+    // contact too: without this they stayed in Today and in the export for 30 days.
+    // Citations and offered slots go with them: nothing of that draft is kept.
+    await ctx.db.query(
+      `UPDATE inbox_messages m SET subject_preview=NULL, draft_preview=NULL, questions='[]'::jsonb, citations='[]'::jsonb, proposed_slots=NULL, updated_at=now()
+       FROM pipeline_items i WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3
+         AND m.workspace_id=i.workspace_id AND m.tenant_id=i.tenant_id AND m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id`,
+      [id, ...p(ctx)],
+    );
+    await ctx.db.query(
+      `UPDATE brain_jobs j SET draft_preview=NULL
+       FROM pipeline_items i JOIN inbox_messages m ON m.workspace_id=i.workspace_id AND m.tenant_id=i.tenant_id
+         AND m.connected_account_id=i.connected_account_id AND m.thread_id=i.thread_id
+       WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3
+         AND j.inbox_message_id=m.id AND j.workspace_id=i.workspace_id AND j.tenant_id=i.tenant_id AND j.draft_preview IS NOT NULL`,
+      [id, ...p(ctx)],
+    );
+  }
   const row = (await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE i.id=$1 AND i.workspace_id=$2 AND i.tenant_id=$3`, [id, ...p(ctx)])).rows[0];
   return publicItem(row!);
 }
@@ -277,8 +295,7 @@ export async function todaySummary(now = new Date()) {
     (
       await ctx.db.query<{ n: string }>(
         `SELECT count(*)::text AS n FROM followups f JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
-         WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND f.status IN ('drafted','needs_review') AND i.status NOT IN ('gagne','perdu')
-           AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)`,
+         WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND ${FOLLOWUP_READY_SQL}`,
         p(ctx),
       )
     ).rows[0]?.n ?? 0,

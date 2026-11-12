@@ -56,16 +56,28 @@ export function parseData(data: unknown): unknown {
   }
   return data ?? {};
 }
+/**
+ * One mailbox (RFC 5322 name-addr or bare addr-spec). The address is the
+ * angle-addr that ENDS the value: the display name before it is free text
+ * chosen by the sender, so `boss@client.fr <attacker@evil.test>` is
+ * attacker@evil.test, never boss@client.fr. A display name that itself holds
+ * `<` or `>` (quoted or not, e.g. `"<boss@client.fr>" <attacker@evil.test>`)
+ * is ambiguous: no address (fail closed — the message is skipped as
+ * `no_sender`, nothing is drafted to anyone). Trailing text after the
+ * angle-addr is refused the same way.
+ */
 export function parseAddress(
   raw: string,
 ): { address: string; name?: string } | null {
-  const angle = raw.match(/<([^<>\s]+@[^<>\s]+)>/);
-  const address = (angle?.[1] ?? raw).trim().toLowerCase();
+  const trimmed = raw.trim();
+  const angle = trimmed.match(/<([^<>\s]+@[^<>\s]+)>$/);
+  const name = angle
+    ? trimmed.slice(0, trimmed.length - angle[0].length).trim().replace(/^"|"$/g, "")
+    : undefined;
+  if (name && /[<>]/.test(name)) return null;
+  const address = (angle?.[1] ?? trimmed).toLowerCase();
   if (!/^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/.test(address))
     return null;
-  const name = angle
-    ? raw.slice(0, raw.indexOf("<")).trim().replace(/^"|"$/g, "")
-    : undefined;
   return { address, ...(name ? { name: name.slice(0, 200) } : {}) };
 }
 function addressList(raw: string) {
@@ -126,7 +138,7 @@ function headerMap(list: unknown): Record<string, string> {
   }
   return out;
 }
-function messagesArray(data: unknown): Obj[] {
+export function messagesArray(data: unknown): Obj[] {
   const d = obj(parseData(data));
   const candidates = [
     d.messages,

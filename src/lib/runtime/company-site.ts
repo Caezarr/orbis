@@ -3,6 +3,7 @@ import { request } from "node:https";
 import ipaddr from "ipaddr.js";
 import { load } from "cheerio";
 import { brokerDecide } from "./broker";
+import { decodeBody } from "./decode-body";
 
 export function publicAddress(address: string) {
   try {
@@ -52,12 +53,22 @@ export function extractCompany(html: string, url: string) {
 
 export type PublicFetchOptions = {
   signal: AbortSignal;
-  /** Accepted content types (substring match on the Content-Type header). */
+  /** Accepted content types (substring match on the Content-Type header); the wildcard type accepts any. */
   accept?: string[];
   maxBytes?: number;
   maxHops?: number;
 };
 export type PublicResource = { url: string; contentType: string; body: string };
+/** The server answered, but not with a readable 200: `status` is the HTTP status it gave. */
+export class PublicFetchError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "PublicFetchError";
+  }
+}
 
 function abortable<T>(promise: Promise<T>, signal: AbortSignal) {
   return Promise.race([
@@ -112,11 +123,12 @@ export async function fetchPublicResource(raw: string | URL, options: PublicFetc
               resolve({ status, location: res.headers.location, body: "", contentType });
               return;
             }
-            if (status !== 200 || !accept.some((type) => contentType.includes(type))) {
+            if (status !== 200 || !accept.some((type) => type === "*/*" || contentType.includes(type))) {
               res.resume();
               reject(
-                new Error(
+                new PublicFetchError(
                   "Ce site ne fournit pas de page HTML publique lisible. Décrivez votre activité pour continuer.",
+                  status,
                 ),
               );
               return;
@@ -137,7 +149,7 @@ export async function fetchPublicResource(raw: string | URL, options: PublicFetc
               chunks.push(Buffer.from(chunk));
             });
             res.on("error", reject);
-            res.on("end", () => resolve({ status, body: Buffer.concat(chunks).toString("utf8"), contentType }));
+            res.on("end", () => resolve({ status, body: decodeBody(Buffer.concat(chunks), contentType), contentType }));
           },
         );
         req.on("error", reject);

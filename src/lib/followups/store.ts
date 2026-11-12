@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { DraftLedger, DraftReceipt } from "@/lib/integrations/mailbox";
-import { RECONCILE_INTERVAL, workspaceBudgetAllows, type Scoped } from "@/lib/inbox/store";
+import { RECONCILE_INTERVAL, threadDraftIds, workspaceBudgetAllows, type Scoped } from "@/lib/inbox/store";
 import type { ModelUsage } from "@/lib/runtime/inbox-replies";
 import type { PipelineStatus } from "./detect";
 import type { FollowupSettings, FollowupStore, RequestStore, TrackedItem, UsageKind } from "./tracker";
@@ -56,7 +56,7 @@ export async function addPipelineUsage(db: PoolClient, ids: Ids, usageId: string
 /** Retention: contact data nulled 24 months after the last activity; follow-up previews after 30 days. */
 export async function purgePipeline(db: PoolClient, ids: Ids) {
   await db.query(
-    "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=now(), updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND contact_erased_at IS NULL",
+    "UPDATE pipeline_items SET contact_name=NULL, contact_email=NULL, contact_domain=NULL, need_summary=NULL, budget_text=NULL, deadline_text=NULL, contact_erased_at=COALESCE(contact_erased_at, now()), updated_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND purge_after<now() AND (contact_erased_at IS NULL OR contact_domain IS NOT NULL)",
     p(ids),
   );
   await db.query(
@@ -199,6 +199,7 @@ export function postgresFollowupStore(
           [key, ...p(ids)],
         );
       }),
+    knownDraftIds: (threadId) => run((db) => threadDraftIds(db, ids, threadId)),
   });
   return {
     settings: () => run((db) => loadPipelineSettings(db, ids)) as Promise<FollowupSettings>,
@@ -256,13 +257,14 @@ export function postgresFollowupStore(
       run(async (db) => {
         const id = randomUUID();
         // New stage, or reclaim a stage row that produced no draft (failed /
-        // not needed for an older owner message). Never touches a drafted row.
+        // not needed or held at the recipient check, for an older owner
+        // message). Never touches a drafted row.
         const r = await db.query<{ id: string }>(
           `INSERT INTO followups(id,workspace_id,tenant_id,pipeline_item_id,stage,status,owner_message_at,due_at)
            VALUES($1,$2,$3,$4,$5,'drafting',$6,$7)
            ON CONFLICT(pipeline_item_id,stage) DO UPDATE SET status='drafting', owner_message_at=EXCLUDED.owner_message_at, due_at=EXCLUDED.due_at, reason=NULL, updated_at=now()
            WHERE followups.workspace_id=$2 AND followups.tenant_id=$3 AND followups.draft_state='none' AND followups.drafted_at IS NULL
-             AND (followups.status='failed' OR (followups.status='not_needed' AND followups.owner_message_at<EXCLUDED.owner_message_at))
+             AND (followups.status='failed' OR (followups.status IN ('not_needed','needs_review') AND followups.owner_message_at<EXCLUDED.owner_message_at))
            RETURNING id`,
           [id, ...p(ids), itemId, input.stage, input.ownerMessageAt, input.dueAt],
         );

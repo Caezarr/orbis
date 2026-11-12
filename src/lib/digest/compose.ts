@@ -17,6 +17,11 @@ export type DigestCounts = {
   orbiQuestions: number;
   /** Follow-up drafts waiting for review right now. */
   followupsReady: number;
+  /**
+   * Test-mode drafts (inbox in the window + follow-ups right now): simulated,
+   * visible in Orbis only. Never counted as "in your mailbox" above.
+   */
+  simulatedDrafts: number;
 };
 export type DigestMessage = { subject: string; text: string; html: string };
 
@@ -32,12 +37,13 @@ export function normalizeCounts(counts: DigestCounts): DigestCounts {
     needsReview: n(counts.needsReview),
     orbiQuestions: n(counts.orbiQuestions),
     followupsReady: n(counts.followupsReady),
+    simulatedDrafts: n(counts.simulatedDrafts),
   };
 }
 /** Nothing to decide: no e-mail is sent that day. */
 export function isEmptyDigest(counts: DigestCounts) {
   const c = normalizeCounts(counts);
-  return !c.draftsReady && !c.needsReview && !c.orbiQuestions && !c.followupsReady;
+  return !c.draftsReady && !c.needsReview && !c.orbiQuestions && !c.followupsReady && !c.simulatedDrafts;
 }
 
 /** https origin of the app; anything else falls back to the canonical site. */
@@ -61,6 +67,10 @@ function lines(c: DigestCounts) {
           : ""),
     );
   if (c.followupsReady) out.push(`${plural(c.followupsReady, "relance préparée", "relances préparées")} à relire`);
+  if (c.simulatedDrafts)
+    out.push(
+      `${plural(c.simulatedDrafts, "brouillon d’essai", "brouillons d’essai")} (mode test) visible${c.simulatedDrafts > 1 ? "s" : ""} dans Orbis seulement : rien n’a été écrit dans votre boîte`,
+    );
   if (c.needsReview) out.push(`${plural(c.needsReview, "message à vérifier", "messages à vérifier")} : Orbi n’a pas préparé de brouillon`);
   if (c.orbiQuestions)
     out.push(`${plural(c.orbiQuestions, "question d’Orbi", "questions d’Orbi")} en attente : une réponse sert à tous les prochains brouillons`);

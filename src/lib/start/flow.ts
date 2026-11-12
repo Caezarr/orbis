@@ -496,6 +496,7 @@ export const SKIP_LABELS: Record<string, string> = {
   promotional_category: "Promotions, réseaux sociaux, mises à jour",
   empty: "Messages vides",
   already_replied: "Déjà traités par vous dans le fil",
+  superseded: "Messages précédents du même client, repris dans un seul brouillon",
 };
 export const CLASSIFICATION_LABELS: Record<string, string> = {
   customer_request: "Demande client",
@@ -524,17 +525,39 @@ export function meetingFlagLabel(flag: string): string | null {
 export function flagLabel(flag: string) {
   if (flag.startsWith("injection_suspected:"))
     return "Le mail contient des instructions suspectes : elles ont été ignorées.";
+  if (flag === "guard:vague_delay")
+    return "Promesse de délai vague (« rapidement »…) : précisez un délai réel ou retirez-la.";
+  if (flag === "guard:unsupported_commitment")
+    return "Engagement pris en votre nom (« nous passerons »…) : vérifiez qu’il est tenable ou retirez-le.";
+  if (flag === "guard:unsupported_free_offer")
+    return "Gratuité ou remboursement promis (« offert »…) : vérifiez que vos conditions le prévoient ou retirez-le.";
+  if (flag === "guard:unsupported_discount")
+    return "Remise ou geste commercial promis en votre nom : vérifiez que vous l’accordez ou retirez-le.";
+  // Model-assisted claim check: same reviewer wording as the pattern guard.
+  if (flag.startsWith("claim_check:unsupported_"))
+    return flagLabel(
+      flag === "claim_check:unsupported_delay"
+        ? "guard:vague_delay"
+        : `guard:${flag.slice("claim_check:".length)}`,
+    );
+  // claim_check:unavailable / :budget are internal: the pattern guard still ran.
+  if (flag.startsWith("claim_check:")) return null;
   if (flag.startsWith("guard:"))
     return "Des informations non sourcées ont été remplacées par des questions.";
   if (flag.startsWith("meeting:")) return meetingFlagLabel(flag);
   return (
     {
       reply_to_diverges: "L’adresse de réponse diffère de l’expéditeur : à vérifier avant tout brouillon.",
-      recipient_mismatch: "Le destinataire du brouillon ne correspond pas à l’expéditeur : à vérifier.",
+      recipient_mismatch: "Destinataire du brouillon différent de l’expéditeur, ou non confirmé par la messagerie : à vérifier avant d’envoyer.",
       awaiting_draft_quota: "En attente : limite de brouillons du premier passage atteinte.",
+      recipient_check: "Destinataire inhabituel dans la conversation : aucune relance préparée, à vérifier.",
     }[flag] ?? null
   );
 }
+
+/** Reviewer notes for a draft: one line per distinct label, internal flags dropped. */
+export const flagLabels = (flags: string[]) =>
+  [...new Set(flags.map(flagLabel))].filter((label): label is string => !!label);
 
 export type ResultSummary = {
   drafts: InboxMessageView[];
@@ -607,6 +630,9 @@ export function splitPlaceholders(text: string) {
 export const SIMULATED_LABEL = "Exemple simulé — pas un vrai mail";
 export const NOT_FOUND_LABEL =
   "Orbi ne trouve pas la réponse sur votre site → il vous la demandera une seule fois";
+/** Same label when step 1 was a description: there is no site to point at. */
+export const NOT_FOUND_LABEL_DESCRIPTION =
+  "Orbi ne trouve pas la réponse dans votre description → il vous la demandera une seule fois";
 /** Fictitious, code-defined parties of the example emails (never model output). */
 export const FICTITIOUS_SENDER = { name: "Client fictif", address: "client.fictif@exemple.invalid" } as const;
 export const FICTITIOUS_RECIPIENT = "Vous (exemple)";

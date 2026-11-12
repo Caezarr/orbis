@@ -14,12 +14,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: "weekly" as const,
     priority,
   });
-  return [
-    entry("", 1.0),
-    // The catalogue is frozen in V1 (redirects to /start) unless re-enabled.
-    ...(frozenSurfacesEnabled() ? [entry("/catalog", 0.8)] : []),
-    entry("/for", 0.8),
-    ...hubs.map((h) => entry(`/for/${h.slug}`, 0.7)),
-    ...getAllJobParams().map(({ hub, job }) => entry(`/for/${hub}/${job}`, 0.6)),
-  ];
+  // The catalogue and the industry pages are frozen in V1 (they redirect to
+  // /start) unless re-enabled.
+  const frozen = frozenSurfacesEnabled()
+    ? [
+        entry("/catalog", 0.8),
+        entry("/for", 0.8),
+        ...hubs.map((h) => entry(`/for/${h.slug}`, 0.7)),
+        ...getAllJobParams().map(({ hub, job }) => entry(`/for/${hub}/${job}`, 0.6)),
+      ]
+    : [];
+  return [entry("", 1.0), entry("/start", 0.9), ...frozen];
 }
