@@ -9,7 +9,8 @@ vi.mock("@/lib/platform/context", () => ({
     role: mocks.role,
   }),
 }));
-import { requestAction } from "./service";
+import { FOLLOWUP_READY_SQL } from "./detect";
+import { listRequests, requestAction } from "./service";
 import { purgePipeline } from "./store";
 
 const row = { id: "item", status: "nouveau", kind: "quote_request", contact_erased_at: new Date(), thread_id: "th", provider: "gmail", drafts: 0, followups: [] };
@@ -47,6 +48,23 @@ describe("erase_contact", () => {
     mocks.role = "operator";
     await expect(requestAction("item", { action: "erase_contact" })).rejects.toThrow(/propriétaire/);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe("ready follow-ups and closing actions", () => {
+  it("dismiss and erase also close a follow-up held at the recipient check (no draft)", async () => {
+    for (const action of ["dismiss_followups", "erase_contact"] as const) {
+      mocks.query.mockClear();
+      await requestAction("item", { action });
+      const close = calls().find((c) => c.sql.startsWith("UPDATE followups SET status='dismissed'"));
+      expect(close?.sql).toContain("draft_state='none' AND status IN ('drafting','failed','not_needed','needs_review')");
+      expect(close?.params).toEqual(["item", "workspace", "tenant"]);
+    }
+  });
+  it("the « relances prêtes » filter uses the shared written-draft predicate", async () => {
+    await listRequests({ followup: "ready" });
+    const list = calls().find((c) => c.sql.includes("EXISTS (SELECT 1 FROM followups f"));
+    expect(list?.sql).toContain(FOLLOWUP_READY_SQL);
   });
 });
 

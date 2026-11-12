@@ -111,8 +111,23 @@ export type FollowupState = {
 export function reconsiderable(f: FollowupState, lastOwnerAt: string | null) {
   if (f.draftedAt || (f.draftState && f.draftState !== "none")) return false;
   if (f.status === "failed") return true;
-  return f.status === "not_needed" && !!lastOwnerAt && lastOwnerAt > f.ownerMessageAt;
+  // "needs_review" without a draft = stopped at the recipient check, before any
+  // write: like "not_needed", reconsidered once the owner wrote a newer message
+  // (the check runs again on the latest customer message), never on its own.
+  return (f.status === "not_needed" || f.status === "needs_review") && !!lastOwnerAt && lastOwnerAt > f.ownerMessageAt;
 }
+
+/**
+ * SQL predicate (aliases `f` = followups, `i` = pipeline_items) for "a follow-up
+ * draft is waiting in the mailbox": one was actually written (`drafted_at` set,
+ * simulated included — callers split test mode on `draft_state`), the request is
+ * still open, follow-ups were not dismissed, the contact was not erased, and the
+ * owner has sent nothing since. A row held at the recipient check has no draft:
+ * it is shown on its request as « À vérifier (destinataire) », never counted as
+ * a prepared follow-up (Today, the « relances prêtes » filter, the digest).
+ */
+export const FOLLOWUP_READY_SQL =
+  "f.status IN ('drafted','needs_review') AND f.drafted_at IS NOT NULL AND i.status NOT IN ('gagne','perdu') AND NOT i.followups_dismissed AND i.contact_erased_at IS NULL AND (i.last_owner_at IS NULL OR i.last_owner_at<f.drafted_at)";
 export type FollowupContext = {
   status: PipelineStatus;
   followupsDismissed: boolean;

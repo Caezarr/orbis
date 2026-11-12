@@ -257,13 +257,14 @@ export function postgresFollowupStore(
       run(async (db) => {
         const id = randomUUID();
         // New stage, or reclaim a stage row that produced no draft (failed /
-        // not needed for an older owner message). Never touches a drafted row.
+        // not needed or held at the recipient check, for an older owner
+        // message). Never touches a drafted row.
         const r = await db.query<{ id: string }>(
           `INSERT INTO followups(id,workspace_id,tenant_id,pipeline_item_id,stage,status,owner_message_at,due_at)
            VALUES($1,$2,$3,$4,$5,'drafting',$6,$7)
            ON CONFLICT(pipeline_item_id,stage) DO UPDATE SET status='drafting', owner_message_at=EXCLUDED.owner_message_at, due_at=EXCLUDED.due_at, reason=NULL, updated_at=now()
            WHERE followups.workspace_id=$2 AND followups.tenant_id=$3 AND followups.draft_state='none' AND followups.drafted_at IS NULL
-             AND (followups.status='failed' OR (followups.status='not_needed' AND followups.owner_message_at<EXCLUDED.owner_message_at))
+             AND (followups.status='failed' OR (followups.status IN ('not_needed','needs_review') AND followups.owner_message_at<EXCLUDED.owner_message_at))
            RETURNING id`,
           [id, ...p(ids), itemId, input.stage, input.ownerMessageAt, input.dueAt],
         );

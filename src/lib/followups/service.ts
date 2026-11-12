@@ -4,7 +4,7 @@ import { DEMO_MAILBOX_PAGE, demoMailboxActive } from "@/lib/integrations/demo-ma
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { parseLocalDate } from "./calendar";
-import { PIPELINE_STATUSES, STATUS_LABELS, type PipelineStatus } from "./detect";
+import { FOLLOWUP_READY_SQL, PIPELINE_STATUSES, STATUS_LABELS, type PipelineStatus } from "./detect";
 import { computeReport, loadReportInput, reportWeek, type WeeklyReport } from "./report";
 import { loadPipelineSettings } from "./store";
 
@@ -134,7 +134,7 @@ export async function listRequests(filters: z.infer<typeof listSchema>) {
   }
   if (filters.followup === "ready")
     where.push(
-      "EXISTS (SELECT 1 FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id AND f.status IN ('drafted','needs_review') AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)) AND i.status NOT IN ('gagne','perdu')",
+      `EXISTS (SELECT 1 FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id AND ${FOLLOWUP_READY_SQL})`,
     );
   const rows = (
     await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.first_customer_at DESC NULLS LAST, i.created_at DESC LIMIT 200`, args)
@@ -177,7 +177,7 @@ export async function requestAction(id: string, input: z.infer<typeof actionSche
   if (input.action === "dismiss_followups" || input.action === "won" || input.action === "lost" || input.action === "erase_contact")
     // Proposed follow-ups that produced no draft are closed; drafts already in the mailbox stay there.
     await ctx.db.query(
-      "UPDATE followups SET status='dismissed', updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3 AND draft_state='none' AND status IN ('drafting','failed','not_needed')",
+      "UPDATE followups SET status='dismissed', updated_at=now() WHERE pipeline_item_id=$1 AND workspace_id=$2 AND tenant_id=$3 AND draft_state='none' AND status IN ('drafting','failed','not_needed','needs_review')",
       [id, ...p(ctx)],
     );
   if (input.action === "erase_contact") {
@@ -295,8 +295,7 @@ export async function todaySummary(now = new Date()) {
     (
       await ctx.db.query<{ n: string }>(
         `SELECT count(*)::text AS n FROM followups f JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
-         WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND f.status IN ('drafted','needs_review') AND i.status NOT IN ('gagne','perdu')
-           AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)`,
+         WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND ${FOLLOWUP_READY_SQL}`,
         p(ctx),
       )
     ).rows[0]?.n ?? 0,

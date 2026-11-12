@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { transaction } from "@/lib/platform/db";
-import { maskEmail } from "@/lib/followups/detect";
+import { FOLLOWUP_READY_SQL, maskEmail } from "@/lib/followups/detect";
 import { scoped, type Identity } from "@/lib/operations/worker";
 import { composeDigest, isEmptyDigest, normalizeCounts, type DigestCounts, type DigestMessage } from "./compose";
 import {
@@ -125,8 +125,7 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
       `SELECT count(*) FILTER (WHERE f.draft_state<>'simulated')::text AS n,
          count(*) FILTER (WHERE f.draft_state='simulated')::text AS simulated
        FROM followups f JOIN pipeline_items i ON i.id=f.pipeline_item_id AND i.workspace_id=f.workspace_id AND i.tenant_id=f.tenant_id
-       WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND f.status IN ('drafted','needs_review') AND i.status NOT IN ('gagne','perdu')
-         AND (i.last_owner_at IS NULL OR f.drafted_at IS NULL OR i.last_owner_at<f.drafted_at)`,
+       WHERE f.workspace_id=$1 AND f.tenant_id=$2 AND ${FOLLOWUP_READY_SQL}`,
       p,
     )
   ).rows[0];

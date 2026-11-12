@@ -4,6 +4,7 @@ import { appOrigin, composeDigest, isEmptyDigest, normalizeCounts, type DigestCo
 import { deliverDigest, digestDeliveryMode, digestIdempotencyKey, digestPolicyHash, isDeliverableAddress } from "./delivery";
 import { digestCounts, runDigestForSubscriber, runDigestPass, MAX_WINDOW_MS } from "./service";
 import { GET as cronGET } from "@/app/api/cron/digest/route";
+import { FOLLOWUP_READY_SQL } from "@/lib/followups/detect";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -117,6 +118,22 @@ describe("digest counts", () => {
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS drafts/);
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS questions/);
     expect(sqls.find((q) => q.includes("FROM followups"))).toMatch(/draft_state<>'simulated'\)::text AS n/);
+  });
+  it("counts a follow-up only when a draft was written (not one held at the recipient check)", async () => {
+    const sqls: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        sqls.push(sql);
+        return { rows: [{ n: "0", simulated: "0", drafts: "0", questions: "0", review: "0" }] };
+      }),
+    } as unknown as PoolClient;
+    await digestCounts(db, identity, new Date("2026-10-01T06:00:00Z"), new Date("2026-10-02T06:00:00Z"));
+    const followups = sqls.find((q) => q.includes("FROM followups"))!;
+    expect(followups).toContain(FOLLOWUP_READY_SQL);
+    expect(followups).not.toContain("f.drafted_at IS NULL");
+    expect(FOLLOWUP_READY_SQL).toContain("f.drafted_at IS NOT NULL");
+    expect(FOLLOWUP_READY_SQL).toContain("NOT i.followups_dismissed");
+    expect(FOLLOWUP_READY_SQL).toContain("i.contact_erased_at IS NULL");
   });
 });
 

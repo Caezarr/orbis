@@ -134,6 +134,14 @@ describe("decideFollowup", () => {
     expect(reconsiderable(notNeeded, "2026-10-05T08:00:00.000Z")).toBe(true);
     expect(reconsiderable({ ...failed, draftState: "uncertain" }, waiting.lastOwnerAt)).toBe(false);
   });
+  it("a stage held at the recipient check (no draft) blocks until the owner writes again, then is reconsidered", () => {
+    const held = { stage: 1, status: "needs_review", draftedAt: null, ownerMessageAt: waiting.lastOwnerAt, draftState: "none" };
+    expect(reconsiderable(held, waiting.lastOwnerAt)).toBe(false);
+    expect(decideFollowup(waiting, ctx({ existing: [held] }), new Date("2026-10-12T08:00:00Z"))).toMatchObject({ reason: "previous_pending" });
+    expect(reconsiderable(held, "2026-10-05T08:00:00.000Z")).toBe(true);
+    // A follow-up actually written to the wrong recipient is never reclaimed.
+    expect(reconsiderable({ ...held, draftedAt: "2026-10-03T08:00:00.000Z", draftState: "created" }, "2026-10-05T08:00:00.000Z")).toBe(false);
+  });
 });
 
 describe("pipeline status transitions", () => {
