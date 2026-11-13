@@ -10,7 +10,9 @@ import { createZip, type ZipEntry } from "./zip";
  * Contents: workspace + members, confirmed company profile and workspace
  * snapshot data, company-sheet facts and questions, request pipeline and
  * follow-ups, inbox batches and drafts METADATA (classification, states,
- * dates, our draft previews while retained), weekly report data, billing
+ * dates, our draft previews, questions, citations and proposed slots while
+ * retained), re-drafts, draft outcomes, Orbis labels and inbox options,
+ * weekly report data, billing
  * status (plan, subscription status, trial). Never exported: provider tokens
  * or secrets (held by Composio/Stripe, never by Orbis), inbound email bodies
  * (never stored), idempotency/payload hashes, lease tokens.
@@ -59,7 +61,32 @@ const SECTIONS: { name: string; table: string; sql: string }[] = [
   {
     name: "drafts",
     table: "inbox_messages",
-    sql: "SELECT id, batch_id, provider, thread_id, received_at, status, classification, skip_reason, flags, subject_preview, draft_preview, questions, citations, draft_state, draft_id, drafted_at, created_at, purge_after FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY created_at",
+    sql: "SELECT id, batch_id, provider, thread_id, received_at, status, classification, skip_reason, flags, subject_preview, draft_preview, questions, citations, proposed_slots, draft_state, draft_id, drafted_at, created_at, purge_after FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY created_at",
+  },
+  {
+    // Orbi's re-drafts after a correction (draft preview kept 30 days) and
+    // sent-mail reading jobs. Never the lease, hashes or connected account.
+    name: "brain_jobs",
+    table: "brain_jobs",
+    sql: "SELECT id, kind, provider, mode, window_days, max_messages, inbox_message_id, status, stats, draft_state, draft_id, drafted_at, draft_preview, created_at, completed_at, purge_after FROM brain_jobs WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY created_at",
+  },
+  {
+    // What became of each draft (sent as is, edited, not used): sizes and a
+    // similarity score only, never the sent text.
+    name: "draft_outcomes",
+    table: "brain_draft_outcomes",
+    sql: "SELECT inbox_message_id, outcome, similarity, draft_chars, sent_chars, proposals, checked_at, decided_at, created_at FROM brain_draft_outcomes WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY created_at",
+  },
+  {
+    // Orbis labels put on mailbox messages (mailbox-labels-v1 ledger).
+    name: "inbox_labels",
+    table: "inbox_labels",
+    sql: "SELECT id, provider, message_id, inbox_message_id, label_keys, mode, state, applied_at, removed_at, created_at, updated_at FROM inbox_labels WHERE workspace_id=$1 AND tenant_id=$2 ORDER BY created_at",
+  },
+  {
+    name: "inbox_features",
+    table: "inbox_features",
+    sql: "SELECT calendar_enabled, labels_enabled, timezone, created_at, updated_at FROM inbox_features WHERE workspace_id=$1 AND tenant_id=$2",
   },
   {
     name: "inbox_settings",
@@ -116,7 +143,7 @@ export function toCsv(rows: Record<string, unknown>[]) {
   return `﻿${lines.join("\r\n")}\r\n`;
 }
 
-const CSV_SECTIONS = new Set(["company_facts", "questions", "requests", "followups", "drafts"]);
+const CSV_SECTIONS = new Set(["company_facts", "questions", "requests", "followups", "drafts", "draft_outcomes"]);
 
 export function buildExportArchive(input: {
   exportedAt: Date;
@@ -136,7 +163,9 @@ export function buildExportArchive(input: {
         `Date : ${input.exportedAt.toISOString()}`,
         "",
         "Contenu : profil de l'entreprise, membres, fiche entreprise (faits et questions), demandes et relances,",
-        "lots et métadonnées des brouillons (aperçus conservés 30 jours), rapport hebdomadaire, état de l'abonnement.",
+        "lots et métadonnées des brouillons (aperçus, questions, extraits cités et créneaux proposés, conservés 30 jours),",
+        "nouveaux brouillons après correction, suite donnée aux brouillons, libellés Orbis posés dans la boîte,",
+        "options de la boîte, rapport hebdomadaire, état de l'abonnement.",
         "Non inclus : le corps des e-mails reçus (jamais stocké par Orbis), les jetons d'accès (détenus par",
         "Composio et Stripe), les empreintes techniques d'idempotence.",
         "Les fichiers .json sont la référence ; les .csv reprennent les tableaux (UTF-8 avec BOM).",
