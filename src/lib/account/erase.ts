@@ -5,8 +5,10 @@ import type { PoolClient } from "pg";
  *
  *  1. Revoke every Composio connected account of the workspace (broker). A
  *     failure stops here: nothing is erased, the owner can retry.
- *  2. Cancel the Stripe subscription IMMEDIATELY (not at period end): the
- *     workspace and its data no longer exist, so the service cannot continue.
+ *  2. Ask Stripe, per customer of this tenant: expire open Checkout Sessions,
+ *     then cancel every subscription that has not ended IMMEDIATELY (not at
+ *     period end): the workspace and its data no longer exist, so the service
+ *     cannot continue.
  *     No automatic pro-rata refund (owner decision, see launch checklist).
  *     Invoices and the Stripe customer stay at Stripe (its own legal
  *     retention). A failure stops here: nothing is erased.
@@ -96,9 +98,16 @@ export async function eraseTenantRows(db: Pick<PoolClient, "query">, identity: E
 }
 
 /** Minimal Stripe surface (mockable). */
+type Page<T> = { data: T[]; has_more: boolean };
 export type StripeCancelSurface = {
+  checkout: {
+    sessions: {
+      list(params: { customer: string; status: "open"; limit: number }): Promise<Page<{ id: string }>>;
+      expire(id: string): Promise<unknown>;
+    };
+  };
   subscriptions: {
-    retrieve(id: string): Promise<{ status: string }>;
+    list(params: { customer: string; status: "all"; limit: number }): Promise<Page<{ id: string; status: string }>>;
     cancel(
       id: string,
       params: { invoice_now: boolean; prorate: boolean },
@@ -107,28 +116,55 @@ export type StripeCancelSurface = {
   };
 };
 const ENDED = new Set(["canceled", "incomplete_expired"]);
-/** Step 2 through the existing Stripe client. Subscription id read from our own row. */
+const PAGE = 100;
+/**
+ * Step 2 through the existing Stripe client. Stripe is asked directly, per
+ * customer of this tenant, instead of trusting our own subscription row:
+ *  - open Checkout Sessions (subscription or task payment) are expired first,
+ *    so nobody can pay for the workspace after it is gone;
+ *  - then every subscription that has not ended is cancelled, including one
+ *    whose webhook has not been processed yet (no row, or an older row).
+ * Any Stripe error, or more than one page of results, aborts the erasure
+ * (fail closed: nothing is erased, retry is safe).
+ */
 export async function cancelTenantSubscription(
   db: Pick<PoolClient, "query">,
   tenantId: string,
   stripe: (() => StripeCancelSurface) | null,
 ): Promise<"canceled" | "none" | "not_configured"> {
+  const customer = (
+    await db.query<{ stripe_customer_id: string }>("SELECT stripe_customer_id FROM stripe_customers WHERE tenant_id=$1", [tenantId])
+  ).rows[0]?.stripe_customer_id;
   const row = (
-    await db.query<{ stripe_subscription_id: string; status: string }>(
-      "SELECT stripe_subscription_id, status FROM stripe_subscriptions WHERE tenant_id=$1",
+    await db.query<{ stripe_customer_id: string; status: string }>(
+      "SELECT stripe_customer_id, status FROM stripe_subscriptions WHERE tenant_id=$1",
       [tenantId],
     )
   ).rows[0];
-  if (!row || ENDED.has(row.status)) return "none";
-  // A live subscription that cannot be cancelled blocks the erasure (it would keep billing).
-  if (!stripe) throw new Error("STRIPE_NOT_CONFIGURED");
+  const customers = [...new Set([customer, row?.stripe_customer_id].filter((id): id is string => !!id))];
+  if (!customers.length) return "none";
+  if (!stripe) {
+    // A live subscription that cannot be cancelled blocks the erasure (it would keep billing).
+    if (row && !ENDED.has(row.status)) throw new Error("STRIPE_NOT_CONFIGURED");
+    return "not_configured";
+  }
   const client = stripe();
-  const current = await client.subscriptions.retrieve(row.stripe_subscription_id);
-  if (ENDED.has(current.status)) return "none";
-  await client.subscriptions.cancel(
-    row.stripe_subscription_id,
-    { invoice_now: false, prorate: false },
-    { idempotencyKey: `orbis-erase:${tenantId}:${row.stripe_subscription_id}` },
-  );
-  return "canceled";
+  let canceled = 0;
+  for (const id of customers) {
+    const open = await client.checkout.sessions.list({ customer: id, status: "open", limit: PAGE });
+    if (open.has_more) throw new Error("TOO_MANY_OPEN_SESSIONS");
+    for (const session of open.data) await client.checkout.sessions.expire(session.id);
+    const subscriptions = await client.subscriptions.list({ customer: id, status: "all", limit: PAGE });
+    if (subscriptions.has_more) throw new Error("TOO_MANY_SUBSCRIPTIONS");
+    for (const subscription of subscriptions.data) {
+      if (ENDED.has(subscription.status)) continue;
+      await client.subscriptions.cancel(
+        subscription.id,
+        { invoice_now: false, prorate: false },
+        { idempotencyKey: `orbis-erase:${tenantId}:${subscription.id}` },
+      );
+      canceled++;
+    }
+  }
+  return canceled ? "canceled" : "none";
 }

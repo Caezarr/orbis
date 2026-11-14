@@ -164,31 +164,70 @@ describe("eraseWorkspace", () => {
 });
 
 describe("cancelTenantSubscription (Stripe mocked)", () => {
-  const db = (row: unknown) => ({ query: vi.fn(async () => ({ rows: row ? [row] : [] })) });
-  const stripe = (status = "active") => {
-    const client = {
-      subscriptions: {
-        retrieve: vi.fn(async () => ({ status })),
-        cancel: vi.fn(async () => ({ status: "canceled" })),
+  // First query: stripe_customers mapping; second: our stripe_subscriptions row.
+  const db = (customer: string | null, row: { stripe_customer_id: string; status: string } | null = null) => ({
+    query: vi.fn(async (sql: string) => {
+      if (sql.includes("FROM stripe_customers")) return { rows: customer ? [{ stripe_customer_id: customer }] : [] };
+      return { rows: row ? [row] : [] };
+    }),
+  });
+  const stripe = (subscriptions: { id: string; status: string }[] = [], sessions: { id: string }[] = []) => ({
+    checkout: {
+      sessions: {
+        list: vi.fn<(params: { customer: string }) => Promise<{ data: { id: string }[]; has_more: boolean }>>(async () => ({ data: sessions, has_more: false })),
+        expire: vi.fn<(id: string) => Promise<unknown>>(async () => ({})),
       },
-    };
-    return client;
-  };
+    },
+    subscriptions: {
+      list: vi.fn<(params: { customer: string }) => Promise<{ data: { id: string; status: string }[]; has_more: boolean }>>(async () => ({
+        data: subscriptions,
+        has_more: false,
+      })),
+      cancel: vi.fn(async () => ({ status: "canceled" })),
+    },
+  });
   it("cancels immediately, without proration, idempotently", async () => {
-    const client = stripe();
-    expect(await cancelTenantSubscription(db({ stripe_subscription_id: "sub_1", status: "active" }) as never, "t1", () => client)).toBe("canceled");
+    const client = stripe([{ id: "sub_1", status: "active" }]);
+    expect(await cancelTenantSubscription(db("cus_1", { stripe_customer_id: "cus_1", status: "active" }) as never, "t1", () => client)).toBe("canceled");
+    expect(client.subscriptions.list).toHaveBeenCalledWith({ customer: "cus_1", status: "all", limit: 100 });
     expect(client.subscriptions.cancel).toHaveBeenCalledWith("sub_1", { invoice_now: false, prorate: false }, { idempotencyKey: "orbis-erase:t1:sub_1" });
+  });
+  it("cancels a subscription Stripe has but our row does not know yet (webhook pending)", async () => {
+    const client = stripe([{ id: "sub_2", status: "active" }]);
+    expect(await cancelTenantSubscription(db("cus_1") as never, "t1", () => client)).toBe("canceled");
+    expect(client.subscriptions.cancel).toHaveBeenCalledWith("sub_2", expect.anything(), { idempotencyKey: "orbis-erase:t1:sub_2" });
+    const replaced = stripe([{ id: "sub_1", status: "canceled" }, { id: "sub_3", status: "incomplete" }]);
+    expect(await cancelTenantSubscription(db("cus_1", { stripe_customer_id: "cus_1", status: "canceled" }) as never, "t1", () => replaced)).toBe("canceled");
+    expect(replaced.subscriptions.cancel).toHaveBeenCalledTimes(1);
+    expect(replaced.subscriptions.cancel).toHaveBeenCalledWith("sub_3", expect.anything(), expect.anything());
+  });
+  it("expires open checkout sessions before cancelling, so nobody pays for an erased workspace", async () => {
+    const client = stripe([], [{ id: "cs_1" }, { id: "cs_2" }]);
+    expect(await cancelTenantSubscription(db("cus_1") as never, "t1", () => client)).toBe("none");
+    expect(client.checkout.sessions.list).toHaveBeenCalledWith({ customer: "cus_1", status: "open", limit: 100 });
+    expect(client.checkout.sessions.expire.mock.calls.map((call) => call[0])).toEqual(["cs_1", "cs_2"]);
+    expect(client.checkout.sessions.expire.mock.invocationCallOrder[0]).toBeLessThan(client.subscriptions.list.mock.invocationCallOrder[0]);
   });
   it("nothing to cancel", async () => {
     const client = stripe();
     expect(await cancelTenantSubscription(db(null) as never, "t1", () => client)).toBe("none");
-    expect(await cancelTenantSubscription(db({ stripe_subscription_id: "sub_1", status: "canceled" }) as never, "t1", () => client)).toBe("none");
-    const ended = stripe("canceled");
-    expect(await cancelTenantSubscription(db({ stripe_subscription_id: "sub_1", status: "active" }) as never, "t1", () => ended)).toBe("none");
+    expect(client.subscriptions.list).not.toHaveBeenCalled();
+    const ended = stripe([{ id: "sub_1", status: "canceled" }, { id: "sub_0", status: "incomplete_expired" }]);
+    expect(await cancelTenantSubscription(db("cus_1", { stripe_customer_id: "cus_1", status: "active" }) as never, "t1", () => ended)).toBe("none");
     expect(ended.subscriptions.cancel).not.toHaveBeenCalled();
   });
   it("a live subscription without Stripe configured blocks the erasure", async () => {
-    await expect(cancelTenantSubscription(db({ stripe_subscription_id: "sub_1", status: "past_due" }) as never, "t1", null)).rejects.toThrow();
+    await expect(cancelTenantSubscription(db("cus_1", { stripe_customer_id: "cus_1", status: "past_due" }) as never, "t1", null)).rejects.toThrow();
+    expect(await cancelTenantSubscription(db("cus_1") as never, "t1", null)).toBe("not_configured");
+  });
+  it("fails closed on a Stripe error or more than one page", async () => {
+    const failing = stripe([{ id: "sub_1", status: "active" }], [{ id: "cs_1" }]);
+    failing.checkout.sessions.expire.mockRejectedValueOnce(new Error("session completed meanwhile"));
+    await expect(cancelTenantSubscription(db("cus_1") as never, "t1", () => failing)).rejects.toThrow();
+    expect(failing.subscriptions.cancel).not.toHaveBeenCalled();
+    const many = stripe();
+    many.subscriptions.list.mockResolvedValueOnce({ data: [], has_more: true });
+    await expect(cancelTenantSubscription(db("cus_1") as never, "t1", () => many)).rejects.toThrow();
   });
 });
 
