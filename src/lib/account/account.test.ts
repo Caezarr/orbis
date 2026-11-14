@@ -74,6 +74,19 @@ describe("export", () => {
       expect(q.sql).not.toMatch(/payload_hash|idempotency|lease_token|connected_account_id|content_hash/);
     }
   });
+  it("covers every workspace table holding drafts, labels and inbox options", async () => {
+    const queries: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        return sql.startsWith("SELECT to_regclass") ? { rows: [{ r: "x" }] } : { rows: [] };
+      }),
+    };
+    const names = (await collectWorkspaceExport(db as never, { workspaceId: "w1", tenantId: "t1" })).map((s) => s.name);
+    expect(names).toEqual(expect.arrayContaining(["drafts", "brain_jobs", "draft_outcomes", "inbox_labels", "inbox_features"]));
+    expect(queries.find((q) => q.includes("FROM inbox_messages"))).toMatch(/proposed_slots/);
+    expect(queries.find((q) => q.includes("FROM brain_jobs"))).toMatch(/draft_preview/);
+  });
   it("CSV cells neutralize formulas", () => {
     expect(csvCell("=HYPERLINK(\"http://evil\")")).toBe('"\'=HYPERLINK(""http://evil"")"');
     expect(csvCell("+33 6")).toBe('"\'+33 6"');
