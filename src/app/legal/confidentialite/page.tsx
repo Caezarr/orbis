@@ -103,6 +103,17 @@ export default function Page() {
           adresses e-mail et numéros de téléphone de tiers sont masqués. Les citations sont effacées si vous rejetez
           l’information.
         </li>
+        <li>
+          Ensuite, pour les brouillons d’Orbis réellement créés dans votre boîte ces 14 derniers jours (5 au plus à chaque
+          relève), Orbis lit la réponse que vous avez envoyée dans le même fil, pour savoir si le brouillon a servi tel
+          quel, modifié ou pas du tout. Seuls ce résultat, un taux de ressemblance et des longueurs sont conservés, jamais
+          le texte envoyé.
+        </li>
+        <li>
+          Si vous avez modifié le brouillon avant d’envoyer, l’aperçu du brouillon et votre réponse sont transmis au
+          fournisseur du modèle d’IA pour proposer au plus 2 règles ou corrections, avec une courte citation de votre
+          réponse masquée comme ci-dessus. Elles vont dans la même file de validation : rien n’est appliqué sans vous.
+        </li>
         <li>Seules les informations que vous avez validées sont utilisées pour rédiger les brouillons.</li>
       </ul>
 

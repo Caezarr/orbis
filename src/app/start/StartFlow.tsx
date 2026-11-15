@@ -862,7 +862,12 @@ function MailboxStep({
           <h3>Ce qu’Orbis peut faire</h3>
           <ul>
             <li>Lire les messages reçus ces 14 derniers jours (50 au plus).</li>
-            <li>Lire quelques-uns de vos messages envoyés, pour le ton et la signature.</li>
+            <li>Lire vos 3 derniers messages envoyés, pour le ton et la signature.</li>
+            <li>
+              Lire une fois vos messages envoyés des 90 derniers jours (200 au plus), pour vous proposer des informations
+              sur votre activité, que vous validez.
+            </li>
+            <li>Lire votre réponse dans les fils où Orbis a préparé un brouillon, pour savoir s’il a servi.</li>
             <li>Créer des brouillons de réponse dans le fil, adressés à l’expéditeur.</li>
           </ul>
         </div>
