@@ -328,26 +328,36 @@ describe("company sheet and follow-ups material", () => {
   });
 
   it("quotes sent without reply are due for a follow-up", async () => {
-    const accountId = await connect("outlook");
-    const mailbox = mailboxClient("outlook", { ...ids, connectedAccountId: accountId }, { mode: "test" });
-    const inbound = await mailbox.listInbound({ windowDays: 14, maxMessages: 50 });
-    const due: string[] = [];
-    for (const key of ["lille-t3", "haubourdin-facade", "tournai-couloir2", "seclin-dimensions", "annoeullin-question"]) {
-      const thread = DEFAULT_FIXTURE.threads.find((t) => t.key === key)!;
-      const first = inbound.find((m) => m.from?.address === thread.contact.email)!;
-      const messages = await mailbox.readThread(first.threadId);
-      const obs = observeThread(messages, thread.contact.email, null);
-      const decision = decideFollowup(
-        obs,
-        { status: "repondu", followupsDismissed: false, snoozedUntil: null, contactEmail: thread.contact.email, businessDays: 5, maxStages: 2, enabled: true, existing: [] },
-        new Date(),
-      );
-      if (decision.action === "propose") due.push(key);
-      // The owner's last message is recognised by code (no model call needed).
-      expect(classifyOwnerMessage(obs.lastOwner!.text)).not.toBe("ambiguous");
+    // Fixture days are relative to "now", but the follow-up delay counts business
+    // days (weekends, French public holidays). On Sunday 15/11/2026 the quote sent
+    // 9 days earlier was only 4 business days old (11/11 is a holiday), so the test
+    // failed depending on the date. Pin the clock (Date only) to a plain Wednesday.
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-03-18T10:00:00Z") });
+    try {
+      store.reset();
+      const accountId = await connect("outlook");
+      const mailbox = mailboxClient("outlook", { ...ids, connectedAccountId: accountId }, { mode: "test" });
+      const inbound = await mailbox.listInbound({ windowDays: 14, maxMessages: 50 });
+      const due: string[] = [];
+      for (const key of ["lille-t3", "haubourdin-facade", "tournai-couloir2", "seclin-dimensions", "annoeullin-question"]) {
+        const thread = DEFAULT_FIXTURE.threads.find((t) => t.key === key)!;
+        const first = inbound.find((m) => m.from?.address === thread.contact.email)!;
+        const messages = await mailbox.readThread(first.threadId);
+        const obs = observeThread(messages, thread.contact.email, null);
+        const decision = decideFollowup(
+          obs,
+          { status: "repondu", followupsDismissed: false, snoozedUntil: null, contactEmail: thread.contact.email, businessDays: 5, maxStages: 2, enabled: true, existing: [] },
+          new Date(),
+        );
+        if (decision.action === "propose") due.push(key);
+        // The owner's last message is recognised by code (no model call needed).
+        expect(classifyOwnerMessage(obs.lastOwner!.text)).not.toBe("ambiguous");
+      }
+      // Quotes sent 8-12 days ago with no reply are due; the answered quote is not.
+      expect(due).toEqual(expect.arrayContaining(["lille-t3", "haubourdin-facade", "seclin-dimensions"]));
+      expect(due).not.toContain("annoeullin-question");
+    } finally {
+      vi.useRealTimers();
     }
-    // Quotes sent 8-12 days ago with no reply are due; the answered quote is not.
-    expect(due).toEqual(expect.arrayContaining(["lille-t3", "haubourdin-facade", "seclin-dimensions"]));
-    expect(due).not.toContain("annoeullin-question");
   });
 });
