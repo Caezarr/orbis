@@ -75,6 +75,8 @@ Tenu par la routine du matin (Claude). Une tâche par jour, dans l'ordre, sauf P
 - [ ] Export RGPD (relevé le 12/11) : `inbox_messages.proposed_slots` (migration 014) absent de la section `drafts` de l'export, et les tables `inbox_labels` / `inbox_features` non exportées (l'effacement les couvre déjà). À ajouter à `account/export.ts` + `account.test.ts`.
 - [ ] Speed Insights : savoir s'il est réellement activé sur le projet Vercel (sinon le script répond 404 et rien n'est envoyé). Si Gabriel ne s'en sert pas, le retirer serait plus simple que le divulguer.
 
+- [x] Surfaces gelées (revue du 16/11, coût/honnêteté) : seules les **pages** du produit horizontal étaient redirigées ; leurs **API** restaient servies en prod à tout compte connecté (inscription libre par lien magique). `POST /api/v1/orbi` (« Demander à Orbi », 12 appels modèle payants/heure par espace, jusqu'à 8 000 caractères) et `POST /api/v1/company-analysis` (6/heure) appelaient le modèle **hors quota de brouillons et hors plafond** ; missions, essais, décisions d'actions, recherche de connaissances, ancien export JSON, etc. restaient aussi joignables. Désormais le proxy répond 404 sur les 24 espaces `/api/v1/*` du produit gelé (`FROZEN_API_NAMESPACES`), avant toute session ; `ORBIS_FROZEN_SURFACES_ENABLED=true` les rouvre. Un test oblige à classer chaque nouvel espace `/api/v1` (V1 ou gelé) et vérifie qu'aucun écran V1 n'appelle une API gelée. Vérifié sur un build de prod local : API gelées 404 (y compris `%6Frbi`, `//api/v1//orbi`), API V1 inchangées — PR à venir.
+
 ## Décisions de Gabriel
 
 _(reportées ici depuis les commentaires Todoist)_
