@@ -27,7 +27,7 @@ Competitive context: Fyxer, Superhuman and Matinel all (a) answer meeting reques
 |---|---|
 | Timezone | Workspace setting: `Europe/Paris` (default) or `Europe/Brussels`. DST-safe (Intl, no library). |
 | Working hours | Owner-approved company sheet facts of category `hours` (parsed: « du lundi au vendredi de 8h à 12h et de 13h30 à 17h », « lun-sam 08:00-18:00 », « en semaine 9h-18h »). Otherwise defaults Mon–Fri 9h–12h / 14h–18h, flagged `[[À CONFIRMER]]`. |
-| Hard bounds | Never before 07:00 or after 20:00 local, never on Sunday, whatever the hours source says. |
+| Hard bounds | Never before 07:00 or after 20:00 local, never on Sunday, never on a public holiday of the workspace country (`Europe/Paris` → the 11 French metropolitan holidays, `Europe/Brussels` → the 10 Belgian legal holidays; same calendar as follow-up business days), whatever the hours source says. |
 | Duration | Visit 60 min (`ORBIS_CALENDAR_VISIT_MINUTES`), call 30 min (`ORBIS_CALENDAR_CALL_MINUTES`). |
 | Buffer | 30 min before and after (`ORBIS_CALENDAR_BUFFER_MINUTES`). |
 | Lead time | First slot ≥ 18 h from now (`ORBIS_CALENDAR_MIN_LEAD_HOURS`). |

@@ -6,6 +6,7 @@ import {
   followupDueAt,
   formatLocalDate,
   isBusinessDay,
+  isPublicHoliday,
   parisDate,
   parisMidnight,
   parisWeek,
@@ -68,5 +69,20 @@ describe("French business calendar (Europe/Paris)", () => {
     expect(parseLocalDate("2026-02-30")).toBeNull();
     expect(parseLocalDate("2026-13-01")).toBeNull();
     expect(parseLocalDate("x")).toBeNull();
+  });
+});
+
+describe("public holidays by workspace country", () => {
+  it("France and Belgium share the common days and differ on the national ones", () => {
+    for (const date of ["2027-01-01", "2027-03-29", "2027-05-01", "2027-05-06", "2027-05-17", "2027-08-15", "2027-11-01", "2027-11-11", "2027-12-25"]) {
+      expect(isPublicHoliday(d(date), "Europe/Paris")).toBe(true);
+      expect(isPublicHoliday(d(date), "Europe/Brussels")).toBe(true);
+    }
+    expect(isPublicHoliday(d("2027-07-14"), "Europe/Paris")).toBe(true);
+    expect(isPublicHoliday(d("2027-07-14"), "Europe/Brussels")).toBe(false);
+    expect(isPublicHoliday(d("2027-05-08"), "Europe/Brussels")).toBe(false);
+    expect(isPublicHoliday(d("2027-07-21"), "Europe/Brussels")).toBe(true);
+    expect(isPublicHoliday(d("2027-07-21"), "Europe/Paris")).toBe(false);
+    expect(isPublicHoliday(d("2027-07-22"), "Europe/Brussels")).toBe(false);
   });
 });

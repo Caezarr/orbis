@@ -102,6 +102,33 @@ describe("computeFreeSlots", () => {
     const busy = [{ start: NOW.getTime(), end: NOW.getTime() + 30 * 86_400_000 }];
     expect(computeFreeSlots({ ...base, busy })).toEqual([]);
   });
+  it("never offers a public holiday (11 November, Christmas, New Year)", () => {
+    // Tuesday 10 November 2026, 15:00 Paris: the first possible day is Wednesday 11/11.
+    const armistice = computeFreeSlots({ ...base, now: new Date("2026-11-10T14:00:00Z") });
+    expect(armistice).toHaveLength(3);
+    expect(armistice.map((s) => local(s.start).day)).toEqual([12, 13, 16]);
+    expect(armistice.map((s) => s.label).join(" ")).not.toContain("11 novembre");
+    // Wednesday 23 December 2026: 25/12 and 1/1 are skipped, the week-end too.
+    const winter = computeFreeSlots({ ...base, now: new Date("2026-12-23T14:00:00Z"), count: 6 });
+    const days = winter.map((s) => s.start.slice(0, 10));
+    expect(days).toContain("2026-12-24");
+    expect(days).not.toContain("2026-12-25");
+    expect(days).not.toContain("2027-01-01");
+    expect(winter).toHaveLength(6);
+  });
+  it("uses the holidays of the workspace country (Paris vs Brussels)", () => {
+    // Tuesday 13 July 2027, 15:00 local: 14/07 is French only, 21/07 Belgian only.
+    const now = new Date("2027-07-13T13:00:00Z");
+    const opts = { ...base, now, count: 6 };
+    const paris = computeFreeSlots(opts).map((s) => s.start.slice(0, 10));
+    const brussels = computeFreeSlots({ ...opts, timezone: "Europe/Brussels" as const }).map((s) =>
+      s.start.slice(0, 10),
+    );
+    expect(paris).not.toContain("2027-07-14");
+    expect(paris).toContain("2027-07-21");
+    expect(brussels).toContain("2027-07-14");
+    expect(brussels).not.toContain("2027-07-21");
+  });
   it("held slots (already offered to someone else) are treated as busy", () => {
     const first = computeFreeSlots(base);
     const held = first.map((s) => ({ start: Date.parse(s.start), end: Date.parse(s.end) }));
