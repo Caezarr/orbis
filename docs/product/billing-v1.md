@@ -1,6 +1,6 @@
 # Facturation V1 — essai gratuit, abonnement simple, quotas de brouillons
 
-Octobre 2026. Phase 3 de [17-v1-self-serve](../strategy/17-v1-self-serve.md). Cible : entreprises de moins de 50 personnes, en self-serve, modèle d'IA fourni par Orbis.
+Octobre 2026. Phase 3 de 17-v1-self-serve. Cible : entreprises de moins de 50 personnes, en self-serve, modèle d'IA fourni par Orbis.
 
 **Statut :** code et migration prêts, **mode test Stripe uniquement**. Aucun prix n'est décidé : l'interface lit le prix affiché dans Stripe. Sans prix configuré, elle affiche « Tarif bientôt disponible » et désactive le paiement.
 

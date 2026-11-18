@@ -1,6 +1,6 @@
 # Company brain: company sheet, ask-once questions, learning from edits
 
-Status: built on branch `feat/company-brain` (stacked on `feat/inbox-scheduler`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio or model call has been made. Concept: levels 3, 4 and 5 of [18-orbi-inbox-concept.md](../strategy/18-orbi-inbox-concept.md). It builds on [inbox-drafts.md](inbox-drafts.md). Updated 2026-10-02.
+Status: built on branch `feat/company-brain` (stacked on `feat/inbox-scheduler`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio or model call has been made. Concept: levels 3, 4 and 5 of 18-orbi-inbox-concept.md. It builds on [inbox-drafts.md](inbox-drafts.md). Updated 2026-10-02.
 
 ## What it does
 
