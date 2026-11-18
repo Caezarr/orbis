@@ -18,9 +18,9 @@ Orbis (codename "Agent OS") is a capability marketplace where a company installs
 
 ## Destination: closed-loop missions
 
-The product's endpoint is not "draft a document for a human to send." A mission should be able to go end to end: browse the web, fill and submit forms, create third-party accounts, and pay — the same actions a human operator does today — under policy, not ad hoc. See [01-vision.md](docs/strategy/01-vision.md) (one-human-company runtime) and [05-capabilities.md](docs/strategy/05-capabilities.md) (later packages: quote preparation, tender analysis, lead operations — all require external writes).
+The product's endpoint is not "draft a document for a human to send." A mission should be able to go end to end: browse the web, fill and submit forms, create third-party accounts, and pay — the same actions a human operator does today — under policy, not ad hoc. Later packages (quote preparation, tender analysis, lead operations) all require external writes.
 
-Nothing here means "never automate the web, never pay, never sign up." It means: **prove the capability read-only first, then unlock the write path through the broker** — never bypass the broker to reach the action faster. The order is fixed by [10-roadmap.md](docs/strategy/10-roadmap.md): external writes ship only "after the action broker and approval model have been proven," not before.
+Nothing here means "never automate the web, never pay, never sign up." It means: **prove the capability read-only first, then unlock the write path through the broker** — never bypass the broker to reach the action faster. The order is fixed: external writes ship only after the action broker and approval model have been proven, not before.
 
 ## Invariants (always true, at every stage — do not violate without an ADR, see [CTO-09-ADRs.md](docs/architecture/CTO-09-ADRs.md))
 
