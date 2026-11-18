@@ -44,6 +44,54 @@ export function frozenRedirect(pathname: string, enabled = frozenSurfacesEnabled
   return null;
 }
 
+/**
+ * API namespaces (under /api/v1/) that only serve the frozen horizontal
+ * product. Redirecting their pages is not enough: the routes stayed callable
+ * by any signed-in account, including Ask Orbi and the company analysis,
+ * which make paid model calls outside the inbox quota and budget. While frozen
+ * they answer 404. Wedge namespaces (inbox, start, brain, requests, report,
+ * digest, account, billing, team, workspace) are deliberately absent.
+ */
+export const FROZEN_API_NAMESPACES: readonly string[] = [
+  "actions",
+  "analytics",
+  "business-audits",
+  "capabilities",
+  "company-analysis",
+  "company-site",
+  "connections",
+  "evaluations",
+  "export", // legacy JSON export; the V1 export is /api/v1/account/export
+  "integrations",
+  "intent-resolutions",
+  "knowledge-browser",
+  "knowledge-scopes",
+  "knowledge-search",
+  "memory",
+  "missions",
+  "operations",
+  "orbi",
+  "profile-jobs",
+  "runtime",
+  "sources",
+  "tasks",
+  "usage",
+  "workflows",
+];
+
+/** True when `pathname` is a frozen API route that must not be served. */
+export function frozenApi(pathname: string, enabled = frozenSurfacesEnabled()): boolean {
+  if (enabled) return false;
+  let path = pathname;
+  try {
+    path = decodeURIComponent(pathname);
+  } catch {
+    // Malformed escapes: match on the raw path.
+  }
+  const match = /^\/+api\/+v1\/+([^/]+)(?:\/|$)/i.exec(path);
+  return !!match && FROZEN_API_NAMESPACES.includes(match[1].toLowerCase());
+}
+
 export type NavKey =
   | "today"
   | "demandes"
