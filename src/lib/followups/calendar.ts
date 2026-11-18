@@ -4,7 +4,7 @@
  * metropolitan public holidays (jours fériés). Used for "no customer reply
  * after N business days" (follow-ups) and the weekly report window.
  */
-export const PARIS = "Europe/Paris";
+const PARIS = "Europe/Paris";
 export type LocalDate = { y: number; m: number; d: number };
 
 const partsFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -52,15 +52,15 @@ const fromUtcDay = (ms: number): LocalDate => {
   const x = new Date(ms);
   return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate() };
 };
-export function addDays(date: LocalDate, days: number): LocalDate {
+function addDays(date: LocalDate, days: number): LocalDate {
   return fromUtcDay(toUtcDay(date) + days * 86_400_000);
 }
-export const sameDate = (a: LocalDate, b: LocalDate) =>
+const sameDate = (a: LocalDate, b: LocalDate) =>
   a.y === b.y && a.m === b.m && a.d === b.d;
-export const compareDates = (a: LocalDate, b: LocalDate) =>
+const compareDates = (a: LocalDate, b: LocalDate) =>
   toUtcDay(a) - toUtcDay(b);
 /** 0 = Sunday … 6 = Saturday. */
-export const weekday = (date: LocalDate) => new Date(toUtcDay(date)).getUTCDay();
+const weekday = (date: LocalDate) => new Date(toUtcDay(date)).getUTCDay();
 
 /** Easter Sunday (anonymous Gregorian algorithm). */
 export function easter(year: number): LocalDate {
@@ -82,7 +82,7 @@ export function easter(year: number): LocalDate {
 }
 const holidayCache = new Map<number, Set<number>>();
 /** French metropolitan public holidays (11 days; Alsace-Moselle extras excluded). */
-export function frenchHolidays(year: number): Set<number> {
+function frenchHolidays(year: number): Set<number> {
   const cached = holidayCache.get(year);
   if (cached) return cached;
   const e = easter(year);

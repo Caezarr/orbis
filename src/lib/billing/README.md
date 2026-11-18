@@ -63,7 +63,7 @@ Do not expire/release unknown outcomes merely because the original quote expired
 
 ## UI
 
-`TaskPricing` named/default export from `src/components/product/TaskPricing.tsx`.
+`TaskPricing` named export from `src/components/product/TaskPricing.tsx`.
 Props: `plans?`, `rateCard?`, `initialSeats?`, `onSelectPlan?` (client callback).
 No CTA is rendered without the callback. Solo/Business monthly fee is separate from
 the suggested optional extra-task spending cap. Included tasks are shared per account,

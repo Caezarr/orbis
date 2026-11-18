@@ -48,20 +48,3 @@ export function EmptyState({
     </OrbiEmpty>
   );
 }
-
-/** The wedge APIs answer 503 when inbox drafts are off on this deployment (or offline). */
-export function NotOnThisDeployment({ page, headingLevel = 1 }: { page: string; headingLevel?: 1 | 2 }) {
-  return (
-    <EmptyState
-      headingLevel={headingLevel}
-      title={page}
-      mood="thinking"
-      action={{ href: "/start", label: "Reprendre la mise en route" }}
-    >
-      <p>
-        Cette page se remplit quand Orbi prépare des brouillons dans votre boîte mail. Ce service n’est pas encore
-        activé sur ce déploiement : rien n’est perdu, tout apparaîtra ici dès son activation.
-      </p>
-    </EmptyState>
-  );
-}

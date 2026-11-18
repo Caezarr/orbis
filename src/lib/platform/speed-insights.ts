@@ -10,7 +10,7 @@
  */
 import { routeTemplate } from "./route-template";
 
-export type VitalEvent = { type: "vital"; url: string; route?: string };
+type VitalEvent = { type: "vital"; url: string; route?: string };
 
 export function scrubVital<T extends VitalEvent>(event: T): T | null {
   let url: URL;

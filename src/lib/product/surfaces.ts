@@ -56,7 +56,7 @@ export type NavKey =
   | "connections"
   | "knowledge"
   | "analytics";
-export type NavItem = { key: NavKey; href: string; label: string; also?: readonly string[] };
+type NavItem = { key: NavKey; href: string; label: string; also?: readonly string[] };
 
 /** Wedge order: decisions first, then the pipeline, then what Orbi knows and measures. */
 export const FOCUSED_NAV: readonly NavItem[] = [

@@ -1,11 +1,3 @@
-export type WorkspaceSnapshot = Awaited<ReturnType<typeof loadWorkspace>>;
-
-export async function loadWorkspace() {
-  const res = await fetch("/api/v1/workspace", { cache: "no-store" });
-  if (!res.ok) throw new Error("Workspace unavailable");
-  return res.json();
-}
-
 export async function postJson<T>(url: string, body: unknown, headers?: HeadersInit): Promise<T> {
   const res = await fetch(url, {
     method: "POST",

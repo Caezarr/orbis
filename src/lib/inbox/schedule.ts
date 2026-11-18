@@ -9,7 +9,7 @@ import { inboxMode } from "./service";
  * per-account cursor. Every function here runs inside the workspace's own RLS
  * context (worker `scoped`); nothing reads across tenants.
  */
-export const DEFAULT_INTERVAL_MINUTES = 15;
+const DEFAULT_INTERVAL_MINUTES = 15;
 /** Re-list a small overlap before the cursor: delivery delays and clock skew. Dedup is by row. */
 export const CURSOR_OVERLAP_MS = 5 * 60_000;
 const DAY_MS = 86_400_000;
@@ -17,7 +17,7 @@ const DAY_MS = 86_400_000;
 const PINNED_FLAG = "awaiting_draft_quota";
 const PINNED_STATUS = new Set(["uncertain"]);
 
-export function continuousMaxDrafts() {
+function continuousMaxDrafts() {
   const n = Number(process.env.ORBIS_INBOX_CONTINUOUS_MAX_DRAFTS);
   return Number.isSafeInteger(n) && n >= 0 && n <= 50 ? n : 10;
 }

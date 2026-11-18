@@ -70,7 +70,7 @@ export const synthesisSchema = z.object({
   summary: z.string().min(20).max(700),
   sources: z.array(z.string().max(24)).min(1).max(12),
 });
-export type SynthesisOutput = z.infer<typeof synthesisSchema>;
+type SynthesisOutput = z.infer<typeof synthesisSchema>;
 
 export function synthesisPrompt(profile: StartProfile) {
   const facts = profile.facts

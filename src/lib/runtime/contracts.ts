@@ -58,8 +58,8 @@ export const reviewSchema = z.object({
   issues: z.array(z.string()).max(12),
   summary: z.string(),
 });
-export type Draft = z.infer<typeof draftSchema>;
-export type Review = z.infer<typeof reviewSchema>;
+type Draft = z.infer<typeof draftSchema>;
+type Review = z.infer<typeof reviewSchema>;
 
 export function scopedMemory(
   items: MemoryItem[],

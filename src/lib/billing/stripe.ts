@@ -10,7 +10,7 @@ export function stripe() {
   return client;
 }
 
-export function requiredPrice(value: string | undefined, name: string) {
+function requiredPrice(value: string | undefined, name: string) {
   if (!value) throw new Error(`${name}_NOT_CONFIGURED`);
   return value;
 }

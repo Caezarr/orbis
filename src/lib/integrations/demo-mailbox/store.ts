@@ -81,7 +81,7 @@ function parisOffsetMinutes(at: Date) {
   return match ? Number(match[1]) * 60 + Math.sign(Number(match[1])) * Number(match[2] ?? 0) : 60;
 }
 
-export function seedState(now = new Date(), fixture: DemoFixture = DEFAULT_FIXTURE): DemoState {
+function seedState(now = new Date(), fixture: DemoFixture = DEFAULT_FIXTURE): DemoState {
   const latest = now.getTime() - 5 * 60_000;
   const messages: DemoMessage[] = [];
   for (const thread of fixture.threads)
