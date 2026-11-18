@@ -11,7 +11,7 @@ const WRITE_TOOLS = new Set([
   "chat:write",
 ]);
 
-export type BrokerDecision =
+type BrokerDecision =
   | { allowed: true; mode: RuntimeMode; tool: string }
   | { allowed: false; code: "ACTION_NOT_ALLOWED_IN_TEST_MODE" | "SCOPE_DENIED" | "APPROVAL_REQUIRED"; tool: string; detail: string };
 

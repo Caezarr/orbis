@@ -40,7 +40,7 @@ export type SharedLimitStore = {
   }): Promise<"ok" | "global" | "key">;
 };
 
-export const pgLimitStore: SharedLimitStore = {
+const pgLimitStore: SharedLimitStore = {
   async take({ bucket, keyHash, windowSeconds, limit, cost }) {
     const { rows } = await pool().query<{ allowed: boolean; used: number; retry_after_ms: string }>(
       "SELECT allowed, used, retry_after_ms FROM orbis_rate_limit_take($1,$2,$3,$4,$5)",

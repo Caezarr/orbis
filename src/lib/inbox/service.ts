@@ -31,7 +31,7 @@ export const triggerSchema = z
     maxMessages: z.number().int().min(1).max(50).default(50),
   })
   .strict();
-export type TriggerInput = z.infer<typeof triggerSchema>;
+type TriggerInput = z.infer<typeof triggerSchema>;
 
 function context() {
   const ctx = workspaceContext();

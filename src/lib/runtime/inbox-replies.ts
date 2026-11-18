@@ -62,7 +62,7 @@ export const ACTIONABLE: ReadonlySet<Classification> = new Set([
 export const PLACEHOLDER_OPEN = "[[";
 export const PLACEHOLDER_CLOSE = "]]";
 
-export type SkipReason =
+type SkipReason =
   | "no_sender"
   | "own_message"
   | "draft"
@@ -116,7 +116,7 @@ export function skipReason(
 }
 
 /** Longest prefix scanned for signals (the model sees at most ~4 300 chars of an email). */
-export const SIGNAL_SCAN_CHARS = 50_000;
+const SIGNAL_SCAN_CHARS = 50_000;
 /** Heuristic signal only. Content is untrusted regardless of this result. */
 export function injectionSignals(raw: string): string[] {
   // Zero-width / bidi / fullwidth tricks must not hide a signal.

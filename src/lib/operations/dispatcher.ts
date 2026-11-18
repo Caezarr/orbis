@@ -34,7 +34,7 @@ export type DueWorkspace = {
   /** Company brain jobs due (extraction, regeneration); migration 009. */
   brainDue?: number;
 };
-export type DispatchOptions = {
+type DispatchOptions = {
   maxBatches?: number;
   perWorkspace?: number;
   maxWorkspaces?: number;
@@ -43,7 +43,7 @@ export type DispatchOptions = {
   /** No new batch is started with less than this left; also the per-message stop margin. */
   reserveMs?: number;
 };
-export type DispatchResult = {
+type DispatchResult = {
   workspaces: number;
   enqueued: number;
   processed: number;
@@ -68,7 +68,7 @@ function envInt(name: string, fallback: number, min: number, max: number) {
   const n = Number(process.env[name]);
   return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
 }
-export function dispatchDefaults(): Required<DispatchOptions> {
+function dispatchDefaults(): Required<DispatchOptions> {
   return {
     maxBatches: envInt("ORBIS_SCHEDULER_MAX_BATCHES", 10, 1, 200),
     perWorkspace: envInt("ORBIS_SCHEDULER_MAX_PER_WORKSPACE", 2, 1, 20),
@@ -79,7 +79,7 @@ export function dispatchDefaults(): Required<DispatchOptions> {
 }
 
 /** Ids only. Runs as the runtime role with no tenant context. */
-export async function discoverDueWorkspaces(limit: number) {
+async function discoverDueWorkspaces(limit: number) {
   return transaction(async (db) => {
     const { rows } = await db.query<{
       tenant_id: string;

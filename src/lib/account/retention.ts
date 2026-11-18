@@ -13,7 +13,7 @@ import { transaction } from "@/lib/platform/db";
  * The workers already purge their own workspace on each run; this job covers
  * workspaces that no longer run anything.
  */
-export type RetentionResult = {
+type RetentionResult = {
   inbox_previews: number;
   brain_previews: number;
   followup_previews: number;

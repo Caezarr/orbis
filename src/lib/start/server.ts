@@ -42,7 +42,7 @@ export const mailboxActionSchema = z
   .object({ provider: z.enum(mailboxProviders), action: z.enum(["connect", "verify"]) })
   .strict();
 
-export type MailboxDeps = {
+type MailboxDeps = {
   accounts?: typeof workspaceMailboxAccounts;
   link?: typeof startConnection;
   configured?: (p: MailboxProvider) => boolean;

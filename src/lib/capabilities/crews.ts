@@ -1,6 +1,6 @@
 import type { CrewSpec } from "@/lib/domain/types";
 
-export const CREWS: Record<string, CrewSpec> = {
+const CREWS: Record<string, CrewSpec> = {
   "research-brief": {
     process: "sequential",
     department: "Growth",

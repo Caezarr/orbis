@@ -36,7 +36,7 @@ const CAPS: Record<FactCategory, number> = {
   legal: 6,
   social: 6,
 };
-export const MAX_FACTS = 60;
+const MAX_FACTS = 60;
 
 // ------------------------------------------------------------------ quoting
 
@@ -624,7 +624,7 @@ function faq(segs: Seg[], out: FactSet, faqPage: boolean) {
 
 // ------------------------------------------------------------------ entry point
 
-export type Extraction = {
+type Extraction = {
   facts: ExtractedFact[];
   name?: string;
   description?: string;

@@ -10,7 +10,7 @@ import { providerStatus } from "@/lib/runtime/provider";
  * presence as booleans, database reachability) only with the CRON_SECRET
  * bearer. Never returns a secret, a URL, an id or a version of a dependency.
  */
-export type HealthChecks = {
+type HealthChecks = {
   database: "ok" | "unavailable" | "not_configured";
   auth: boolean;
   ai: boolean;

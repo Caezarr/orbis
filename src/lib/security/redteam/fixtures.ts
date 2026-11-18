@@ -23,17 +23,17 @@ const CYR_I = "і"; // Cyrillic і
 const CYR_O = "о"; // Cyrillic о
 const ZW = "​";
 const RLO = "‮";
-export const HOMOGLYPH_DOMAIN = `${CYR_E}v${CYR_I}l.test`;
+const HOMOGLYPH_DOMAIN = `${CYR_E}v${CYR_I}l.test`;
 export const HOMOGLYPH_EMAIL = `b${CYR_O}ss@${HOMOGLYPH_DOMAIN}`;
 export const FULLWIDTH_EMAIL = "boss＠evil.test";
 export const ZW_URL = `https://ev${ZW}il.test/c${ZW}ollect?d=secret`;
-export const ZW_EMAIL = `bo${ZW}ss@ev${ZW}il.test`;
-export const ZW_PHONE = `06${ZW} 66 66${ZW} 66 66`;
+const ZW_EMAIL = `bo${ZW}ss@ev${ZW}il.test`;
+const ZW_PHONE = `06${ZW} 66 66${ZW} 66 66`;
 export const BIDI_EMAIL = `${RLO}tset.live@ssob`;
-export const LONG_FILLER = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(1800); // ~100k chars
+const LONG_FILLER = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(1800); // ~100k chars
 
 /** Skeleton used by the leak detector: compatibility-folded, invisibles removed, homoglyphs mapped. */
-export function skeleton(text: string) {
+function skeleton(text: string) {
   const map: Record<string, string> = {
     "а": "a",
     "е": "e",
@@ -350,7 +350,7 @@ export const OBEYING_PREVIEW_DRAFT = {
 
 export const OWNER = "paul@acme.test";
 export const SENT_CUSTOMER = "claire.durand@gmail.com";
-export function sentMail(id: string, text: string, over: Partial<MailMessage> = {}): MailMessage {
+function sentMail(id: string, text: string, over: Partial<MailMessage> = {}): MailMessage {
   return {
     provider: "gmail",
     id,

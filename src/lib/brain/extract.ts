@@ -11,11 +11,11 @@ import { stripQuoted } from "./text";
  * never re-billed), budgeted (reservation before every model call).
  */
 const FACT_SCHEMA = extractionSchema.shape.facts.element;
-export const EXTRACTION_LIMITS = { maxWindowDays: 90, maxMessages: 200 } as const;
-export const CHUNK_MESSAGES = 6;
-export const CHUNK_CHARS = 9000;
-export const MESSAGE_CHARS = 1500;
-export const MIN_OWN_CHARS = 30;
+const EXTRACTION_LIMITS = { maxWindowDays: 90, maxMessages: 200 } as const;
+const CHUNK_MESSAGES = 6;
+const CHUNK_CHARS = 9000;
+const MESSAGE_CHARS = 1500;
+const MIN_OWN_CHARS = 30;
 
 const PUBLIC_DOMAINS = new Set([
   "gmail.com",
@@ -43,7 +43,7 @@ const PUBLIC_DOMAINS = new Set([
 ]);
 const domainOf = (address: string) => address.split("@")[1] ?? "";
 
-export type SentSkipReason =
+type SentSkipReason =
   | "draft"
   | "auto_or_bulk"
   | "forward"
@@ -88,7 +88,7 @@ export function sentSkipReason(
   return null;
 }
 
-export const sentHash = (m: MailMessage) =>
+const sentHash = (m: MailMessage) =>
   createHash("sha256")
     .update(JSON.stringify([m.provider, m.id, m.subject, m.text]))
     .digest("hex");

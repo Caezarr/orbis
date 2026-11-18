@@ -2,7 +2,6 @@ import { ORBI_MIN_SIZE, orbiSources, type OrbiMood } from "@/lib/brand/orbi";
 import { OrbiMark } from "./OrbiMark";
 import s from "./orbi.module.css";
 
-export type { OrbiMood };
 
 /**
  * Orbi, the mascot. Rules: docs/design/orbi-mascot.md — one per viewport, never decoration.

@@ -51,7 +51,7 @@ export function extractCompany(html: string, url: string) {
   };
 }
 
-export type PublicFetchOptions = {
+type PublicFetchOptions = {
   signal: AbortSignal;
   /** Accepted content types (substring match on the Content-Type header); the wildcard type accepts any. */
   accept?: string[];

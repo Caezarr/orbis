@@ -12,7 +12,7 @@ export type KnowledgeEvidence = Citation & {
  * sourceIds is the server-resolved allowlist (empty means no access).
  * Pass missionId to intersect that list with the current mission version.
  */
-export type RetrievalInput = {
+type RetrievalInput = {
   state: StoreState;
   query: string;
   sourceIds: readonly string[];

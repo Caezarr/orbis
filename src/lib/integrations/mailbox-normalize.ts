@@ -21,7 +21,7 @@ export type MailMessage = {
   fromOwner: boolean;
   webLink?: string;
 };
-export const MAX_BODY_CHARS = 8000;
+const MAX_BODY_CHARS = 8000;
 const KEPT_HEADERS = new Set([
   "list-unsubscribe",
   "list-id",
@@ -87,7 +87,7 @@ function addressList(raw: string) {
     .filter((a): a is string => !!a)
     .slice(0, 50);
 }
-export function htmlToText(html: string) {
+function htmlToText(html: string) {
   return html
     .replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")

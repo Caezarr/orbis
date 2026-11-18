@@ -51,7 +51,7 @@ import {
   type Ids,
 } from "./store";
 
-export function brainCents(name: string, fallback: number) {
+function brainCents(name: string, fallback: number) {
   const value = Number(process.env[name]);
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
@@ -81,7 +81,7 @@ type Mailbox = {
   listThreadSent(threadId: string): Promise<MailMessage[]>;
   createReplyDraft: ReturnType<typeof mailboxClient>["createReplyDraft"];
 };
-export type BrainWorkerDeps = {
+type BrainWorkerDeps = {
   model?: BrainModel;
   inboxModel?: InboxModel;
   /** Question grouping model (tests); used only when ORBIS_BRAIN_QUESTION_GROUPING=true. */

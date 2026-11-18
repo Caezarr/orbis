@@ -12,7 +12,7 @@ import {
 // Server-only worker API. Never expose execute directly as a client-callable action.
 // Tool IDs are operator configuration, not claimed live SDK actions. Every entry
 // is conservatively a write; adding read actions needs a reviewed schema contract.
-export const actionRegistry = {
+const actionRegistry = {
   "gmail.send": { provider: "gmail", env: "GMAIL_SEND", effect: "write" },
   "slack.post": { provider: "slack", env: "SLACK_POST", effect: "write" },
   "notion.create-page": {
@@ -39,7 +39,7 @@ export type ActionRequest = {
 };
 // Must be backed by an atomic, durable worker store in production. A claimed key
 // remains consumed on timeout/failure: reconcile before retrying an uncertain write.
-export type ActionLedger = {
+type ActionLedger = {
   claim(key: string, payloadHash: string): Promise<boolean>;
 };
 class BrokerError extends Error {}
