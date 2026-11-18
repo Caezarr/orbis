@@ -69,7 +69,13 @@ export type FollowupUpdate = {
   questions?: string[];
   flags?: string[];
 };
-export type FollowupSettings = { enabled: boolean; businessDays: number; maxStages: number };
+export type FollowupSettings = {
+  enabled: boolean;
+  businessDays: number;
+  maxStages: number;
+  /** Workspace timezone (inbox_features); picks the holiday calendar. Default Europe/Paris. */
+  timezone?: string;
+};
 export type UsageKind = "request_extract" | "followup_classify" | "followup_draft";
 export type FollowupStore = {
   settings(): Promise<FollowupSettings>;
@@ -189,6 +195,7 @@ export async function runFollowups(params: {
         snoozedUntil: item.snoozedUntil,
         contactEmail: item.contactEmail,
         businessDays: settings.businessDays,
+        timezone: settings.timezone,
         maxStages: settings.maxStages,
         enabled: settings.enabled,
         existing: item.followups,

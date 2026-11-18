@@ -90,6 +90,16 @@ describe("decideFollowup", () => {
     expect(decideFollowup(waiting, ctx(), new Date("2026-10-08T21:00:00Z"))).toEqual({ action: "wait", dueAt: "2026-10-08T22:00:00.000Z" });
     expect(decideFollowup(waiting, ctx(), new Date("2026-10-09T06:00:00Z"))).toEqual({ action: "propose", stage: 1, dueAt: "2026-10-08T22:00:00.000Z" });
   });
+  it("counts business days with the workspace country's holidays", () => {
+    // Owner wrote Tue 20/07/2027; Wed 21/07 is the Belgian national day.
+    const before = { awaitingCustomer: true, lastOwnerAt: "2027-07-20T08:00:00.000Z" };
+    const at = new Date("2027-07-21T06:00:00Z");
+    expect(decideFollowup(before, ctx({ businessDays: 1 }), at)).toMatchObject({ action: "propose", dueAt: "2027-07-20T22:00:00.000Z" });
+    expect(decideFollowup(before, ctx({ businessDays: 1, timezone: "Europe/Brussels" }), at)).toEqual({
+      action: "wait",
+      dueAt: "2027-07-21T22:00:00.000Z",
+    });
+  });
   it("honors the configured delay", () => {
     expect(decideFollowup(waiting, ctx({ businessDays: 2 }), new Date("2026-10-06T23:00:00Z"))).toMatchObject({ action: "propose", stage: 1 });
   });

@@ -202,7 +202,18 @@ export function postgresFollowupStore(
     knownDraftIds: (threadId) => run((db) => threadDraftIds(db, ids, threadId)),
   });
   return {
-    settings: () => run((db) => loadPipelineSettings(db, ids)) as Promise<FollowupSettings>,
+    settings: () =>
+      run(async (db): Promise<FollowupSettings> => {
+        const settings = await loadPipelineSettings(db, ids);
+        // Holiday calendar of the workspace's country (same column as meeting slots).
+        const tz = (
+          await db.query<{ timezone: string }>(
+            "SELECT timezone FROM inbox_features WHERE workspace_id=$1 AND tenant_id=$2",
+            p(ids),
+          )
+        ).rows?.[0]?.timezone;
+        return { ...settings, timezone: tz === "Europe/Brussels" ? tz : "Europe/Paris" };
+      }),
     dueItems: (limit) =>
       run(async (db) => {
         await purgePipeline(db, ids);
