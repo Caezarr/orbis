@@ -10,7 +10,6 @@ The first mission in production prepares replies to customer and quote requests,
 
 <p align="center">
   <a href="ARCHITECTURE.md">Architecture</a> ·
-  <a href="docs/strategy/PRODUCT-README.md">Product</a> ·
   <a href="docs/product/INTEGRATIONS-AND-KNOWLEDGE.md">Integrations</a> ·
   <a href="docs/design/LANDING-MOTION.md">Design system</a>
 </p>
@@ -99,7 +98,6 @@ CI (`.github/workflows/ci.yml`) runs all of the above. The end-to-end suite runs
 - [ARCHITECTURE.md](ARCHITECTURE.md): the system as built
 - [docs/architecture/](docs/architecture/CTO-README.md): target architecture, ADRs, security, reliability and evaluation design (mostly in French)
 - [docs/product/](docs/product/): runtime, inbox drafts, billing, launch readiness
-- [docs/strategy/](docs/strategy/PRODUCT-README.md): product, roadmap and decisions
 - [docs/design/](docs/design/LANDING-MOTION.md): design system, Orbi mascot, landing motion
 
 ## License

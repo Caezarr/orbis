@@ -1,5 +1,5 @@
 /**
- * V1 focus (docs/strategy/17-v1-self-serve.md, « Ce qu'on gèle »): the
+ * V1 focus (private product notes, "what we freeze"): the
  * horizontal product (catalogue, missions, workflows, knowledge, analytics,
  * integrations catalogue, old audit/onboarding, industry pages, Ask Orbi
  * chat) is frozen.

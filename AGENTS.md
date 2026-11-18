@@ -12,7 +12,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Orbis (codename "Agent OS") is a capability marketplace where a company installs bounded, evaluated AI missions instead of assembling an automation stack. Full product and architecture docs live in this repo:
 
-- [docs/strategy/](docs/strategy/) — vision, PRD, UX, flows, capability contract, build-vs-buy, roadmap, decisions
 - [docs/architecture/](docs/architecture/CTO-README.md) — target architecture, runtime, contracts, security, reliability, evaluation, stack, ADRs
 - [docs/design/](docs/design/13-design-system.md) — design system, mockups, boards
 - [docs/product/agent-runtime.md](docs/product/agent-runtime.md) — current runtime implementation and pilot gates
