@@ -1,6 +1,6 @@
 # Follow-ups, request pipeline and measured weekly report
 
-Status: built on branch `feat/followups-pipeline-report` (stacked on `feat/v1-integration`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio, Stripe or model call has been made. Concept: levels 6, 7 and 8 of [18-orbi-inbox-concept.md](../strategy/18-orbi-inbox-concept.md). It builds on [inbox-drafts.md](inbox-drafts.md), [company-brain.md](company-brain.md) and [billing-v1.md](billing-v1.md). Updated 2026-10-02.
+Status: built on branch `feat/followups-pipeline-report` (stacked on `feat/v1-integration`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio, Stripe or model call has been made. Concept: levels 6, 7 and 8 of 18-orbi-inbox-concept.md. It builds on [inbox-drafts.md](inbox-drafts.md), [company-brain.md](company-brain.md) and [billing-v1.md](billing-v1.md). Updated 2026-10-02.
 
 ## What it does
 

@@ -8,9 +8,9 @@ import { authConfig } from "@/lib/platform/auth";
  * NEXT_PUBLIC_*), used for this single admin call. Without it, the identity
  * stays in Supabase Auth: the operator deletes it on request (launch checklist).
  */
-export type AdminAuth = { deleteUser(id: string): Promise<{ error: unknown }> };
+type AdminAuth = { deleteUser(id: string): Promise<{ error: unknown }> };
 
-export function adminAuth(): AdminAuth | null {
+function adminAuth(): AdminAuth | null {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!key) return null;
   const { url } = authConfig();

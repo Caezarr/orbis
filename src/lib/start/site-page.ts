@@ -32,7 +32,7 @@ export type SitePage = {
   instructionsRemoved: number;
 };
 
-export const MAX_SEGMENTS = 600;
+const MAX_SEGMENTS = 600;
 const MAX_SEGMENT_CHARS = 1200;
 
 const BLOCK = new Set(

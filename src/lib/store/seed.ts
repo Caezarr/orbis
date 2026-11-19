@@ -39,8 +39,6 @@ const TENANT = "tenant_acme";
 const WORKSPACE = "ws_acme";
 const USER = "user_gabriel";
 
-export const DEMO_TENANT = TENANT;
-
 export function buildSeed(): StoreState {
   return {
     workspace: {

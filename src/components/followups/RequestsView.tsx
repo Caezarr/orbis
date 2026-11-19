@@ -36,7 +36,7 @@ const FOLLOWUP_STATUS: Record<string, string> = {
   not_needed: "Pas de relance nécessaire",
   dismissed: "Écartée",
 };
-export const dateFr = (iso: string | null, withTime = false) =>
+const dateFr = (iso: string | null, withTime = false) =>
   iso
     ? new Intl.DateTimeFormat("fr-FR", {
         timeZone: "Europe/Paris",

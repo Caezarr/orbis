@@ -1,3 +1,6 @@
+import type { BusinessAudit } from "@/lib/product/audit";
+import type { KnowledgeSelection } from "@/lib/product/knowledge-scopes";
+
 export type Maturity =
   "planned" | "composable" | "ready" | "supervised" | "autonomy_scoped";
 
@@ -22,7 +25,7 @@ export type RunState =
 
 export type RuntimeMode = "test" | "supervised" | "scoped_autonomy";
 
-export type ClaimKind = "fact" | "hypothesis" | "missing";
+type ClaimKind = "fact" | "hypothesis" | "missing";
 
 export type CorrectionScope = "this_result" | "this_customer" | "general_rule";
 
@@ -34,7 +37,7 @@ export type MemoryKind =
   | "preference"
   | "organizational";
 
-export type ActionState =
+type ActionState =
   | "planned"
   | "policy_checked"
   | "approval_required"
@@ -425,8 +428,8 @@ export type StoreState = {
     updatedAt: string;
   }[];
   teamGroups?: { id: string; name: string; memberIds: string[] }[];
-  businessAudits?: import("@/lib/product/audit").BusinessAudit[];
-  knowledgeSelections?: import("@/lib/product/knowledge-scopes").KnowledgeSelection[];
+  businessAudits?: BusinessAudit[];
+  knowledgeSelections?: KnowledgeSelection[];
   workspace: Workspace;
   memberships: Membership[];
   profile: CompanyProfile | null;

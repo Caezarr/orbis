@@ -33,7 +33,7 @@ const DAY_MS = 86_400_000;
 /** First digest, or after a long pause: never look back further than this. */
 export const MAX_WINDOW_MS = 7 * DAY_MS;
 
-export type DigestSettingsView = {
+type DigestSettingsView = {
   enabled: boolean;
   /** Masked address the digest goes to (the account e-mail at opt-in). */
   recipient?: string;
@@ -139,8 +139,8 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
   });
 }
 
-export type SubscriberOutcome = "not_due" | "skipped_empty" | DigestOutcome;
-export type DigestDeps = {
+type SubscriberOutcome = "not_due" | "skipped_empty" | DigestOutcome;
+type DigestDeps = {
   mode?: DigestDeliveryMode;
   counts?: typeof digestCounts;
   compose?: (counts: DigestCounts) => DigestMessage;
@@ -201,7 +201,7 @@ export async function runDigestForSubscriber(db: PoolClient, identity: Identity,
   return outcome;
 }
 
-export type DigestPassResult = {
+type DigestPassResult = {
   due: number;
   simulated: number;
   sent: number;
@@ -210,7 +210,7 @@ export type DigestPassResult = {
   failed: number;
   errors: number;
 };
-export type DigestPassDeps = DigestDeps & {
+type DigestPassDeps = DigestDeps & {
   discover?: (limit: number) => Promise<Identity[]>;
   run?: (identity: Identity, fn: (db: PoolClient) => Promise<SubscriberOutcome>) => Promise<SubscriberOutcome>;
   clock?: () => Date;
@@ -218,7 +218,7 @@ export type DigestPassDeps = DigestDeps & {
 };
 
 /** Ids only. Runs as the runtime role with no tenant context. */
-export async function discoverDueDigests(limit: number): Promise<Identity[]> {
+async function discoverDueDigests(limit: number): Promise<Identity[]> {
   return transaction(async (db) =>
     (
       await db.query<{ tenant_id: string; workspace_id: string; user_id: string }>(

@@ -1,5 +1,5 @@
 /**
- * V1 focus (docs/strategy/17-v1-self-serve.md, « Ce qu'on gèle »): the
+ * V1 focus (private product notes, "what we freeze"): the
  * horizontal product (catalogue, missions, workflows, knowledge, analytics,
  * integrations catalogue, old audit/onboarding, industry pages, Ask Orbi
  * chat) is frozen.
@@ -56,7 +56,7 @@ export type NavKey =
   | "connections"
   | "knowledge"
   | "analytics";
-export type NavItem = { key: NavKey; href: string; label: string; also?: readonly string[] };
+type NavItem = { key: NavKey; href: string; label: string; also?: readonly string[] };
 
 /** Wedge order: decisions first, then the pipeline, then what Orbi knows and measures. */
 export const FOCUSED_NAV: readonly NavItem[] = [

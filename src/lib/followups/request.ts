@@ -17,7 +17,7 @@ export const requestExtractionSchema = z.object({
   deadlineQuote: z.string().max(120).nullable(),
 });
 export type RequestExtraction = z.infer<typeof requestExtractionSchema>;
-export type VerifiedRequest = {
+type VerifiedRequest = {
   need: string | null;
   budget: string | null;
   deadline: string | null;
@@ -28,7 +28,7 @@ export type VerifiedRequest = {
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 /** Exact quote check, whitespace-insensitive only (no case/accent folding). */
-export function quoteIn(quote: string | null | undefined, text: string, min = 4) {
+function quoteIn(quote: string | null | undefined, text: string, min = 4) {
   const q = squash(quote ?? "");
   return q.length >= min && squash(text).includes(q);
 }

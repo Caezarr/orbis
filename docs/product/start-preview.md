@@ -1,6 +1,6 @@
 # /start instant preview — level 1, "value before connection"
 
-Status: built behind `ORBIS_START_PREVIEW=false`. No live model call has been made. Updated 2026-10-02. Concept: level 1 of `docs/strategy/18-orbi-inbox-concept.md`.
+Status: built behind `ORBIS_START_PREVIEW=false`. No live model call has been made. Updated 2026-10-02. Concept: level 1 of the Orbi inbox concept.
 
 ## Step 1 reading (`POST /api/v1/start/site`), updated 2026-10-03
 

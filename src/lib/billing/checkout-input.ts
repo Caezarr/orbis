@@ -1,6 +1,6 @@
 import type { PaidPlanKey } from "./plans";
 
-export type CheckoutInput = { plan: PaidPlanKey; requestId: string };
+type CheckoutInput = { plan: PaidPlanKey; requestId: string };
 /** No coercion, client price IDs, amounts or client tenant identifiers. */
 export function checkoutInput(value: unknown): CheckoutInput {
   if (!value || typeof value !== "object") throw new Error("INVALID_CHECKOUT");

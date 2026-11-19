@@ -106,7 +106,7 @@ function mergeRedaction(a: RedactionContext, b: RedactionContext): RedactionCont
   };
 }
 
-export type CandidatePlan =
+type CandidatePlan =
   | { action: "insert" }
   | { action: "merge"; factId: string; quotes: FactQuote[]; evidenceAt: string | null }
   | { action: "skip"; reason: "rejected_before" | "duplicate" };

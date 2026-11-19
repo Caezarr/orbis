@@ -19,8 +19,8 @@ import { createZip, type ZipEntry } from "./zip";
  */
 
 type Db = Pick<PoolClient, "query">;
-export type ExportIds = { workspaceId: string; tenantId: string };
-export type ExportSection = { name: string; rows: Record<string, unknown>[] };
+type ExportIds = { workspaceId: string; tenantId: string };
+type ExportSection = { name: string; rows: Record<string, unknown>[] };
 
 const SECTIONS: { name: string; table: string; sql: string }[] = [
   {

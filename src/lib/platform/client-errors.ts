@@ -26,7 +26,7 @@ export const browserReportSchema = z
     path: z.string().min(1).max(200),
   })
   .strict();
-export type BrowserReport = z.infer<typeof browserReportSchema>;
+type BrowserReport = z.infer<typeof browserReportSchema>;
 
 // Chrome/Edge: "    at fn (https://host/_next/static/chunks/a.js:1:200)" or "at https://…:1:2".
 const V8 = /^\s*at (?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/;

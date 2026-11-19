@@ -84,7 +84,7 @@ export function isLikelyDomain(match: string) {
   return true;
 }
 
-export type ContactKind = "email" | "link" | "domain" | "phone";
+type ContactKind = "email" | "link" | "domain" | "phone";
 /** Contact data found in (normalised) text. */
 export function contactData(raw: string): { kind: ContactKind; value: string }[] {
   const text = normalizeModelText(raw);
@@ -112,7 +112,7 @@ const URLISH = /[\p{L}\p{N}._%+\-@]/u;
  * not part of an address/domain, and the character after does not extend it
  * ("hello@acme.te" is NOT supported by "hello@acme.test").
  */
-export function containsToken(trusted: string, candidate: string, opts: { allowPathAfter?: boolean } = {}) {
+function containsToken(trusted: string, candidate: string, opts: { allowPathAfter?: boolean } = {}) {
   const hay = trusted.toLowerCase();
   const needle = candidate.toLowerCase();
   if (!needle) return false;

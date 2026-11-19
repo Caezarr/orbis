@@ -16,7 +16,7 @@ import type { DigestMessage } from "./compose";
  *    SPF/DKIM, provider idempotency key) needs an owner decision first; it must
  *    be added here, behind the same policy hash and ledger claim.
  */
-export const DIGEST_ACTION = "orbis.digest.send";
+const DIGEST_ACTION = "orbis.digest.send";
 export type DigestDeliveryMode = "simulated" | "unsupported";
 export type DigestOutcome = "simulated" | "sent" | "refused" | "failed";
 

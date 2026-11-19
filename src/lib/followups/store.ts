@@ -11,10 +11,10 @@ import type { FollowupSettings, FollowupStore, RequestStore, TrackedItem, UsageK
  * transaction (worker `scoped()` or `withWorkspaceRequest`) and filters on
  * workspace_id/tenant_id on top of FORCE RLS (migration 011).
  */
-export type Ids = { workspaceId: string; tenantId: string };
+type Ids = { workspaceId: string; tenantId: string };
 const p = (ids: Ids) => [ids.workspaceId, ids.tenantId];
 
-export const DEFAULT_SETTINGS = { enabled: true, businessDays: 5, maxStages: 2, replyBaselineMinutes: null as number | null };
+const DEFAULT_SETTINGS = { enabled: true, businessDays: 5, maxStages: 2, replyBaselineMinutes: null as number | null };
 export async function loadPipelineSettings(db: Pick<PoolClient, "query">, ids: Ids) {
   const row = (
     await db.query<{
@@ -37,7 +37,7 @@ export async function loadPipelineSettings(db: Pick<PoolClient, "query">, ids: I
 }
 
 /** Same monthly cap as tasks, inbox drafts and the brain; reservation in pipeline_usage. */
-export async function reservePipelineBudget(db: PoolClient, ids: Ids, kind: UsageKind, refId: string, cents: number) {
+async function reservePipelineBudget(db: PoolClient, ids: Ids, kind: UsageKind, refId: string, cents: number) {
   if (!(await workspaceBudgetAllows(db, ids, cents))) return null;
   const id = randomUUID();
   await db.query(
@@ -46,7 +46,7 @@ export async function reservePipelineBudget(db: PoolClient, ids: Ids, kind: Usag
   );
   return id;
 }
-export async function addPipelineUsage(db: PoolClient, ids: Ids, usageId: string, usage: ModelUsage) {
+async function addPipelineUsage(db: PoolClient, ids: Ids, usageId: string, usage: ModelUsage) {
   await db.query(
     "UPDATE pipeline_usage SET input_tokens=input_tokens+$4, output_tokens=output_tokens+$5 WHERE id=$1 AND workspace_id=$2 AND tenant_id=$3",
     [usageId, ...p(ids), usage.inputTokens, usage.outputTokens],

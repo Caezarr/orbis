@@ -15,7 +15,7 @@ import { canonical, sdkClient, verifyPrivateAccount } from "./action-broker";
  */
 export class BrokerPolicyError extends Error {}
 
-export type PinnedConfig = { toolkit: string; config: string; version: string };
+type PinnedConfig = { toolkit: string; config: string; version: string };
 
 export function pinnedConfig(input: {
   toolkit: string | undefined;

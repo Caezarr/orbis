@@ -11,7 +11,7 @@
  * times are Paris local time.
  */
 export type Person = { name: string; email: string };
-export type FixtureMessage = {
+type FixtureMessage = {
   dir: "in" | "out";
   /** Days before seeding (negative). */
   day: number;
@@ -1155,7 +1155,7 @@ Bien à vous,`),
   ),
 ];
 
-export const MDK_PEINTURE: DemoFixture = Object.freeze({
+const MDK_PEINTURE: DemoFixture = Object.freeze({
   id: "mdk-peinture",
   company: {
     name: "MDK Peinture",

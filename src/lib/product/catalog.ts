@@ -1,4 +1,4 @@
-export type Flow = {
+type Flow = {
   id: string;
   version: string;
   title: string;

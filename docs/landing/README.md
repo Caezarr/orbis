@@ -11,8 +11,7 @@ Revue de direction : éviter une nouvelle page entièrement composée de cartes 
 ## Fichiers
 
 - `src/app/page.tsx` : page rendue côté serveur, contenu, métadonnées et FAQ native.
-- `src/components/landing/LandingExperience.tsx` : navigation responsive, démo à trois scénarios, aperçu de mémoire.
-- `src/app/landing.module.css` : styles locaux, sans fuite vers le workspace ; adaptation mobile et réduction des animations.
+- ~~`src/components/landing/LandingExperience.tsx`~~ et ~~`src/app/landing.module.css`~~ : remplacés depuis par `CompanyLanding.tsx` / `company-landing.module.css`, supprimés en novembre 2026 (code mort).
 - `public/brand/orbis-modules.png` : illustration originale. Next Image prend en charge les tailles adaptées et le chargement différé.
 - `desktop.png`, `mobile.png` : captures de vérification.
 

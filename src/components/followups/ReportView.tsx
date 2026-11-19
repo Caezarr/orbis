@@ -7,7 +7,7 @@ import s from "./followups.module.css";
 export type ReportData = WeeklyReport & { previous: WeeklyReport };
 const dayFr = (iso: string) =>
   new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" }).format(new Date(iso));
-export function weekLabel(week: WeeklyReport["week"]) {
+function weekLabel(week: WeeklyReport["week"]) {
   const last = new Date(new Date(week.end).getTime() - 3_600_000).toISOString();
   return `Semaine du ${dayFr(week.start)} au ${dayFr(last)}`;
 }

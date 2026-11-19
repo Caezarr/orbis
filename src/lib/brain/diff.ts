@@ -6,16 +6,16 @@ import { fold, stripQuoted } from "./text";
  */
 export type Outcome = "pending" | "sent_as_is" | "sent_edited" | "not_used";
 /** Similarity at or above which a sent reply counts as the draft sent as is. */
-export const AS_IS_THRESHOLD = 0.9;
+const AS_IS_THRESHOLD = 0.9;
 /**
  * Share of the draft's words kept, in order, in the sent reply (LCS / draft
  * length). Below this the owner wrote a different reply: the draft was not used.
  * Kept separate from similarity so a short draft the owner completed (filled a
  * placeholder, added a sentence) counts as edited, not as unused.
  */
-export const RETAINED_THRESHOLD = 0.5;
+const RETAINED_THRESHOLD = 0.5;
 /** Without a sent reply after this long, the draft is counted as not used. */
-export const NOT_USED_AFTER_MS = 7 * 86_400_000;
+const NOT_USED_AFTER_MS = 7 * 86_400_000;
 const MAX_TOKENS = 600;
 
 const tokens = (text: string) =>
@@ -27,7 +27,7 @@ const tokens = (text: string) =>
     .slice(0, MAX_TOKENS);
 
 /** Word-level Levenshtein distance (bounded inputs: O(n·m) on <= 600 tokens). */
-export function wordDistance(a: string[], b: string[]) {
+function wordDistance(a: string[], b: string[]) {
   let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
     const cur = [i];
@@ -42,7 +42,7 @@ export function wordDistance(a: string[], b: string[]) {
   return prev[b.length];
 }
 /** Longest common subsequence of words (bounded inputs). */
-export function lcsLength(a: string[], b: string[]) {
+function lcsLength(a: string[], b: string[]) {
   let prev = new Array<number>(b.length + 1).fill(0);
   for (let i = 1; i <= a.length; i++) {
     const cur = [0];
@@ -53,7 +53,7 @@ export function lcsLength(a: string[], b: string[]) {
   return prev[b.length];
 }
 /** Share of the draft's words that survive, in order, in the sent text. */
-export function retainedRatio(draft: string, sent: string) {
+function retainedRatio(draft: string, sent: string) {
   const a = tokens(draft);
   if (!a.length) return 0;
   return lcsLength(a, tokens(sent)) / a.length;
@@ -68,7 +68,7 @@ export function similarityRatio(draft: string, sent: string) {
   return 1 - wordDistance(a, bb) / Math.max(a.length, bb.length);
 }
 
-export type SentReply = { id: string; sentAt: string; text: string };
+type SentReply = { id: string; sentAt: string; text: string };
 /**
  * First owner reply sent after the draft was created decides the outcome.
  * Placeholder markers left in the draft are ignored for the ratio, so filling

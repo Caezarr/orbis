@@ -31,9 +31,9 @@ import { generationSettings, getModel } from "@/lib/runtime/provider";
  * - any failure (budget, model, schema, timeout) keeps the pattern guard's
  *   result unchanged, with an internal `claim_check:unavailable` flag.
  */
-export const CLAIM_KINDS = ["commitment", "free_offer", "discount", "delay"] as const;
-export type ClaimKind = (typeof CLAIM_KINDS)[number];
-export const CLAIM_MAX = 6;
+const CLAIM_KINDS = ["commitment", "free_offer", "discount", "delay"] as const;
+type ClaimKind = (typeof CLAIM_KINDS)[number];
+const CLAIM_MAX = 6;
 
 export function claimCheckEnabled() {
   return process.env.ORBIS_INBOX_CLAIM_CHECK === "true";

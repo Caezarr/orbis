@@ -26,7 +26,6 @@ export async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Pr
     throw error;
   } finally { client.release(); }
 }
-export const withTransaction = transaction;
 /** Transaction-local settings: never persist identity on a pooled connection. */
 export async function setTenantContext(client: PoolClient, identity: {userId: string; tenantId?: string; workspaceId?: string}) {
   await client.query("SELECT set_config('app.user_id', $1, true), set_config('app.tenant_id', $2, true), set_config('app.workspace_id', $3, true)",

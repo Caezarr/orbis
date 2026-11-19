@@ -92,7 +92,7 @@ export async function trackOnce(event: EventName, properties: Properties = {}) {
   await recordEvent(ctx.db, ctx, event, properties);
   return true;
 }
-export function pseudonym(value: string) {
+function pseudonym(value: string) {
   return createHash("sha256")
     .update(`orbis:analytics:v1:${value}`)
     .digest("hex");

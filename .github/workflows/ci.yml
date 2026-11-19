@@ -35,12 +35,14 @@ jobs:
       # next-env.d.ts and route types are generated, not committed.
       - run: pnpm exec next typegen
       - run: pnpm exec tsc --noEmit
-      # Errors fail the job; warnings are reported only.
+      # Errors and warnings both fail the job (--max-warnings 0).
       - run: pnpm lint
+      # Unused files, exports and dependencies (config: knip.json).
+      - run: pnpm knip
       - run: pnpm test
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright has no chromium build for ubuntu-26.04 yet
     timeout-minutes: 30
     env:
       CI: "true"

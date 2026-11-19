@@ -12,7 +12,7 @@ import { editProposalSchema, type BrainModel } from "./model";
  * go to the same validation queue as extracted facts. Nothing is auto-applied.
  */
 const PROPOSAL_SCHEMA = editProposalSchema.shape.proposals.element;
-export const OUTCOME_CHECK_LIMIT = 5;
+const OUTCOME_CHECK_LIMIT = 5;
 export type DueDraft = {
   rowId: string;
   threadId: string;

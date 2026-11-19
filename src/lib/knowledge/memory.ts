@@ -10,7 +10,7 @@ export type KnowledgeMemory = MemoryItem & {
   sourceRefs?: { sourceId: string; sourceVersion: string }[];
 };
 
-export type MemoryContext = {
+type MemoryContext = {
   state: StoreState;
   sourceIds: readonly string[];
   missionId?: string;

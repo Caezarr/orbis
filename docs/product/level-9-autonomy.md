@@ -1,6 +1,6 @@
 # Level 9 — progressive autonomy (spec only)
 
-Status: **specification only. Nothing in this document is built, and nothing here may ship before the gates in [§ 9](#9-gates-before-any-code) are met.** Written 2026-10-06 by the morning routine. Backlog item 8 in [docs/TODO.md](../TODO.md). Context: [18-orbi-inbox-concept.md](../strategy/18-orbi-inbox-concept.md) (level 9: « Envoi en un tap, puis auto-envoi opt-in par catégorie à fort taux d'acceptation ») and [17-v1-self-serve.md](../strategy/17-v1-self-serve.md) (« Jamais d'envoi automatique en V1 »).
+Status: **specification only. Nothing in this document is built, and nothing here may ship before the gates in [§ 9](#9-gates-before-any-code) are met.** Written 2026-10-06 by the morning routine. Backlog item 8 in [docs/TODO.md](../TODO.md). Context: 18-orbi-inbox-concept.md (level 9: « Envoi en un tap, puis auto-envoi opt-in par catégorie à fort taux d'acceptation ») and 17-v1-self-serve.md (« Jamais d'envoi automatique en V1 »).
 
 Today the product never sends. The only external write is creating a draft (`inbox-drafts-v1`, [inbox-drafts.md](inbox-drafts.md)). This spec describes how sending could be added later without breaking any invariant in [AGENTS.md](../../AGENTS.md): through the broker, gated by runtime mode, bound to an exact payload hash, with an idempotency key and a policy hash, and revocable.
 

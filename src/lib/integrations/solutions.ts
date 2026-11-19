@@ -7,7 +7,7 @@ export type ConnectionState =
   | "not_configured"
   | "unverified"
   | "error";
-export type ToolRequirement = {
+type ToolRequirement = {
   label: string;
   description: string;
   alternatives: IntegrationSlug[];

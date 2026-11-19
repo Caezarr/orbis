@@ -6,7 +6,7 @@ import { OrbiEmpty, OrbiSays } from "@/components/product/OrbiSays";
 import s from "./brain.module.css";
 
 type Quote = { quote: string; messageId: string; sentAt: string };
-export type FactView = {
+type FactView = {
   id: string;
   category: string;
   statement: string;
@@ -21,7 +21,7 @@ export type FactView = {
   active: boolean;
   conflictKey: string | null;
 };
-export type Overview = {
+type Overview = {
   categories: { id: string; label: string }[];
   facts: FactView[];
   counts: { candidates: number; approved: number; conflicts: number };
@@ -41,7 +41,7 @@ export type Overview = {
   canReview: boolean;
 };
 
-export const dateFr = (iso?: string | null) =>
+const dateFr = (iso?: string | null) =>
   iso
     ? new Date(iso).toLocaleDateString("fr-FR", {
         day: "numeric",
