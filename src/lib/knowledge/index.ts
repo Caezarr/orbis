@@ -1,4 +1,4 @@
-export { accessibleSources, retrieveKnowledge } from "./retrieval";
-export type { KnowledgeEvidence, RetrievalInput } from "./retrieval";
+export { retrieveKnowledge } from "./retrieval";
+export type { KnowledgeEvidence } from "./retrieval";
 export { resolveApprovedMemory } from "./memory";
-export type { KnowledgeMemory, MemoryContext } from "./memory";
+export type { KnowledgeMemory } from "./memory";

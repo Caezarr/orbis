@@ -33,7 +33,7 @@ type SettingsRow = {
   next_run_at: Date | null;
   monthly_cap_cents: number | null;
 };
-export type InboxSettingsView = {
+type InboxSettingsView = {
   continuousEnabled: boolean;
   /** A first run completed for a connected mailbox: the toggle can be turned on. */
   eligible: boolean;
@@ -141,7 +141,7 @@ export async function setContinuous(enabled: boolean) {
 }
 
 type DigestRow = Parameters<typeof publicMessage>[0];
-export type TodayDigest = {
+type TodayDigest = {
   since: string;
   counts: {
     draftsReady: number;

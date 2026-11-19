@@ -19,7 +19,7 @@ import { parseSitePage, type SitePage } from "./site-page";
  * - Nothing is stored: pages live in memory for the request only.
  */
 
-export type CrawlOptions = {
+type CrawlOptions = {
   /** Whole crawl, home included. */
   budgetMs?: number;
   homeTimeoutMs?: number;
@@ -42,7 +42,7 @@ export type CrawlResult = {
   instructionsRemoved: number;
 };
 
-export const CRAWL_DEFAULTS: Required<CrawlOptions> = {
+const CRAWL_DEFAULTS: Required<CrawlOptions> = {
   budgetMs: 20_000,
   homeTimeoutMs: 12_000,
   pageTimeoutMs: 7_000,
@@ -65,7 +65,7 @@ const ROBOTS_UNREACHABLE = { rules: [{ allow: false, pattern: "/" }] as Rule[], 
  * checked: the RFC asks for text/plain, but crawlers parse what they get, and
  * an HTML soft-404 yields no rule, like a 404.
  */
-export async function readRobots(fetcher: Fetcher, url: string, signal: AbortSignal) {
+async function readRobots(fetcher: Fetcher, url: string, signal: AbortSignal) {
   try {
     const r = await fetcher(url, { signal, accept: ["*/*"], maxBytes: ROBOTS_MAX_BYTES });
     return { ...parseRobots(r.body), unreachable: false };

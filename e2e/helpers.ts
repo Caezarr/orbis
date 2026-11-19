@@ -27,7 +27,7 @@ export async function magicLinkFor(email: string) {
  * Locally no proxy sets X-Forwarded-For, so give each test its own
  * documentation-range address (RFC 5737) instead of sharing "unknown".
  */
-export async function asDistinctClient(page: Page) {
+async function asDistinctClient(page: Page) {
   const octet = () => Math.floor(Math.random() * 254) + 1;
   await page.setExtraHTTPHeaders({ "x-forwarded-for": `198.51.${octet()}.${octet()}` });
 }

@@ -26,7 +26,7 @@ const view = (m: MailMessage, max = 2500) => ({
   text: m.text.slice(0, max),
 });
 
-export const ownerWaitingSchema = z.object({
+const ownerWaitingSchema = z.object({
   awaitingReply: z.boolean(),
   kind: z.enum(["quote", "answer", "question", "closing", "other"]),
 });
@@ -45,7 +45,7 @@ export type FollowupModel = {
   draftFollowup(input: FollowupDraftInput): Promise<{ output: ReplyDraft; usage: ModelUsage }>;
 };
 
-export function requestPrompt(message: MailMessage) {
+function requestPrompt(message: MailMessage) {
   const block = dataBlock("email", view(message, 3000));
   return {
     system: `You structure ONE inbound customer request for a small company's own request list. ${SECURITY_RULES}
@@ -58,7 +58,7 @@ Never estimate, convert, complete or infer a budget or a date. Never include nam
     prompt: `${block.text}\nStructure the request inside <${block.tag}>.`,
   };
 }
-export function ownerWaitingPrompt(ownerText: string) {
+function ownerWaitingPrompt(ownerText: string) {
   const block = dataBlock("owner_message", { text: ownerText.slice(0, 2000) });
   return {
     system: `You read the LAST message a small company sent to a customer in an email thread. ${SECURITY_RULES}
@@ -66,7 +66,7 @@ Decide whether the company is waiting for the customer's answer: true for a quot
     prompt: `${block.text}\nClassify the message inside <${block.tag}>.`,
   };
 }
-export function followupPrompt(input: FollowupDraftInput) {
+function followupPrompt(input: FollowupDraftInput) {
   const owner = dataBlock("company_last_message", view(input.ownerMessage));
   const customer = dataBlock("customer_last_message", view(input.customerMessage, 1500));
   const sources = dataBlock(

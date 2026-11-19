@@ -619,7 +619,6 @@ export function createDemoComposio(store: DemoStore = demoStore()) {
     },
   };
 }
-export type DemoComposio = ReturnType<typeof createDemoComposio>;
 
 /** Consent page action: activates a pending account owned by `userId`. */
 export function resolveDemoConsent(

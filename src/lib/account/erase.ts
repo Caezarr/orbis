@@ -25,7 +25,7 @@ import type { PoolClient } from "pg";
  */
 
 export const CONFIRMATION_WORD = "SUPPRIMER";
-export const RECENT_AUTH_MS = 15 * 60_000;
+const RECENT_AUTH_MS = 15 * 60_000;
 
 export type EraseIdentity = { userId: string; workspaceId: string; tenantId: string };
 export type EraseDeps = {
@@ -99,7 +99,7 @@ export async function eraseTenantRows(db: Pick<PoolClient, "query">, identity: E
 
 /** Minimal Stripe surface (mockable). */
 type Page<T> = { data: T[]; has_more: boolean };
-export type StripeCancelSurface = {
+type StripeCancelSurface = {
   checkout: {
     sessions: {
       list(params: { customer: string; status: "open"; limit: number }): Promise<Page<{ id: string }>>;

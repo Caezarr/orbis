@@ -1,6 +1,6 @@
 # Orbi — règles de la mascotte
 
-Orbi est le collègue qui tient la boîte mail ([16-orbi-product-language.md](../strategy/16-orbi-product-language.md), [18-orbi-inbox-concept.md](../strategy/18-orbi-inbox-concept.md)). La mascotte rend le produit vivant **parce qu'elle est rare et honnête** : elle apparaît aux moments qui comptent et son humeur dit toujours la vérité sur l'état réel de l'interface.
+Orbi est le collègue qui tient la boîte mail (16-orbi-product-language.md, 18-orbi-inbox-concept.md). La mascotte rend le produit vivant **parce qu'elle est rare et honnête** : elle apparaît aux moments qui comptent et son humeur dit toujours la vérité sur l'état réel de l'interface.
 
 ## Invariant
 

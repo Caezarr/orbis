@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Local production-like stack: Supabase (Postgres + Auth + Mailpit) in Docker,
 # migrations applied by the owner role, app connected as a runtime role
-# without BYPASSRLS (same shape as production, see docs/product/launch-checklist.md).
+# without BYPASSRLS (same shape as production, see docs/product/launch-hardening.md).
 #
 #   pnpm local:up      start Supabase, create the runtime role, migrate
 #   pnpm local:env     print the .env.local block to paste

@@ -213,7 +213,7 @@ export function csvCell(value: unknown) {
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
-export const CSV_COLUMNS = [
+const CSV_COLUMNS = [
   "date_reception",
   "statut",
   "type",

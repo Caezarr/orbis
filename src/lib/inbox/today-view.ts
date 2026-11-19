@@ -29,7 +29,7 @@ export function uncertainties(m: Pick<InboxMessageView, "questions" | "draftPrev
   return { items, warnings };
 }
 
-export type TodayShortcut = "next" | "previous" | "open" | "answer";
+type TodayShortcut = "next" | "previous" | "open" | "answer";
 
 /** j/k/o/e, only when the user is not typing and no modifier is held. */
 export function shortcutFor(e: {
@@ -63,7 +63,7 @@ export function moveSelection(current: number, delta: 1 | -1, length: number) {
   return Math.min(length - 1, Math.max(0, current + delta));
 }
 
-export type TodayState =
+type TodayState =
   /** No completed first run on a mailbox: the next step is /start. */
   | "connect"
   /** First run done, continuous drafting off: new mail is not read. */

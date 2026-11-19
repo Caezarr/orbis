@@ -19,7 +19,7 @@ export type TaskQuote = Readonly<{
   lines: readonly QuoteLine[];
   totalCents: number;
 }>;
-export type QuoteRequest = {
+type QuoteRequest = {
   id: string;
   tenantId: string;
   outcomeKey: string;
@@ -118,7 +118,7 @@ export function createQuote(card: RateCard, request: QuoteRequest): TaskQuote {
   });
 }
 
-export type Reservation = Readonly<{
+type Reservation = Readonly<{
   quote: TaskQuote;
   state: "reserved" | "settled" | "released" | "refunded";
   cashCents: number;
@@ -127,7 +127,7 @@ export type Reservation = Readonly<{
   closedAt: number | null;
 }>;
 /** JSON portable. One account represents one tenant/billing period; budget is a cap, not a payment. */
-export type BillingAccount = Readonly<{
+type BillingAccount = Readonly<{
   tenantId: string;
   periodId: string;
   budgetCents: number;

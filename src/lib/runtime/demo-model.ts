@@ -25,19 +25,10 @@ import type { Classification, InboxModel, ReplyDraft, ReplySource } from "./inbo
  */
 type Env = Record<string, string | undefined>;
 
-export const DEMO_MODEL_ID = "orbis-demo-local";
 export const DEMO_DRAFT_NOTICE =
   "(Brouillon de démonstration : modèle factice local, aucun appel à une IA.)";
 
-export class DemoModelForbiddenError extends Error {
-  constructor() {
-    super(
-      "ORBIS_AI_PROVIDER=demo is a local development switch and is refused in production. Configure a real provider.",
-    );
-  }
-}
-
-export function demoModelRequested(env: Env = process.env) {
+function demoModelRequested(env: Env = process.env) {
   return env.ORBIS_AI_PROVIDER?.trim().toLowerCase() === "demo";
 }
 

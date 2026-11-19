@@ -63,7 +63,7 @@ export type RedactionContext = {
   trustedText?: string;
 };
 /** Name-like tokens derived from third-party addresses/names (>= 3 letters). */
-export function nameTokens(thirdParties: readonly string[]) {
+function nameTokens(thirdParties: readonly string[]) {
   const tokens = new Set<string>();
   for (const party of thirdParties) {
     const local = party.includes("@") ? party.split("@")[0] : party;

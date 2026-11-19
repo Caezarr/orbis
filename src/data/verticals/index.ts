@@ -4,8 +4,6 @@ import { contentCreators } from "./content-creators";
 import { coachesConsultants } from "./coaches-consultants";
 import type { FaqItem, VerticalHub, VerticalJob } from "./types";
 
-export type { FaqItem, VerticalHub, VerticalJob } from "./types";
-
 export const hubs: VerticalHub[] = [airbnbHosts, contentCreators, coachesConsultants];
 
 export function getHub(slug: string): VerticalHub | undefined {

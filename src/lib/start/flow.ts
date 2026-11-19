@@ -8,7 +8,7 @@ import { z } from "zod";
  */
 
 export type StartStep = "company" | "account" | "mailbox" | "drafts";
-export const START_STEPS: readonly StartStep[] = [
+const START_STEPS: readonly StartStep[] = [
   "company",
   "account",
   "mailbox",
@@ -222,7 +222,7 @@ export function quotableSentences(text: string, max = 2) {
   return out;
 }
 
-export type SiteReading = {
+type SiteReading = {
   website: string;
   title: string;
   description: string;
@@ -463,7 +463,7 @@ export const BLOCKER_COPY: Record<BlockerKind, { title: string; action: string }
 };
 
 /** Phase displayed while a batch is pending — only states the backend reports. */
-export type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget" | "quota";
+type ProgressPhase = "queued" | "reading" | "drafting" | "done" | "failed" | "budget" | "quota";
 export function progressPhase(
   batch: Pick<InboxBatchView, "status">,
   messages: Pick<InboxMessageView, "status">[],
@@ -486,7 +486,7 @@ export function progressPhase(
 }
 export const isPending = (status: BatchStatus) => status === "queued" || status === "running";
 
-export const SKIP_LABELS: Record<string, string> = {
+const SKIP_LABELS: Record<string, string> = {
   no_sender: "Sans expéditeur",
   draft: "Brouillons existants",
   own_message: "Vos propres messages",
@@ -506,7 +506,7 @@ export const CLASSIFICATION_LABELS: Record<string, string> = {
   noise: "Sans suite",
 };
 /** Meeting flags (calendar-aware drafts). No em-dashes, vouvoiement. */
-export function meetingFlagLabel(flag: string): string | null {
+function meetingFlagLabel(flag: string): string | null {
   if (flag === "meeting:slots:simulated")
     return "Créneaux simulés (mode test) : votre agenda n’a pas été consulté.";
   if (flag === "meeting:ask_availability:calendar_not_connected")
@@ -559,7 +559,7 @@ export function flagLabel(flag: string) {
 export const flagLabels = (flags: string[]) =>
   [...new Set(flags.map(flagLabel))].filter((label): label is string => !!label);
 
-export type ResultSummary = {
+type ResultSummary = {
   drafts: InboxMessageView[];
   review: InboxMessageView[];
   skipped: { reason: string; label: string; count: number }[];

@@ -43,7 +43,7 @@ import {
  */
 export type MailboxProvider = "gmail" | "outlook";
 export const mailboxProviders = ["gmail", "outlook"] as const;
-export type MailboxOperation =
+type MailboxOperation =
   | "list_inbound"
   | "list_sent"
   | "read_thread"
@@ -125,9 +125,9 @@ const providerId = z
   .min(1)
   .max(1024)
   .regex(/^[A-Za-z0-9_\-=+/.:]+$/);
-export const LIST_LIMITS = { maxMessages: 50, maxWindowDays: 31 } as const;
+const LIST_LIMITS = { maxMessages: 50, maxWindowDays: 31 } as const;
 /** Sent-mail reads (company sheet extraction): one bounded page, read-only. */
-export const SENT_LIST_LIMITS = { maxMessages: 200, maxWindowDays: 90 } as const;
+const SENT_LIST_LIMITS = { maxMessages: 200, maxWindowDays: 90 } as const;
 const listInput = z
   .object({
     windowDays: z.number().int().min(1).max(LIST_LIMITS.maxWindowDays),
@@ -298,15 +298,15 @@ export type DraftLedger = {
    */
   knownDraftIds?(threadId: string): Promise<string[]>;
 };
-export type MailboxIdentity = {
+type MailboxIdentity = {
   tenantId: string;
   workspaceId: string;
   connectedAccountId: string;
 };
 export const RECONCILE_RETRY_AFTER_MS = 10 * 60_000;
-export const MAX_DRAFT_ATTEMPTS = 3;
+const MAX_DRAFT_ATTEMPTS = 3;
 /** Tolerated gap between the database clock (claim) and the provider's. */
-export const RECONCILE_CLOCK_SKEW_MS = 2 * 60_000;
+const RECONCILE_CLOCK_SKEW_MS = 2 * 60_000;
 /** Epoch ms from a provider timestamp (ms number/string or ISO), else undefined. */
 function providerTime(value: unknown): number | undefined {
   const n =

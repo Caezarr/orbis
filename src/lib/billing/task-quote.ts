@@ -10,12 +10,12 @@ export type TaskPriceSnapshot = Readonly<{
   rateVersion: string;
   billableOutcome: "completed_task";
 }>;
-export type TaskQuoteConfig = {
+type TaskQuoteConfig = {
   rateCard?: RateCard;
   /** Explicit runtime workflow -> rate ID mapping; unknown workflows never get a fallback price. */
   workflowRates?: Readonly<Record<string, string>>;
 };
-export const workflowRateAliases: Readonly<Record<string, string>> =
+const workflowRateAliases: Readonly<Record<string, string>> =
   Object.freeze({
     commerce: "ecommerce-operations",
     "b2b-sales": "sales-operations",
