@@ -103,6 +103,36 @@ export function frenchHolidays(year: number): Set<number> {
   holidayCache.set(year, set);
   return set;
 }
+const belgianCache = new Map<number, Set<number>>();
+/** Belgian legal public holidays (10 days; regional/community days excluded). */
+function belgianHolidays(year: number): Set<number> {
+  const cached = belgianCache.get(year);
+  if (cached) return cached;
+  const e = easter(year);
+  const days: LocalDate[] = [
+    { y: year, m: 1, d: 1 }, // Nouvel an
+    addDays(e, 1), // Lundi de Pâques
+    { y: year, m: 5, d: 1 }, // Fête du travail
+    addDays(e, 39), // Ascension
+    addDays(e, 50), // Lundi de Pentecôte
+    { y: year, m: 7, d: 21 }, // Fête nationale
+    { y: year, m: 8, d: 15 }, // Assomption
+    { y: year, m: 11, d: 1 }, // Toussaint
+    { y: year, m: 11, d: 11 }, // Armistice
+    { y: year, m: 12, d: 25 }, // Noël
+  ];
+  const set = new Set(days.map(toUtcDay));
+  belgianCache.set(year, set);
+  return set;
+}
+/**
+ * Public holiday in the country of a supported workspace timezone
+ * (Europe/Paris → France, Europe/Brussels → Belgium). Unknown zones: France.
+ */
+export function isPublicHoliday(date: LocalDate, timezone: string = PARIS) {
+  const set = timezone === "Europe/Brussels" ? belgianHolidays(date.y) : frenchHolidays(date.y);
+  return set.has(toUtcDay(date));
+}
 export function isBusinessDay(date: LocalDate) {
   const w = weekday(date);
   return w !== 0 && w !== 6 && !frenchHolidays(date.y).has(toUtcDay(date));

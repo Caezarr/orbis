@@ -1,4 +1,5 @@
 import type { BusyInterval } from "@/lib/integrations/calendar";
+import { isPublicHoliday } from "@/lib/followups/calendar";
 
 /*
  * Meeting slots computed by CODE from free/busy data. The model never chooses a
@@ -48,7 +49,8 @@ export type MeetingPlan =
     };
 
 // Hard sanity bounds, whatever the hours source says: never before 07:00 or
-// after 20:00 local time, never on Sunday.
+// after 20:00 local time, never on Sunday, never on a public holiday of the
+// workspace's country (an owner's calendar rarely marks 25/12 or 11/11 busy).
 const EARLIEST = 7 * 60;
 const LATEST = 20 * 60;
 
@@ -315,6 +317,10 @@ export function computeFreeSlots(o: SlotOptions): Slot[] {
     const [y, m, d] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
     const weekday = date.getUTCDay();
     const starts: number[] = [];
+    if (isPublicHoliday({ y, m, d }, o.timezone)) {
+      perDay.push(starts);
+      continue;
+    }
     for (const [a, b] of o.hours[weekday] ?? []) {
       const lo = Math.max(a, EARLIEST);
       const hi = Math.min(b, LATEST);
