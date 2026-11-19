@@ -105,7 +105,7 @@ export function frenchHolidays(year: number): Set<number> {
 }
 const belgianCache = new Map<number, Set<number>>();
 /** Belgian legal public holidays (10 days; regional/community days excluded). */
-export function belgianHolidays(year: number): Set<number> {
+function belgianHolidays(year: number): Set<number> {
   const cached = belgianCache.get(year);
   if (cached) return cached;
   const e = easter(year);
