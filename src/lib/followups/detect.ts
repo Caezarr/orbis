@@ -134,6 +134,8 @@ export type FollowupContext = {
   snoozedUntil: string | null;
   contactEmail: string | null;
   businessDays: number;
+  /** Workspace timezone: picks the holiday calendar (Europe/Brussels → Belgium; default France). */
+  timezone?: string;
   maxStages: number;
   enabled: boolean;
   existing: readonly FollowupState[];
@@ -170,7 +172,7 @@ export function decideFollowup(
     if (!last.draftedAt || obs.lastOwnerAt <= last.draftedAt) return { action: "none", reason: "previous_pending" };
   }
   const stage = (last?.stage ?? 0) + 1;
-  const dueAt = followupDueAt(new Date(obs.lastOwnerAt), ctx.businessDays).toISOString();
+  const dueAt = followupDueAt(new Date(obs.lastOwnerAt), ctx.businessDays, ctx.timezone).toISOString();
   if (now.toISOString() < dueAt) return { action: "wait", dueAt };
   if (ctx.snoozedUntil && now.toISOString() < ctx.snoozedUntil) return { action: "wait", dueAt: ctx.snoozedUntil };
   return { action: "propose", stage, dueAt };

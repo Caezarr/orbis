@@ -85,4 +85,22 @@ describe("public holidays by workspace country", () => {
     expect(isPublicHoliday(d("2027-07-21"), "Europe/Paris")).toBe(false);
     expect(isPublicHoliday(d("2027-07-22"), "Europe/Brussels")).toBe(false);
   });
+  it("business days follow the workspace country (follow-up delays)", () => {
+    // Wed 14/07/2027: holiday in France, working day in Belgium; Wed 21/07: the reverse.
+    expect(isBusinessDay(d("2027-07-14"), "Europe/Paris")).toBe(false);
+    expect(isBusinessDay(d("2027-07-14"), "Europe/Brussels")).toBe(true);
+    expect(isBusinessDay(d("2027-07-21"), "Europe/Brussels")).toBe(false);
+    expect(isBusinessDay(d("2027-07-21"))).toBe(true);
+    expect(formatLocalDate(addBusinessDays(d("2027-07-20"), 1, "Europe/Brussels"))).toBe("2027-07-22");
+    expect(formatLocalDate(addBusinessDays(d("2027-07-13"), 1, "Europe/Brussels"))).toBe("2027-07-14");
+    // Owner wrote Tue 20/07 at 10:00: due the next Belgian business day (Thu 22), not Wed 21.
+    const sent = new Date("2027-07-20T08:00:00Z");
+    expect(followupDueAt(sent, 1, "Europe/Brussels").toISOString()).toBe("2027-07-21T22:00:00.000Z");
+    expect(followupDueAt(sent, 1, "Europe/Paris").toISOString()).toBe("2027-07-20T22:00:00.000Z");
+    expect(followupDueAt(sent, 1).toISOString()).toBe("2027-07-20T22:00:00.000Z");
+    expect(businessDaysBetween(new Date("2027-07-13T08:00:00Z"), new Date("2027-07-23T08:00:00Z"), "Europe/Brussels")).toBe(7);
+    expect(businessDaysBetween(new Date("2027-07-13T08:00:00Z"), new Date("2027-07-23T08:00:00Z"), "Europe/Paris")).toBe(7);
+    expect(businessDaysBetween(new Date("2027-07-13T08:00:00Z"), new Date("2027-07-22T08:00:00Z"), "Europe/Brussels")).toBe(6);
+    expect(businessDaysBetween(new Date("2027-07-13T08:00:00Z"), new Date("2027-07-22T08:00:00Z"), "Europe/Paris")).toBe(6);
+  });
 });

@@ -1,8 +1,12 @@
 /*
- * French business calendar (Europe/Paris). Pure, dependency-free.
- * Business day = Monday–Friday in Paris local time, excluding French
- * metropolitan public holidays (jours fériés). Used for "no customer reply
- * after N business days" (follow-ups) and the weekly report window.
+ * Business calendar of a supported workspace (Europe/Paris or
+ * Europe/Brussels). Pure, dependency-free.
+ * Business day = Monday–Friday in local time, excluding the public holidays
+ * of the workspace's country (France by default, Belgium for Europe/Brussels).
+ * Paris and Brussels share the same UTC offsets and DST rules, so the Paris
+ * calendar date is also the Brussels one: only the holiday list differs.
+ * Used for "no customer reply after N business days" (follow-ups) and the
+ * weekly report window.
  */
 export const PARIS = "Europe/Paris";
 export type LocalDate = { y: number; m: number; d: number };
@@ -133,35 +137,37 @@ export function isPublicHoliday(date: LocalDate, timezone: string = PARIS) {
   const set = timezone === "Europe/Brussels" ? belgianHolidays(date.y) : frenchHolidays(date.y);
   return set.has(toUtcDay(date));
 }
-export function isBusinessDay(date: LocalDate) {
+/** Monday–Friday and not a public holiday of the workspace's country. */
+export function isBusinessDay(date: LocalDate, timezone: string = PARIS) {
   const w = weekday(date);
-  return w !== 0 && w !== 6 && !frenchHolidays(date.y).has(toUtcDay(date));
+  return w !== 0 && w !== 6 && !isPublicHoliday(date, timezone);
 }
 /** The Nth business day strictly after `date` (N ≥ 1). */
-export function addBusinessDays(date: LocalDate, n: number): LocalDate {
+export function addBusinessDays(date: LocalDate, n: number, timezone: string = PARIS): LocalDate {
   let current = date;
   let left = Math.max(1, Math.floor(n));
   while (left > 0) {
     current = addDays(current, 1);
-    if (isBusinessDay(current)) left--;
+    if (isBusinessDay(current, timezone)) left--;
   }
   return current;
 }
 /**
- * When a follow-up becomes due: 00:00 Paris on the Nth business day after the
- * Paris date of the owner's message. Sent Friday, N=5 → due next Friday 00:00.
+ * When a follow-up becomes due: local midnight on the Nth business day after
+ * the local date of the owner's message. Sent Friday, N=5 → due next Friday
+ * 00:00. Holidays follow the workspace timezone (Europe/Brussels → Belgium).
  */
-export function followupDueAt(ownerMessageAt: Date, businessDays: number): Date {
-  return parisMidnight(addBusinessDays(parisDate(ownerMessageAt), businessDays));
+export function followupDueAt(ownerMessageAt: Date, businessDays: number, timezone: string = PARIS): Date {
+  return parisMidnight(addBusinessDays(parisDate(ownerMessageAt), businessDays, timezone));
 }
-/** Business days fully elapsed between two instants (Paris dates, start excluded). */
-export function businessDaysBetween(from: Date, to: Date) {
+/** Business days fully elapsed between two instants (local dates, start excluded). */
+export function businessDaysBetween(from: Date, to: Date, timezone: string = PARIS) {
   let current = parisDate(from);
   const end = parisDate(to);
   let n = 0;
   while (compareDates(current, end) < 0 && n < 400) {
     current = addDays(current, 1);
-    if (isBusinessDay(current)) n++;
+    if (isBusinessDay(current, timezone)) n++;
   }
   return n;
 }
