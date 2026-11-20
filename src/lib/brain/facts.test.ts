@@ -79,6 +79,18 @@ describe("conflicts and dedup", () => {
     expect(planCandidate(candidate, [fact({ status: "rejected", quotes: [] })])).toEqual({ action: "skip", reason: "rejected_before" });
     expect(planCandidate({ ...candidate, statement: "Pose : 60 € HT/m²" }, [fact({})])).toEqual({ action: "insert" });
   });
+  it("never adds a new quote of the owner's mail to a replaced (superseded) fact", () => {
+    const candidate = buildCandidate(
+      { category: "pricing", topic: "prix pose m2", statement: "Pose : 45 € HT / m²", quotes: [{ quote: "pose est à 45 € HT/m²", evidence: evidence("la pose est à 45 € HT/m²") }] },
+      "sent_mail",
+    )!;
+    expect(planCandidate(candidate, [fact({ status: "superseded", quotes: [] })])).toEqual({ action: "skip", reason: "superseded_before" });
+    // A live copy of the same statement still collects the quote, never the replaced one.
+    expect(planCandidate(candidate, [fact({ id: "old", status: "superseded", quotes: [] }), fact({ id: "live" })])).toMatchObject({
+      action: "merge",
+      factId: "live",
+    });
+  });
 });
 
 describe("factSources: only approved facts reach drafting", () => {

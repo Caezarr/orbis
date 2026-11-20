@@ -175,6 +175,11 @@ describe("fact review", () => {
     expect(approve[1]).toEqual(["f1", "ws-a", "tenant-a", "Pose : 48 € HT/m²", "user-a", "approved_edited"]);
     expect(sqls().some((s) => s.includes("UPDATE brain_questions SET answered_fact_id"))).toBe(true);
   });
+  it("a replaced fact keeps no quote of the owner's mail", async () => {
+    handler = (sql) => (sql.startsWith("SELECT id,status,version") ? { rows: [row()] } : undefined);
+    await inSession(() => reviewFact("f1", { action: "approve", expectedVersion: 2 }));
+    expect(sqls().find((s) => s.includes("SET status='superseded'"))).toContain("quotes='[]'::jsonb");
+  });
   it("reject clears the stored quotes and re-opens questions it answered", async () => {
     handler = (sql) => (sql.startsWith("SELECT id,status,version") ? { rows: [row({ status: "approved" })] } : undefined);
     await inSession(() => reviewFact("f1", { action: "reject", expectedVersion: 2 }));

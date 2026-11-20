@@ -101,7 +101,8 @@ export default function Page() {
         <li>
           Chaque information proposée peut être accompagnée de courtes citations (240 caractères au plus) dont les noms,
           adresses e-mail et numéros de téléphone de tiers sont masqués. Les citations sont effacées si vous rejetez
-          l’information.
+          l’information, ou si une autre version de la même information la remplace (vous en validez une autre, ou
+          vous répondez à la question d’Orbi sur ce sujet).
         </li>
         <li>
           Ensuite, pour les brouillons d’Orbis réellement créés dans votre boîte ces 14 derniers jours (5 au plus à chaque
@@ -216,7 +217,7 @@ export default function Page() {
           ["Aperçu des brouillons de relance", "30 jours"],
           ["Identifiants, empreintes et classement des e-mails traités", "Durée de vie de l’espace"],
           ["Fiche entreprise validée", "Durée de vie de l’espace, ou jusqu’à suppression par vous"],
-          ["Citations d’une information rejetée", "Effacées au rejet"],
+          ["Citations d’une information rejetée ou remplacée", "Effacées au rejet ou au remplacement"],
           [
             "Données de contact des demandes (nom, e-mail, domaine, besoin, budget, délai)",
             "Effacées 24 mois après la dernière activité, ou à la demande (« Effacer le contact »)",

@@ -150,7 +150,10 @@ export async function requestExtraction(requestKey: string) {
 
 async function supersedeTopic(ctx: Ctx, fact: { id: string; category: string; topic_key: string }) {
   const superseded = await ctx.db.query<{ id: string }>(
-    `UPDATE brain_facts SET status='superseded', updated_at=now(),
+    // Data minimization, as for a rejection: a replaced fact is never used again,
+    // so it keeps no quote of the owner's sent mail (and the owner could not
+    // reject it any more to erase them).
+    `UPDATE brain_facts SET status='superseded', quotes='[]'::jsonb, updated_at=now(),
        history=history || jsonb_build_array(jsonb_build_object('at',now(),'actor',$5::text,'status','superseded'))
      WHERE workspace_id=$1 AND tenant_id=$2 AND category=$3 AND topic_key=$4 AND id<>$6 AND status IN ('candidate','approved') RETURNING id`,
     [...p(ctx), fact.category, fact.topic_key, ctx.userId, fact.id],

@@ -109,12 +109,15 @@ function mergeRedaction(a: RedactionContext, b: RedactionContext): RedactionCont
 export type CandidatePlan =
   | { action: "insert" }
   | { action: "merge"; factId: string; quotes: FactQuote[]; evidenceAt: string | null }
-  | { action: "skip"; reason: "rejected_before" | "duplicate" };
+  | { action: "skip"; reason: "rejected_before" | "superseded_before" | "duplicate" };
 /**
  * Dedup against what is already stored for the same category+topic:
  *  - same statement already rejected → skip (never re-propose a rejected fact);
- *  - same statement candidate/approved/superseded → add the new quotes (max 3,
- *    newest kept) without changing its status;
+ *  - same statement candidate/approved → add the new quotes (max 3, newest
+ *    kept) without changing its status;
+ *  - same statement only superseded (the owner approved another version of the
+ *    topic) → skip: a replaced fact is never used again, so it collects no new
+ *    quote of the owner's mail, and it is not proposed again;
  *  - otherwise insert a new candidate (a different statement = a conflict, shown
  *    to the owner; both are kept).
  */
@@ -127,8 +130,8 @@ export function planCandidate(candidate: CandidateFact, existing: readonly Fact[
   );
   if (same.some((f) => f.status === "rejected"))
     return { action: "skip", reason: "rejected_before" };
-  const target = same[0];
-  if (!target) return { action: "insert" };
+  const target = same.find((f) => f.status !== "superseded");
+  if (!target) return same.length ? { action: "skip", reason: "superseded_before" } : { action: "insert" };
   const known = new Set(target.quotes.map((q) => `${q.messageId}:${q.quote}`));
   const added = candidate.quotes.filter((q) => !known.has(`${q.messageId}:${q.quote}`));
   if (!added.length) return { action: "skip", reason: "duplicate" };
