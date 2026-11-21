@@ -3,8 +3,9 @@ import { SITE_URL } from "@/lib/site";
 /*
  * Daily digest content. Counts and fixed text only: no customer name, address,
  * subject, excerpt or draft text ever enters the e-mail, so a forwarded or
- * leaked digest reveals nothing about anyone's mail. The only link is the
- * app's own Today page (APP_ORIGIN, else SITE_URL), never a URL from mail.
+ * leaked digest reveals nothing about anyone's mail. The only links are the
+ * app's own pages (APP_ORIGIN, else SITE_URL): Today, and the Réglages section
+ * where the digest is switched off. Never a URL from mail.
  */
 export type DigestCounts = {
   /** Drafts prepared in the window (inbox + follow-ups are counted separately). */
@@ -83,12 +84,14 @@ const escape = (value: string) =>
 export function composeDigest(raw: DigestCounts, origin = appOrigin()): DigestMessage {
   const c = normalizeCounts(raw);
   const today = `${origin}/today`;
+  // The opt-out lives on Réglages › Résumé quotidien (DigestToggle), not on Today.
+  const settings = `${origin}/settings#resume`;
   const subject = c.draftsReady
     ? `Orbi : ${plural(c.draftsReady, "brouillon prêt", "brouillons prêts")} à relire`
     : "Orbi : votre résumé du jour";
   const items = lines(c);
   const sent = "Rien n’a été envoyé à vos clients : chaque brouillon attend votre relecture.";
-  const why = "Vous recevez ce résumé parce que vous l’avez activé dans Orbis. Vous pouvez l’arrêter depuis la page Aujourd’hui.";
+  const why = "Vous recevez ce résumé parce que vous l’avez activé dans Orbis. Vous pouvez l’arrêter dans Réglages › Résumé quotidien.";
   const text = [
     "Bonjour,",
     "",
@@ -99,6 +102,7 @@ export function composeDigest(raw: DigestCounts, origin = appOrigin()): DigestMe
     `Ouvrir Orbis : ${today}`,
     "",
     why,
+    `Arrêter le résumé : ${settings}`,
   ].join("\n");
   const html = [
     '<!doctype html><html lang="fr"><body style="font-family:system-ui,sans-serif;color:#111;line-height:1.5">',
@@ -106,7 +110,7 @@ export function composeDigest(raw: DigestCounts, origin = appOrigin()): DigestMe
     ...items.map((line) => `<li>${escape(line)}</li>`),
     `</ul><p>${escape(sent)}</p>`,
     `<p><a href="${escape(today)}">Ouvrir Orbis</a></p>`,
-    `<p style="color:#666;font-size:13px">${escape(why)}</p>`,
+    `<p style="color:#666;font-size:13px">${escape(why)} <a href="${escape(settings)}">Arrêter le résumé</a></p>`,
     "</body></html>",
   ].join("");
   return { subject, text, html };
