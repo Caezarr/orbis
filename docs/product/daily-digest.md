@@ -7,7 +7,7 @@ Doc 17, Phase 2: « Digest quotidien par email : brouillons prêts, questions en
 | Part | Status |
 |---|---|
 | Per-user opt-in on Réglages › Résumé quotidien (`ORBIS_DIGEST=true`) | built, off by default |
-| Counts-only content, fixed French text, one link to `/today` | built |
+| Counts-only content, fixed French text, links to `/today` and to the opt-out (`/settings#resume`) | built |
 | Once per Europe/Paris day, from 07:00, ledger claim before delivery | built (migration 013) |
 | Broker step `orbis.digest.send` with policy hash + idempotency key | built |
 | **Real e-mail transport** | **not built.** `ORBIS_DIGEST_DELIVERY` only accepts `simulated`. The digest is composed and recorded, nothing leaves the server. Any other value is refused. |
@@ -24,7 +24,7 @@ Counts since the previous digest (window: last digest → now, at most 7 days ba
 - messages left for a human check (`needs_review`, `uncertain`);
 - open « Questions d’Orbi ».
 
-No customer name, address, subject, excerpt or draft text. The only link is `${APP_ORIGIN}/today` (https only, else the canonical site). Mail content and the model never reach the digest: it is built from counts in the database. No e-mail on a day with nothing to decide (`skipped_empty`).
+No customer name, address, subject, excerpt or draft text. The only links are `${APP_ORIGIN}/today` and `${APP_ORIGIN}/settings#resume` (Réglages › Résumé quotidien, where the opt-out toggle is), https only, else the canonical site. Before 21/11 the footer said « Vous pouvez l’arrêter depuis la page Aujourd’hui », but the toggle had moved to Réglages: every digest pointed at a page without the switch. Mail content and the model never reach the digest: it is built from counts in the database. No e-mail on a day with nothing to decide (`skipped_empty`).
 
 « Rien n’a été envoyé à vos clients » is a true statement: Orbis never sends from the customer's mailbox.
 
