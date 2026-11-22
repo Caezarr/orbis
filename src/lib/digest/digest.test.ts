@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PoolClient } from "pg";
 import { appOrigin, composeDigest, isEmptyDigest, normalizeCounts, type DigestCounts } from "./compose";
@@ -23,9 +25,21 @@ describe("digest content", () => {
     expect(m.text).toContain("Rien n’a été envoyé à vos clients");
     expect(m.text).toContain("https://app.orbis.test/today");
     expect(m.html).toContain('href="https://app.orbis.test/today"');
-    // No address or other link than the app.
-    expect(m.text.match(/https?:\/\/[^\s]+/g)).toEqual(["https://app.orbis.test/today"]);
+    // No address or other link than the app's own pages.
+    expect(m.text.match(/https?:\/\/[^\s]+/g)).toEqual(["https://app.orbis.test/today", "https://app.orbis.test/settings#resume"]);
     expect(m.text).not.toContain("@");
+  });
+  it("points the opt-out at Réglages, where the toggle actually is", () => {
+    const m = composeDigest(some, "https://app.orbis.test");
+    // The toggle is on /settings (section #resume), not on Today.
+    expect(m.text).not.toContain("depuis la page Aujourd’hui");
+    expect(m.text).toContain("Vous pouvez l’arrêter dans Réglages › Résumé quotidien.");
+    expect(m.text).toContain("Arrêter le résumé : https://app.orbis.test/settings#resume");
+    expect(m.html).toContain('<a href="https://app.orbis.test/settings#resume">Arrêter le résumé</a>');
+    // …and that section really holds the toggle.
+    const page = readFileSync(join(process.cwd(), "src/app/(workspace)/settings/page.tsx"), "utf8");
+    const section = page.slice(page.indexOf('<section id="resume"'), page.indexOf("</section>", page.indexOf('<section id="resume"')));
+    expect(section).toContain("<DigestToggle");
   });
   it("omits zero lines and uses a generic subject without drafts", () => {
     const m = composeDigest({ ...zero, orbiQuestions: 2 }, "https://app.orbis.test");
