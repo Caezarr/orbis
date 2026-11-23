@@ -16,13 +16,21 @@ The Réglages toggle says so on screen: « L’envoi n’est pas encore branché
 
 ## What the e-mail contains
 
-Counts since the previous digest (window: last digest → now, at most 7 days back; the first digest covers what happened after opt-in):
+Two headed sections, each omitted when empty.
+
+« Depuis le dernier résumé » — what happened in the window (last digest → now, at most 7 days back; the first digest covers what happened after opt-in):
 
 - drafts prepared (inbox) and **written to the mailbox** (`draft_state` not `simulated`), of which drafts that carry a highlighted question;
+- test-mode inbox drafts of the window (`ORBIS_INBOX_MODE=test`, `draft_state='simulated'`), on their own line: « N brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte ». Before 09/11 they were counted in « brouillons prêts à relire dans votre boîte », which was false: nothing was written to the mailbox. A day with only test drafts still sends a digest, with the generic subject;
+- messages left for a human check (`needs_review`, `uncertain`).
+
+« En attente en ce moment » — counted as they stand when the digest is built, so they come back every day while they stay open:
+
 - follow-ups to review (same definition as the Today card), test-mode follow-ups excluded;
-- test-mode drafts (`ORBIS_INBOX_MODE=test`: inbox drafts of the window + follow-ups waiting now, `draft_state='simulated'`), on their own line: « N brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte ». Before 09/11 they were counted in « brouillons prêts à relire dans votre boîte », which was false: nothing was written to the mailbox. A day with only test drafts still sends a digest, with the generic subject;
-- messages left for a human check (`needs_review`, `uncertain`);
-- open « Questions d’Orbi ».
+- test-mode follow-ups waiting now, on their own line (« N relances d’essai (mode test) visibles dans Orbis seulement… »);
+- open « Questions d’Orbi » (« N questions d’Orbi sans réponse »).
+
+Before 23/11 everything sat under « Depuis le dernier résumé », so an unanswered question or a pending follow-up was announced as new every morning, and test-mode follow-ups were added to the window's test drafts.
 
 No customer name, address, subject, excerpt or draft text. The only links are `${APP_ORIGIN}/today` and `${APP_ORIGIN}/settings#resume` (Réglages › Résumé quotidien, where the opt-out toggle is), https only, else the canonical site. Before 21/11 the footer said « Vous pouvez l’arrêter depuis la page Aujourd’hui », but the toggle had moved to Réglages: every digest pointed at a page without the switch. Mail content and the model never reach the digest: it is built from counts in the database. No e-mail on a day with nothing to decide (`skipped_empty`).
 

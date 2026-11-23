@@ -10,8 +10,8 @@ import { FOLLOWUP_READY_SQL } from "@/lib/followups/detect";
 
 afterEach(() => vi.unstubAllEnvs());
 
-const zero: DigestCounts = { draftsReady: 0, draftsWithQuestions: 0, needsReview: 0, orbiQuestions: 0, followupsReady: 0, simulatedDrafts: 0 };
-const some: DigestCounts = { draftsReady: 3, draftsWithQuestions: 1, needsReview: 2, orbiQuestions: 1, followupsReady: 1, simulatedDrafts: 0 };
+const zero: DigestCounts = { draftsReady: 0, draftsWithQuestions: 0, needsReview: 0, orbiQuestions: 0, followupsReady: 0, simulatedDrafts: 0, simulatedFollowups: 0 };
+const some: DigestCounts = { draftsReady: 3, draftsWithQuestions: 1, needsReview: 2, orbiQuestions: 1, followupsReady: 1, simulatedDrafts: 0, simulatedFollowups: 0 };
 const identity = { tenantId: "t1", workspaceId: "w1", userId: "u1" };
 
 describe("digest content", () => {
@@ -21,7 +21,7 @@ describe("digest content", () => {
     expect(m.text).toContain("3 brouillons prêts à relire dans votre boîte (dont 1 avec une question surlignée à compléter)");
     expect(m.text).toContain("1 relance préparée à relire");
     expect(m.text).toContain("2 messages à vérifier");
-    expect(m.text).toContain("1 question d’Orbi en attente");
+    expect(m.text).toContain("1 question d’Orbi sans réponse");
     expect(m.text).toContain("Rien n’a été envoyé à vos clients");
     expect(m.text).toContain("https://app.orbis.test/today");
     expect(m.html).toContain('href="https://app.orbis.test/today"');
@@ -45,7 +45,7 @@ describe("digest content", () => {
     const m = composeDigest({ ...zero, orbiQuestions: 2 }, "https://app.orbis.test");
     expect(m.subject).toBe("Orbi : votre résumé du jour");
     expect(m.text).not.toContain("brouillon prêt");
-    expect(m.text).toContain("2 questions d’Orbi en attente");
+    expect(m.text).toContain("2 questions d’Orbi sans réponse");
   });
   it("normalizes counts and detects an empty day", () => {
     expect(isEmptyDigest(zero)).toBe(true);
@@ -58,6 +58,7 @@ describe("digest content", () => {
       orbiQuestions: 9_999,
       followupsReady: 1,
       simulatedDrafts: 0,
+      simulatedFollowups: 0,
     });
   });
   it("never counts test-mode drafts as drafts in the mailbox", () => {
@@ -68,6 +69,31 @@ describe("digest content", () => {
     expect(m.text).not.toContain("à relire dans votre boîte");
     expect(m.text).toContain("2 brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte");
     expect(composeDigest({ ...zero, simulatedDrafts: 1 }).text).toContain("1 brouillon d’essai (mode test) visible dans Orbis seulement");
+    const f = composeDigest({ ...zero, simulatedFollowups: 2 }, "https://app.orbis.test");
+    expect(isEmptyDigest({ ...zero, simulatedFollowups: 2 })).toBe(false);
+    expect(f.text).toContain("2 relances d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte");
+    expect(f.text).not.toContain("relance préparée");
+  });
+  it("never presents what is still open as new since the last digest", () => {
+    // Follow-ups and Orbi's questions are counted as they stand now: they can
+    // come back every day, so they sit under « En attente », not « Depuis ».
+    const waitingOnly = composeDigest({ ...zero, orbiQuestions: 1, followupsReady: 2, simulatedFollowups: 1 }, "https://app.orbis.test");
+    expect(waitingOnly.text).not.toContain("Depuis le dernier résumé");
+    expect(waitingOnly.html).not.toContain("Depuis le dernier résumé");
+    expect(waitingOnly.text).toContain("En attente en ce moment :\n- 2 relances préparées à relire\n- 1 relance d’essai");
+    const both = composeDigest({ ...some, simulatedDrafts: 1 }, "https://app.orbis.test").text;
+    const since = both.slice(both.indexOf("Depuis le dernier résumé :"), both.indexOf("En attente en ce moment :"));
+    const now = both.slice(both.indexOf("En attente en ce moment :"));
+    expect(since).toContain("3 brouillons prêts");
+    expect(since).toContain("1 brouillon d’essai");
+    expect(since).toContain("2 messages à vérifier");
+    expect(since).not.toContain("relance");
+    expect(since).not.toContain("question d’Orbi");
+    expect(now).toContain("1 relance préparée à relire");
+    expect(now).toContain("1 question d’Orbi sans réponse");
+    const recentOnly = composeDigest({ ...zero, needsReview: 1 }, "https://app.orbis.test");
+    expect(recentOnly.text).toContain("Depuis le dernier résumé :");
+    expect(recentOnly.text).not.toContain("En attente");
   });
   it("only links to an https app origin", () => {
     expect(appOrigin("https://app.orbis.test/x?y")).toBe("https://app.orbis.test");
@@ -127,7 +153,7 @@ describe("digest counts", () => {
       }),
     } as unknown as PoolClient;
     const counts = await digestCounts(db, identity, new Date("2026-10-01T06:00:00Z"), new Date("2026-10-02T06:00:00Z"));
-    expect(counts).toEqual({ draftsReady: 2, draftsWithQuestions: 1, needsReview: 0, orbiQuestions: 0, followupsReady: 1, simulatedDrafts: 7 });
+    expect(counts).toEqual({ draftsReady: 2, draftsWithQuestions: 1, needsReview: 0, orbiQuestions: 0, followupsReady: 1, simulatedDrafts: 3, simulatedFollowups: 4 });
     const inbox = sqls.find((q) => q.includes("FROM inbox_messages"))!;
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS drafts/);
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS questions/);

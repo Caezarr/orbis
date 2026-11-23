@@ -135,7 +135,8 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
     needsReview: Number(inbox?.review ?? 0),
     orbiQuestions: Number(questions?.n ?? 0),
     followupsReady: Number(followups?.n ?? 0),
-    simulatedDrafts: Number(inbox?.simulated ?? 0) + Number(followups?.simulated ?? 0),
+    simulatedDrafts: Number(inbox?.simulated ?? 0),
+    simulatedFollowups: Number(followups?.simulated ?? 0),
   });
 }
 
