@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@ai-sdk/anthropic':
-        specifier: ^4.0.50
-        version: 4.0.50(zod@4.5.4)
+        specifier: ^4.0.106
+        version: 4.0.106(zod@4.5.4)
       '@ai-sdk/openai':
         specifier: ^4.0.62
         version: 4.0.62(zod@4.5.4)
@@ -135,8 +135,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/anthropic@4.0.50':
-    resolution: {integrity: sha512-bHtVy5FC2JUX3T1zapquOqVxkYtDoDVUXUmZlobNq0EzZ2ESx72ysw223MzdlxCEoaFn3lDPog6EhjRgHd87qQ==}
+  '@ai-sdk/anthropic@4.0.106':
+    resolution: {integrity: sha512-CKqIoPG91+uqmZxxxQEaS2anQlDxA+4UPeYB0TgcHAit1HZgx0m2y9JJ7QwJVYmgBuZHO1OXowMovV0kwvrTcQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -159,8 +159,18 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.82':
+    resolution: {integrity: sha512-9s3Le9LsTR0exy14H8SERw4uMgFhiP0yJVoLefzfQCnnptj71noYh1AoVEsjfJjmMH1y16+1OqBVTDpTpU6M3Q==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.11':
     resolution: {integrity: sha512-A/Cyjma9RLTLsF9xv/2OSaw9eyFhOIBqzoeOVZhp+xKZD8wv5opN+qyIa83NE4Jug2SjQ/Kaf08w1JX6CESR/w==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.39':
+    resolution: {integrity: sha512-jRvAhvW23+TeMGVCME2WGejP/TjzyDg7TplUep3t8HcEYnC2/8zqhCy9RRrjjVs1ljcygABZ8pQ21MbCRdF01w==}
     engines: {node: '>=22'}
 
   '@alloc/quick-lru@5.3.0':
@@ -3141,6 +3151,10 @@ packages:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
 
+  source-map-js@1.2.4:
+    resolution: {integrity: sha512-J7ZjMvHd9O1fcT/5V09QWaaSl2BbWx3F6O08spde82Namf9UB0GxRVIPiNbVsdKkoizHiSpTodo3vp2bAy91MA==}
+    engines: {node: '>=6.0.0'}
+
   space-separated-tokens@2.0.2:
     resolution: {integrity: sha512-PEGlAwrG8yXGXRjW32fGbg66JAlOAwbObuqVoJpv/mRgoWDQfgH1wDPvtzWyUSNAXBGSk8h755YDbbcEy3SH2Q==}
 
@@ -3565,10 +3579,10 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/anthropic@4.0.50(zod@4.5.4)':
+  '@ai-sdk/anthropic@4.0.106(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/provider': 4.0.11
-      '@ai-sdk/provider-utils': 5.0.37(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.39
+      '@ai-sdk/provider-utils': 5.0.82(zod@4.5.4)
       zod: 4.5.4
 
   '@ai-sdk/gateway@4.0.76(zod@4.5.4)':
@@ -3593,7 +3607,19 @@ snapshots:
       undici: 7.29.1
       zod: 4.5.4
 
+  '@ai-sdk/provider-utils@5.0.82(zod@4.5.4)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.39
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      zod: 4.5.4
+
   '@ai-sdk/provider@4.0.11':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.39':
     dependencies:
       json-schema: 0.4.0
 
@@ -6423,7 +6449,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.20
       picocolors: 1.1.1
-      source-map-js: 1.2.2
+      source-map-js: 1.2.4
 
   postgres-array@2.0.0: {}
 
@@ -6692,6 +6718,8 @@ snapshots:
   source-map-js@1.2.1: {}
 
   source-map-js@1.2.2: {}
+
+  source-map-js@1.2.4: {}
 
   space-separated-tokens@2.0.2: {}
 
