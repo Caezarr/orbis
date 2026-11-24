@@ -12,8 +12,8 @@ importers:
         specifier: ^4.0.50
         version: 4.0.50(zod@4.5.4)
       '@ai-sdk/openai':
-        specifier: ^4.0.62
-        version: 4.0.62(zod@4.5.4)
+        specifier: ^4.0.121
+        version: 4.0.121(zod@4.5.4)
       '@composio/core':
         specifier: ^0.18.1
         version: 0.18.1(zod@4.5.4)
@@ -147,8 +147,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@4.0.62':
-    resolution: {integrity: sha512-KOemym7oinL4bSaPI/e1SYXp770jEkIAWz2VYgof4Xglua1q46ViLtrALTOndW9Vz8dYWar/CIYOMii5AnyMhw==}
+  '@ai-sdk/openai@4.0.121':
+    resolution: {integrity: sha512-7rDVkDk/nTHlryx/gOglSDL0Zh1Hq7rMtEcVgRCDsKKf/F/CcIJ3RnCmudYeyeLyuDE5fEcZQAdaNWYgOuwvSQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -3509,10 +3509,10 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
-  '@ai-sdk/openai@4.0.62(zod@4.5.4)':
+  '@ai-sdk/openai@4.0.121(zod@4.5.4)':
     dependencies:
-      '@ai-sdk/provider': 4.0.11
-      '@ai-sdk/provider-utils': 5.0.37(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.39
+      '@ai-sdk/provider-utils': 5.0.82(zod@4.5.4)
       zod: 4.5.4
 
   '@ai-sdk/provider-utils@5.0.37(zod@4.5.4)':
