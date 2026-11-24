@@ -17,6 +17,7 @@ import {
 } from "@/components/followups/WeekCard";
 import type { RequestsData } from "@/components/followups/RequestsView";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { continuousCadence } from "@/lib/inbox/cadence";
 import { DECISIONS_EVENT } from "@/components/shell/AppShell";
 import {
   CLASSIFICATION_LABELS,
@@ -242,6 +243,7 @@ export function TodayDecisions() {
     );
 
   const { counts, settings } = digest;
+  const cadence = continuousCadence(settings);
   const mailbox = mailboxName(settings.provider);
   const waiting = counts.draftsReady + questionCount + followupCount;
   const state = todayState({
@@ -327,9 +329,10 @@ export function TodayDecisions() {
       {state === "quiet" && (
         <EmptyState title="Tout est à jour" mood="done">
           <p>
-            Aucun brouillon à relire ni question en attente. Orbi vérifie{" "}
-            {mailbox} toutes les {settings.intervalMinutes} minutes et vous
-            présentera ici la prochaine demande.
+            Aucun brouillon à relire ni question en attente.{" "}
+            {cadence.late
+              ? `La vérification de ${mailbox} a pris du retard${cadence.lastChecked ? ` (dernière ${cadence.lastChecked})` : ""} : la prochaine demande apparaîtra ici dès la prochaine vérification.`
+              : `Orbi vérifie ${mailbox} toutes les ${settings.intervalMinutes} minutes et vous présentera ici la prochaine demande.`}
           </p>
         </EmptyState>
       )}

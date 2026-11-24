@@ -5,6 +5,12 @@ name: Inbox scheduler
 # Needs repository secret CRON_SECRET (same value as in Vercel) and
 # repository variable ORBIS_APP_URL (public origin, no trailing slash).
 # Does nothing until both are set.
+#
+# GitHub does not honour "*/5" on this repository: from 15/11 to 24/11 the
+# schedule fired every 3 to 9 hours. The app therefore shows the time of the
+# last real check and says when it is late (src/lib/inbox/cadence.ts) instead
+# of promising the configured interval. A 5-minute cadence needs Vercel Pro or
+# a dedicated external scheduler.
 
 on:
   schedule:
@@ -31,8 +37,11 @@ jobs:
             echo "Scheduler not configured (CRON_SECRET / ORBIS_APP_URL missing), skipping."
             exit 0
           fi
-          status=$(curl -sS -o response.json -w '%{http_code}' --max-time 90 \
+          # This repository is public, and so are its Actions logs: print the
+          # HTTP status only, never the response body (activity counts, error
+          # counts). Details go to the server logs and Sentry.
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 \
             -X POST -H "Authorization: Bearer $CRON_SECRET" \
-            "$ORBIS_APP_URL/api/cron/inbox")
-          cat response.json; echo
+            "$ORBIS_APP_URL/api/cron/inbox" 2>/dev/null || true)
+          echo "Inbox pass: HTTP ${status:-none}"
           test "$status" = "200"
