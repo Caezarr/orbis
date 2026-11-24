@@ -5,14 +5,14 @@
  * configured (a throttled cron, an outage): the screen must then say so
  * instead of promising "toutes les 15 minutes". Pure and client-safe.
  */
-export type CadenceInput = {
+type CadenceInput = {
   continuousEnabled: boolean;
   intervalMinutes: number;
   nextRunAt?: string;
   lastCheckedAt?: string;
 };
 
-export type Cadence = {
+type Cadence = {
   /** "aujourd’hui à 09:15", "hier à 18:02", "le 21/11 à 07:40"; null when never checked. */
   lastChecked: string | null;
   /** The due check is overdue by more than two intervals (at least 30 minutes). */
