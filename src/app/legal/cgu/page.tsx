@@ -50,7 +50,7 @@ export default function Page() {
           classe et crée des <strong>brouillons</strong> de réponse directement dans votre boîte ;
         </li>
         <li>
-          si vous l’activez, Orbis prépare de nouveaux brouillons en continu (environ toutes les 15 minutes) ;
+          si vous l’activez, Orbis prépare de nouveaux brouillons en continu, à intervalle régulier (au plus souvent toutes les 15 minutes ; l’heure de la dernière vérification est affichée dans l’application) ;
         </li>
         <li>
           Orbis peut préparer des brouillons de relance lorsqu’une demande reste sans réponse après un nombre de jours ouvrés

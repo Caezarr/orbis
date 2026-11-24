@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { continuousCadence } from "@/lib/inbox/cadence";
 import s from "./start.module.css";
 
 export type ContinuousSettings = {
@@ -13,14 +14,6 @@ export type ContinuousSettings = {
   monthlyCapCents: number | null;
   spentCents: number;
 };
-
-const time = (iso?: string) =>
-  iso
-    ? new Date(iso).toLocaleTimeString("fr-FR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
 
 /** Explicit opt-in for continuous drafting. Off by default; owner/admin only (enforced server-side). */
 export function ContinuousToggle({
@@ -55,6 +48,7 @@ export function ContinuousToggle({
   if (!settings) return null;
   const on = settings.continuousEnabled;
   const minutes = settings.intervalMinutes;
+  const cadence = continuousCadence(settings);
 
   async function toggle() {
     if (saving || !settings) return;
@@ -95,10 +89,12 @@ export function ContinuousToggle({
             brouillons. Rien n’est envoyé.
           </p>
           {on && (
-            <p className={s.fine}>
-              {time(settings.lastCheckedAt)
-                ? `Dernière vérification à ${time(settings.lastCheckedAt)}.`
-                : "Première vérification dans les prochaines minutes."}
+            <p className={s.fine} role={cadence.late ? "status" : undefined}>
+              {cadence.late
+                ? `${cadence.lastChecked ? `Dernière vérification ${cadence.lastChecked}` : "Pas encore de vérification"} : elle a pris du retard. Les nouveaux mails seront traités à la prochaine.`
+                : cadence.lastChecked
+                  ? `Dernière vérification ${cadence.lastChecked}.`
+                  : "Première vérification dans les prochaines minutes."}
             </p>
           )}
           {!settings.eligible && !on && (
