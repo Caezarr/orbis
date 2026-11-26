@@ -11,6 +11,8 @@ export type ContinuousSettings = {
   intervalMinutes: number;
   nextRunAt?: string;
   lastCheckedAt?: string;
+  /** On, but the plan blocks it: no mail is read (see PlanBanner). */
+  paused: boolean;
   monthlyCapCents: number | null;
   spentCents: number;
 };
@@ -85,12 +87,17 @@ export function ContinuousToggle({
         <div className={s.toggleText}>
           <h3>Brouillons en continu</h3>
           <p>
-            Orbi vérifie votre boîte toutes les {minutes} minutes et prépare des
-            brouillons. Rien n’est envoyé.
+            {on && settings.paused
+              ? "En pause : votre formule ne permet plus de préparer de brouillons (voir l’encadré en haut de la page). Orbi ne lit pas vos nouveaux mails en attendant et reprend de lui-même dès que la formule le permet. Rien n’est envoyé."
+              : `Orbi vérifie votre boîte toutes les ${minutes} minutes et prépare des brouillons. Rien n’est envoyé.`}
           </p>
           {on && (
             <p className={s.fine} role={cadence.late ? "status" : undefined}>
-              {cadence.late
+              {settings.paused
+                ? cadence.lastChecked
+                  ? `Dernière vérification ${cadence.lastChecked}.`
+                  : "Pas encore de vérification."
+                : cadence.late
                 ? `${cadence.lastChecked ? `Dernière vérification ${cadence.lastChecked}` : "Pas encore de vérification"} : elle a pris du retard. Les nouveaux mails seront traités à la prochaine.`
                 : cadence.lastChecked
                   ? `Dernière vérification ${cadence.lastChecked}.`

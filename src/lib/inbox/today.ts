@@ -6,6 +6,7 @@ import { draftsWithNewInfo, openQuestions } from "@/lib/brain/service";
 import type { MailboxMode } from "@/lib/integrations/mailbox";
 import { inboxMode, publicMessage, type InboxResult } from "./service";
 import { effectiveMonthlyCap } from "./store";
+import { currentEntitlement } from "@/lib/billing/entitlements-store";
 
 /**
  * "Today" decisions and the continuous-drafting toggle for the session
@@ -41,6 +42,13 @@ export type InboxSettingsView = {
   intervalMinutes: number;
   nextRunAt?: string;
   lastCheckedAt?: string;
+  /**
+   * Continuous drafting is on but the plan blocks it (trial over, quota
+   * reached, payment pending, canceled): the dispatcher keeps moving the
+   * schedule without queuing a batch, so no new mail is read. Same gate as
+   * `enqueueDueIncremental`'s `allow`.
+   */
+  paused: boolean;
   monthlyCapCents: number | null;
   spentCents: number;
 };
@@ -80,6 +88,9 @@ export async function inboxSettings(): Promise<InboxSettingsView> {
       ids,
     )
   ).rows[0];
+  const paused =
+    !!row?.continuous_enabled &&
+    !(await currentEntitlement(ctx.db, { workspaceId: ctx.workspaceId, tenantId: ctx.tenantId })).canProcess;
   return {
     continuousEnabled: !!row?.continuous_enabled,
     eligible: !!account,
@@ -89,6 +100,7 @@ export async function inboxSettings(): Promise<InboxSettingsView> {
       ? row.next_run_at?.toISOString()
       : undefined,
     lastCheckedAt: last?.completed_at?.toISOString(),
+    paused,
     monthlyCapCents: effectiveMonthlyCap(row?.monthly_cap_cents),
     spentCents: Number(spent?.cents ?? 0),
   };

@@ -10,6 +10,8 @@ type CadenceInput = {
   intervalMinutes: number;
   nextRunAt?: string;
   lastCheckedAt?: string;
+  /** Plan blocks continuous drafting: nothing is due, so nothing is "late". */
+  paused?: boolean;
 };
 
 type Cadence = {
@@ -39,7 +41,7 @@ export function checkedLabel(iso: string | undefined, now: Date): string | null 
 
 export function continuousCadence(input: CadenceInput, now = new Date()): Cadence {
   const lastChecked = checkedLabel(input.lastCheckedAt, now);
-  if (!input.continuousEnabled || !input.nextRunAt) return { lastChecked, late: false };
+  if (!input.continuousEnabled || input.paused || !input.nextRunAt) return { lastChecked, late: false };
   const due = new Date(input.nextRunAt).getTime();
   if (Number.isNaN(due)) return { lastChecked, late: false };
   const grace = Math.max(2 * Math.max(input.intervalMinutes, 1) * 60_000, MIN_LATE_MS);

@@ -9,12 +9,17 @@ vi.mock("@/lib/platform/auth", () => ({
     }
   },
 }));
+const entitlement = vi.hoisted(() => ({ canProcess: true }));
+vi.mock("@/lib/billing/entitlements-store", () => ({
+  currentEntitlement: vi.fn(async () => entitlement),
+}));
 import type { PoolClient } from "pg";
 import {
   workspaceStorage,
   type WorkspaceContext,
 } from "@/lib/platform/context";
 import {
+  inboxSettings,
   markTodaySeen,
   setContinuous,
   settingsSchema,
@@ -32,8 +37,11 @@ const ctx: WorkspaceContext = {
 };
 const inSession = <T>(fn: () => Promise<T>) => workspaceStorage.run(ctx, fn);
 let firstRun: Record<string, unknown> | undefined;
+let settingsRow: Record<string, unknown> | undefined;
 beforeEach(() => {
   vi.resetAllMocks();
+  entitlement.canProcess = true;
+  settingsRow = undefined;
   vi.stubEnv("ORBIS_OPERATIONS_MONTHLY_CAP_CENTS", "500");
   firstRun = { provider: "gmail", connected_account_id: "acc" };
   query.mockImplementation(async (sql: string) => {
@@ -41,6 +49,8 @@ beforeEach(() => {
       return { rows: firstRun ? [firstRun] : [] };
     if (sql.startsWith("SELECT max(received_at)"))
       return { rows: [{ cursor: new Date("2026-10-02T09:00:00Z") }] };
+    if (sql.startsWith("SELECT continuous_enabled,provider"))
+      return { rows: settingsRow ? [settingsRow] : [] };
     if (sql.includes("AS drafts"))
       return {
         rows: [{ drafts: "2", questions: "1", review: "0", skipped: "4" }],
@@ -99,6 +109,31 @@ describe("continuous drafting toggle", () => {
     expect(update[0]).toContain("continuous_enabled=false");
     expect(update[0]).not.toContain("cursor_at");
     expect(update[1]).toEqual(["ws-a", "tenant-a"]);
+  });
+});
+
+describe("continuous drafting paused by the plan", () => {
+  const on = {
+    continuous_enabled: true,
+    provider: "gmail",
+    interval_minutes: 15,
+    cursor_at: null,
+    next_run_at: new Date("2026-11-26T09:15:00Z"),
+    monthly_cap_cents: null,
+  };
+  it("says paused when continuous mode is on but the plan blocks processing (same gate as the dispatcher)", async () => {
+    settingsRow = on;
+    entitlement.canProcess = false;
+    const view = await inSession(() => inboxSettings());
+    expect(view.continuousEnabled).toBe(true);
+    expect(view.paused).toBe(true);
+  });
+  it("is not paused while the plan allows processing, nor when continuous mode is off", async () => {
+    settingsRow = on;
+    expect((await inSession(() => inboxSettings())).paused).toBe(false);
+    settingsRow = { ...on, continuous_enabled: false, next_run_at: null };
+    entitlement.canProcess = false;
+    expect((await inSession(() => inboxSettings())).paused).toBe(false);
   });
 });
 

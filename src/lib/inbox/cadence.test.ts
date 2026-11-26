@@ -49,4 +49,11 @@ describe("continuousCadence", () => {
     expect(continuousCadence({ ...base, continuousEnabled: false, nextRunAt: "2026-11-20T00:00:00Z" }, now).late).toBe(false);
     expect(continuousCadence({ ...base }, now).late).toBe(false);
   });
+  it("never reports late while the plan pauses continuous mode (the schedule keeps moving, nothing is read)", () => {
+    const c = continuousCadence(
+      { ...base, paused: true, nextRunAt: "2026-11-24T02:49:00Z", lastCheckedAt: "2026-11-12T08:00:00Z" },
+      now,
+    );
+    expect(c).toEqual({ lastChecked: "le 12/11 à 09:00", late: false });
+  });
 });
