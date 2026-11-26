@@ -330,7 +330,9 @@ export function TodayDecisions() {
         <EmptyState title="Tout est à jour" mood="done">
           <p>
             Aucun brouillon à relire ni question en attente.{" "}
-            {cadence.late
+            {settings.paused
+              ? `Les brouillons en continu sont en pause (voir l’encadré ci-dessus) : Orbi ne lit pas les nouveaux mails de ${mailbox} en attendant.`
+              : cadence.late
               ? `La vérification de ${mailbox} a pris du retard${cadence.lastChecked ? ` (dernière ${cadence.lastChecked})` : ""} : la prochaine demande apparaîtra ici dès la prochaine vérification.`
               : `Orbi vérifie ${mailbox} toutes les ${settings.intervalMinutes} minutes et vous présentera ici la prochaine demande.`}
           </p>
