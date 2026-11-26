@@ -70,7 +70,7 @@ jobs:
           E2E_DEMO_MODEL=1 pnpm test:e2e
       - name: Keep traces and screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-results
           path: test-results/
