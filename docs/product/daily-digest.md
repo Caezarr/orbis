@@ -22,7 +22,7 @@ Two headed sections, each omitted when empty.
 
 - drafts prepared (inbox) and **written to the mailbox** (`draft_state` not `simulated`), of which drafts that carry a highlighted question;
 - test-mode inbox drafts of the window (`ORBIS_INBOX_MODE=test`, `draft_state='simulated'`), on their own line: « N brouillons d’essai (mode test) visibles dans Orbis seulement : rien n’a été écrit dans votre boîte ». Before 09/11 they were counted in « brouillons prêts à relire dans votre boîte », which was false: nothing was written to the mailbox. A day with only test drafts still sends a digest, with the generic subject;
-- messages left for a human check (`needs_review`, `uncertain`).
+- messages left for a human check (`needs_review`, `uncertain`), dated by when Orbi decided them: the completion time of the inbox batch that set that status (`DECIDED_AT_SQL`, `src/lib/inbox/decided.ts`). Before 27/11 they were dated by `inbox_messages.updated_at`, which the 30-day preview purge, « Effacer le contact » and token bookkeeping also bump: a message set aside a month earlier came back as « 1 message à vérifier » the morning after its preview was purged — and could trigger a digest on a day with nothing new. Today's « à vérifier » and « ignorés » counters (since the last visit) had the same defect and use the same date.
 
 « En attente en ce moment » — counted as they stand when the digest is built, so they come back every day while they stay open:
 

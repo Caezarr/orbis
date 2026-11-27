@@ -5,6 +5,7 @@ import { intervalMinutes } from "./schedule";
 import { draftsWithNewInfo, openQuestions } from "@/lib/brain/service";
 import type { MailboxMode } from "@/lib/integrations/mailbox";
 import { inboxMode, publicMessage, type InboxResult } from "./service";
+import { DECIDED_AT_SQL } from "./decided";
 import { effectiveMonthlyCap } from "./store";
 import { currentEntitlement } from "@/lib/billing/entitlements-store";
 
@@ -194,9 +195,9 @@ export async function todayDigest(now = new Date()): Promise<TodayDigest> {
       `SELECT
         count(*) FILTER (WHERE status='drafted' AND drafted_at>$3)::text AS drafts,
         count(*) FILTER (WHERE status='drafted' AND drafted_at>$3 AND jsonb_array_length(questions)>0)::text AS questions,
-        count(*) FILTER (WHERE status IN ('needs_review','uncertain') AND updated_at>$3)::text AS review,
-        count(*) FILTER (WHERE status='skipped' AND updated_at>$3)::text AS skipped
-       FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND updated_at>$3`,
+        count(*) FILTER (WHERE status IN ('needs_review','uncertain') AND ${DECIDED_AT_SQL}>$3)::text AS review,
+        count(*) FILTER (WHERE status='skipped' AND ${DECIDED_AT_SQL}>$3)::text AS skipped
+       FROM inbox_messages m WHERE workspace_id=$1 AND tenant_id=$2`,
       [...ids, since],
     )
   ).rows[0];

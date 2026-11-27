@@ -134,7 +134,7 @@ export async function runOneInboxBatch(
     scoped<T>(identity, fn);
   const claimed = await run(async (db) => {
     await db.query(
-      "UPDATE inbox_batches SET status='failed',error='Worker lease expired after three attempts.',lease_token=NULL,lease_until=NULL WHERE workspace_id=$1 AND tenant_id=$2 AND status='running' AND lease_until<now() AND attempts>=3",
+      "UPDATE inbox_batches SET status='failed',error='Worker lease expired after three attempts.',lease_token=NULL,lease_until=NULL,completed_at=now() WHERE workspace_id=$1 AND tenant_id=$2 AND status='running' AND lease_until<now() AND attempts>=3",
       [identity.workspaceId, identity.tenantId],
     );
     // Retention: inbound subjects, draft previews, Orbi's questions on the
