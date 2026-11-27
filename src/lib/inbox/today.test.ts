@@ -25,6 +25,7 @@ import {
   settingsSchema,
   todayDigest,
 } from "./today";
+import { DECIDED_AT_SQL } from "./decided";
 
 const query = vi.fn();
 const ctx: WorkspaceContext = {
@@ -155,6 +156,16 @@ describe("today digest", () => {
     for (const [sql, params] of query.mock.calls)
       if (/inbox_(messages|batches|settings|visits)/.test(sql))
         expect(params.slice(0, 2)).toEqual(["ws-a", "tenant-a"]);
+  });
+  it("counts messages to check and skipped ones by when Orbi decided them, not by updated_at", async () => {
+    await inSession(() => todayDigest(new Date("2026-10-02T12:00:00Z")));
+    const [sql] = query.mock.calls.find(([q]) => String(q).includes("AS review"))!;
+    for (const name of ["review", "skipped"]) {
+      const line = String(sql).split("\n").find((l) => l.includes(`AS ${name}`))!;
+      expect(line).toContain(`${DECIDED_AT_SQL}>$3`);
+      expect(line).not.toContain("updated_at");
+    }
+    expect(String(sql)).not.toMatch(/tenant_id=\$2 AND updated_at/);
   });
   it("marks seen for the session user", async () => {
     await inSession(() => markTodaySeen());

@@ -4,6 +4,7 @@ import { PlatformError } from "@/lib/platform/auth";
 import { workspaceContext } from "@/lib/platform/context";
 import { transaction } from "@/lib/platform/db";
 import { FOLLOWUP_READY_SQL, maskEmail } from "@/lib/followups/detect";
+import { DECIDED_AT_SQL } from "@/lib/inbox/decided";
 import { scoped, type Identity } from "@/lib/operations/worker";
 import { composeDigest, isEmptyDigest, normalizeCounts, type DigestCounts, type DigestMessage } from "./compose";
 import {
@@ -107,8 +108,8 @@ export async function digestCounts(db: PoolClient, ids: Ids, since: Date, until:
         count(*) FILTER (WHERE status='drafted' AND draft_state<>'simulated' AND drafted_at>$3 AND drafted_at<=$4)::text AS drafts,
         count(*) FILTER (WHERE status='drafted' AND draft_state<>'simulated' AND drafted_at>$3 AND drafted_at<=$4 AND jsonb_array_length(questions)>0)::text AS questions,
         count(*) FILTER (WHERE status='drafted' AND draft_state='simulated' AND drafted_at>$3 AND drafted_at<=$4)::text AS simulated,
-        count(*) FILTER (WHERE status IN ('needs_review','uncertain') AND updated_at>$3 AND updated_at<=$4)::text AS review
-       FROM inbox_messages WHERE workspace_id=$1 AND tenant_id=$2 AND updated_at>$3`,
+        count(*) FILTER (WHERE status IN ('needs_review','uncertain') AND ${DECIDED_AT_SQL}>$3 AND ${DECIDED_AT_SQL}<=$4)::text AS review
+       FROM inbox_messages m WHERE workspace_id=$1 AND tenant_id=$2`,
       [...p, since, until],
     )
   ).rows[0];

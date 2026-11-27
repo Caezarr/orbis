@@ -7,6 +7,7 @@ import { deliverDigest, digestDeliveryMode, digestIdempotencyKey, digestPolicyHa
 import { digestCounts, runDigestForSubscriber, runDigestPass, MAX_WINDOW_MS } from "./service";
 import { GET as cronGET } from "@/app/api/cron/digest/route";
 import { FOLLOWUP_READY_SQL } from "@/lib/followups/detect";
+import { DECIDED_AT_SQL } from "@/lib/inbox/decided";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -158,6 +159,25 @@ describe("digest counts", () => {
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS drafts/);
     expect(inbox).toMatch(/status='drafted' AND draft_state<>'simulated'[^\n]*AS questions/);
     expect(sqls.find((q) => q.includes("FROM followups"))).toMatch(/draft_state<>'simulated'\)::text AS n/);
+  });
+  it("dates a message to check by the batch that decided it, not by updated_at (purge, contact erasure)", async () => {
+    const sqls: string[] = [];
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        sqls.push(sql);
+        return { rows: [{ n: "0", simulated: "0", drafts: "0", questions: "0", review: "0" }] };
+      }),
+    } as unknown as PoolClient;
+    await digestCounts(db, identity, new Date("2026-10-01T06:00:00Z"), new Date("2026-10-02T06:00:00Z"));
+    const inbox = sqls.find((q) => q.includes("FROM inbox_messages"))!;
+    const review = inbox.split("\n").find((line) => line.includes("AS review"))!;
+    expect(review).toContain(`${DECIDED_AT_SQL}>$3 AND ${DECIDED_AT_SQL}<=$4`);
+    expect(review).not.toContain("updated_at");
+    // No updated_at pre-filter either: a batch that completes in the window may
+    // have set the status before the previous digest ran.
+    expect(inbox).not.toMatch(/WHERE workspace_id=\$1 AND tenant_id=\$2 AND updated_at/);
+    expect(DECIDED_AT_SQL).toContain("b.completed_at");
+    expect(DECIDED_AT_SQL).toContain("b.id=m.batch_id AND b.workspace_id=m.workspace_id AND b.tenant_id=m.tenant_id");
   });
   it("counts a follow-up only when a draft was written (not one held at the recipient check)", async () => {
     const sqls: string[] = [];
