@@ -39,7 +39,7 @@ function envInt(env: Env, name: string, fallback: number, min: number, max: numb
   return Number.isSafeInteger(n) && n >= min && n <= max ? n : fallback;
 }
 
-export const PLAN_DEFAULTS = Object.freeze({
+const PLAN_DEFAULTS = Object.freeze({
   trialDays: 14,
   trialDrafts: 50,
   trialCapCents: 800,

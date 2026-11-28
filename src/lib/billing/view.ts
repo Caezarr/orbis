@@ -46,7 +46,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? "s" : ""}`;
 const date = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : null;
 
-export type Banner = {
+type Banner = {
   tone: "info" | "warning" | "blocked";
   title: string;
   body?: string;

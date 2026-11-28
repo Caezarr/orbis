@@ -1,6 +1,6 @@
 # Follow-ups, request pipeline and measured weekly report
 
-Status: built on branch `feat/followups-pipeline-report` (stacked on `feat/v1-integration`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio, Stripe or model call has been made. Concept: levels 6, 7 and 8 of [18-orbi-inbox-concept.md](../strategy/18-orbi-inbox-concept.md). It builds on [inbox-drafts.md](inbox-drafts.md), [company-brain.md](company-brain.md) and [billing-v1.md](billing-v1.md). Updated 2026-10-02.
+Status: built on branch `feat/followups-pipeline-report` (stacked on `feat/v1-integration`), behind the existing `ORBIS_INBOX_DRAFTS_ENABLED` flag. No live mailbox, Composio, Stripe or model call has been made. Concept: levels 6, 7 and 8 of 18-orbi-inbox-concept.md. It builds on [inbox-drafts.md](inbox-drafts.md), [company-brain.md](company-brain.md) and [billing-v1.md](billing-v1.md). Updated 2026-10-02.
 
 ## What it does
 
@@ -98,9 +98,9 @@ FORCE RLS with the same membership policy as 007–010 on all four tables. The r
 
 | Endpoint | Role | Contract |
 |---|---|---|
-| `GET /api/v1/requests?status&kind&q&followup=ready` | member | Lines (≤200), counts per status, settings, mode, `canEdit`, `canAdmin` |
+| `GET /api/v1/requests?status&kind&q&followup=ready` | member | Lines (the 200 most recent matching; `truncated: true` + `limit` when more match, and the screen says so), counts per status, settings, mode, `canEdit`, `canAdmin` |
 | `PATCH /api/v1/requests/:id` | owner/admin/operator (`erase_contact`: owner/admin) | strict `{action}` as listed above |
-| `GET /api/v1/requests/export` | owner/admin | CSV |
+| `GET /api/v1/requests/export` | owner/admin | CSV of **every** request of the workspace (not capped at the screen's 200; bounded by the 24-month retention) |
 | `GET/PUT /api/v1/requests/settings` | member / owner/admin | strict `{followupsEnabled, businessDays, maxStages, replyBaselineMinutes}` |
 | `GET /api/v1/report?week=YYYY-MM-DD` | member | Week report + previous week (digest data) |
 | `GET /api/v1/report/today` | member | Today card |

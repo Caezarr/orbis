@@ -1,6 +1,6 @@
 # Launch hardening (V1 Phase 4)
 
-Status: built on branch `feat/launch-hardening` (stacked on `feat/followups-pipeline-report`). No live Supabase, Stripe, Composio, Sentry or model call has been made. Updated 2026-10-02. Plan: Phase 4 of `docs/strategy/17-v1-self-serve.md` (branch `docs/v1-self-serve-plan`). Operator steps: [launch-checklist.md](launch-checklist.md).
+Status: built on branch `feat/launch-hardening` (stacked on `feat/followups-pipeline-report`). No live Supabase, Stripe, Composio, Sentry or model call has been made. Updated 2026-10-02. Plan: Phase 4 of the V1 self-serve plan.
 
 ## 1. Shared rate limits and budgets (migration 012)
 

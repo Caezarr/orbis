@@ -23,13 +23,13 @@ export const siteInputSchema = z.union([
     })
     .strict(),
 ]);
-export type SiteInput = z.infer<typeof siteInputSchema>;
+type SiteInput = z.infer<typeof siteInputSchema>;
 
-export function publicAiEnabled() {
+function publicAiEnabled() {
   return process.env.ORBIS_START_AI_PROFILE === "true" && providerStatus().configured;
 }
 
-export type PrepareDeps = {
+type PrepareDeps = {
   crawl?: (website: string) => Promise<CrawlResult>;
   analyze?: typeof analyzeCompany;
   synthesize?: (prompt: { system: string; prompt: string }, signal: AbortSignal) => Promise<unknown>;
@@ -96,7 +96,7 @@ function logFallback(reason: string) {
 
 const SYNTHESIS_TIMEOUT_MS = 20_000;
 /** Provider-backed synthesis. No tools, no retries. */
-export async function providerSynthesis(prompt: { system: string; prompt: string }, signal: AbortSignal) {
+async function providerSynthesis(prompt: { system: string; prompt: string }, signal: AbortSignal) {
   const result = await generateText({
     model: getModel(),
     system: prompt.system,

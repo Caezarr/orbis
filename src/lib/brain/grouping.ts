@@ -23,13 +23,13 @@ import { recordDraftQuestions, type Ids } from "./store";
  *   for two drafts, which the owner still reads before answering;
  * - any failure (budget, model, schema, timeout) falls back to lexical dedup.
  */
-export const GROUPING_MAX_CANDIDATES = 40;
-export const GROUPING_MAX_NEW = 6;
+const GROUPING_MAX_CANDIDATES = 40;
+const GROUPING_MAX_NEW = 6;
 
 export function questionGroupingEnabled() {
   return process.env.ORBIS_BRAIN_QUESTION_GROUPING === "true";
 }
-export function groupingCents() {
+function groupingCents() {
   const value = Number(process.env.ORBIS_BRAIN_EST_CENTS_GROUP);
   return Number.isSafeInteger(value) && value > 0 ? value : 1;
 }

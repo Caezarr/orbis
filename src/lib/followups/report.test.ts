@@ -142,5 +142,9 @@ describe("session API contracts", () => {
     expect(csv.startsWith("﻿date_reception,statut")).toBe(true);
     expect(csv).toContain('"Claire","claire@client.test","\'=cmd","3 000 €"');
     for (const [, params] of query.mock.calls as unknown as [string, unknown[]][]) expect(params.slice(0, 2)).toEqual(["w", "t"]);
+    // The whole list, not the screen's first 200.
+    const sql = (query.mock.calls as unknown as [string][]).map(([q]) => q).find((q) => q.includes("FROM pipeline_items i"));
+    expect(sql).toBeDefined();
+    expect(sql).not.toMatch(/LIMIT/);
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const contentPackSchema = z.object({
+const contentPackSchema = z.object({
   script: z.string().min(30).max(20000),
   sourceIds: z.array(z.string().min(1)).min(1),
   claims: z.array(

@@ -116,7 +116,6 @@ export type BatchStats = {
   /** Visible triage pass (labels/categories), counts only. */
   labels?: Record<string, number | boolean>;
 };
-export class LeaseLostError extends Error {}
 /** Model output failed schema validation (treated like a model failure). */
 class InvalidModelOutput extends Error {}
 
@@ -125,7 +124,7 @@ const TERMINAL: ReadonlySet<MessageStatus> = new Set([
   "drafted",
   "needs_review",
 ]);
-export const contentHash = (m: MailMessage) =>
+const contentHash = (m: MailMessage) =>
   createHash("sha256")
     .update(
       JSON.stringify([
@@ -138,7 +137,7 @@ export const contentHash = (m: MailMessage) =>
       ]),
     )
     .digest("hex");
-export const draftIdempotencyKey = (batch: InboxBatch, messageId: string) =>
+const draftIdempotencyKey = (batch: InboxBatch, messageId: string) =>
   createHash("sha256")
     .update(
       JSON.stringify([

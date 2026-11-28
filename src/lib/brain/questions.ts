@@ -8,7 +8,7 @@ import { fold, redactThirdParty, type RedactionContext } from "./text";
  * words (accent-folded, stopwords removed, light stemming, small synonym map),
  * then Jaccard similarity >= MATCH_THRESHOLD against existing keys.
  */
-export const MATCH_THRESHOLD = 0.6;
+const MATCH_THRESHOLD = 0.6;
 
 const STOPWORDS = new Set(
   (
@@ -82,7 +82,7 @@ export function questionTokens(text: string) {
   ].sort();
 }
 export const canonicalKey = (text: string) => questionTokens(text).join(" ").slice(0, 200);
-export function similarity(a: string, b: string) {
+function similarity(a: string, b: string) {
   const x = new Set(a.split(" ").filter(Boolean));
   const y = new Set(b.split(" ").filter(Boolean));
   if (!x.size || !y.size) return 0;

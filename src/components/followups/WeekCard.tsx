@@ -1,28 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+
 import type { WeeklyReport } from "@/lib/followups/report";
 import { durationFr } from "./ReportView";
 import s from "./followups.module.css";
 
 export type WeekSummary = { report: WeeklyReport; followupsReady: number; openRequests: number };
-
-/** Today: this week's measured counts + follow-ups to review. Silent when the feature is off. */
-export function WeekCard() {
-  const [data, setData] = useState<WeekSummary | null>(null);
-  useEffect(() => {
-    let live = true;
-    fetch("/api/v1/report/today", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => live && body && setData(body as WeekSummary))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
-  return data ? <WeekCardView data={data} /> : null;
-}
 
 export function WeekCardView({ data }: { data: WeekSummary }) {
   const r = data.report;

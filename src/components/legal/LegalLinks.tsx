@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export const LEGAL_PAGES = [
+const LEGAL_PAGES = [
   { href: "/legal/cgu", label: "CGU" },
   { href: "/legal/confidentialite", label: "Confidentialité" },
   { href: "/legal/sous-traitants", label: "Sous-traitants" },

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 /** Minimum CRON_SECRET length; shorter secrets are treated as unconfigured. */
-export const MIN_CRON_SECRET_LENGTH = 32;
+const MIN_CRON_SECRET_LENGTH = 32;
 
 /**
  * Bearer check for scheduler endpoints (Vercel Cron sends

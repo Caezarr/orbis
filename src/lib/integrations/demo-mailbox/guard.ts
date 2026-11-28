@@ -25,7 +25,7 @@ export function isProductionRuntime(env: Env = process.env) {
 }
 
 /** Whether the demo flag is set at all (no production check). */
-export function demoMailboxRequested(env: Env = process.env) {
+function demoMailboxRequested(env: Env = process.env) {
   return env.ORBIS_DEMO_MAILBOX?.trim().toLowerCase() === "true";
 }
 

@@ -55,3 +55,6 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# Design inspiration and third-party screenshots stay local
+docs/design/inspiration/

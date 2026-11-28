@@ -10,7 +10,7 @@ import {
 } from "@/lib/billing/rates";
 import styles from "./task-pricing.module.css";
 
-export type TaskPricingProps = {
+type TaskPricingProps = {
   plans?: PlanConfig;
   rateCard?: RateCard;
   initialSeats?: number;
@@ -173,4 +173,3 @@ export function TaskPricing({
     </section>
   );
 }
-export default TaskPricing;

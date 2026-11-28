@@ -6,7 +6,7 @@ import { RequestsView, type RequestsData } from "./RequestsView";
 
 type Followup = RequestView["followups"][number];
 
-function render(followup: Partial<Followup>) {
+function render(followup: Partial<Followup>, extra: Partial<RequestsData> = {}) {
   const item: RequestView = {
     id: "item-1",
     kind: "quote_request",
@@ -38,6 +38,7 @@ function render(followup: Partial<Followup>) {
     mode: "test",
     canEdit: false,
     canAdmin: false,
+    ...extra,
   };
   return renderToStaticMarkup(
     createElement(RequestsView, { view: "relances", data, filters: {}, busy: null, onFilter: () => undefined, onAction: () => undefined }),
@@ -74,5 +75,15 @@ describe("RequestsView follow-up review", () => {
     const html = render({ preview: "Bonjour, avez-vous pu regarder notre devis ?" });
     expect(html).not.toContain("À confirmer avant d’envoyer");
     expect(html).not.toContain("Points à vérifier");
+  });
+});
+
+describe("RequestsView list cap", () => {
+  it("says when only the most recent requests are shown, and points admins to the full export", () => {
+    expect(render({})).not.toContain("les plus récentes sont affichées");
+    const cut = render({}, { truncated: true, limit: 200 });
+    expect(cut).toContain("Seules les 200 demandes les plus récentes sont affichées");
+    expect(cut).not.toContain("exportez la liste complète");
+    expect(render({}, { truncated: true, limit: 200, canAdmin: true })).toContain("exportez la liste complète en CSV");
   });
 });

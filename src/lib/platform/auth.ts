@@ -9,7 +9,7 @@ export class PlatformError extends Error {
  * routes. Anything else (absolute URL, protocol-relative, backslash, control
  * characters, /api, /login, unknown route) falls back to /today.
  */
-export const RETURN_TO_ALLOWLIST = [
+const RETURN_TO_ALLOWLIST = [
   "today", "start", "fiche", "demandes", "rapport", "billing", "settings", "company", "connections",
   "catalog", "knowledge", "missions", "audit", "onboarding", "analytics", "plans", "pricing", "tasks",
   "runs", "workflows", "chat", "discover", "legal",

@@ -14,6 +14,9 @@ export type RequestsData = {
   mode: "test" | "scoped_autonomy";
   canEdit: boolean;
   canAdmin: boolean;
+  /** More requests match than the screen shows (the API sends `limit` of them). */
+  truncated?: boolean;
+  limit?: number;
 };
 export type RequestAction =
   | { action: "won" | "lost" | "reopen" | "dismiss_followups" | "resume_followups" | "erase_contact" }
@@ -36,7 +39,7 @@ const FOLLOWUP_STATUS: Record<string, string> = {
   not_needed: "Pas de relance nécessaire",
   dismissed: "Écartée",
 };
-export const dateFr = (iso: string | null, withTime = false) =>
+const dateFr = (iso: string | null, withTime = false) =>
   iso
     ? new Intl.DateTimeFormat("fr-FR", {
         timeZone: "Europe/Paris",
@@ -326,6 +329,12 @@ export function RequestsView({
             </li>
           ))}
         </ul>
+      )}
+      {data.truncated && data.items.length > 0 && (
+        <p className={s.fine} role="note">
+          Seules les {data.limit ?? data.items.length} demandes les plus récentes sont affichées. Affinez avec la recherche ou
+          les filtres{data.canAdmin ? ", ou exportez la liste complète en CSV" : ""}.
+        </p>
       )}
 
       <FollowupSettings settings={data.settings} canAdmin={data.canAdmin} busy={busy === "settings"} onSave={onSaveSettings} />

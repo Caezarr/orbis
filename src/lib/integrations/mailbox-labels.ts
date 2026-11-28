@@ -41,14 +41,14 @@ export const ORBI_LABELS = Object.freeze({
 export type OrbiLabelKey = keyof typeof ORBI_LABELS;
 export const ORBI_LABEL_KEYS = Object.keys(ORBI_LABELS) as OrbiLabelKey[];
 const ORBI_NAMES: ReadonlySet<string> = new Set(Object.values(ORBI_LABELS));
-export const isOrbiLabelName = (name: string) => ORBI_NAMES.has(name);
+const isOrbiLabelName = (name: string) => ORBI_NAMES.has(name);
 
-export type LabelOperation =
+type LabelOperation =
   | "list_labels"
   | "create_label"
   | "read_message_labels"
   | "set_message_labels";
-export const LABEL_TOOLS: Readonly<
+const LABEL_TOOLS: Readonly<
   Record<MailboxProvider, Readonly<Partial<Record<LabelOperation, string>>>>
 > = Object.freeze({
   gmail: Object.freeze({
@@ -66,7 +66,7 @@ const ALLOWED = new Set(
 );
 const FORBIDDEN_SLUG =
   /SEND|FORWARD|REPLY|DELETE|TRASH|MOVE|RULE|FILTER|SETTING|SPAM|ARCHIVE|VACATION|DELEGATE|BATCH|IMPORT|INSERT|DRAFT|THREAD|ATTACHMENT|CONTACT|EVENT|CALENDAR|FOLDER|MASTER/;
-export const LABEL_POLICY = {
+const LABEL_POLICY = {
   id: "mailbox-labels-v1",
   allowedOperations: [
     "list_labels",
@@ -176,7 +176,7 @@ type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {};
 /** Gmail label list → Orbis label name → id (other labels are ignored). */
-export function normalizeGmailLabels(data: unknown) {
+function normalizeGmailLabels(data: unknown) {
   const d = obj(parseData(data));
   const list = Array.isArray(d.labels)
     ? d.labels
@@ -194,14 +194,14 @@ export function normalizeGmailLabels(data: unknown) {
   }
   return out;
 }
-export function createdGmailLabelId(data: unknown) {
+function createdGmailLabelId(data: unknown) {
   const d = obj(parseData(data));
   const raw = d.id ?? obj(d.response_data).id ?? obj(d.label).id;
   return typeof raw === "string" && gmailUserLabelId.safeParse(raw).success
     ? raw
     : undefined;
 }
-export function outlookCategories(data: unknown): string[] {
+function outlookCategories(data: unknown): string[] {
   const d = obj(parseData(data));
   const message = Array.isArray(d.categories) ? d : obj(d.response_data);
   if (!Array.isArray(message.categories)) throw new Error("categories_shape");
