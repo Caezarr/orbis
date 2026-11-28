@@ -24,7 +24,7 @@ function origin(value: string | undefined) {
 }
 
 /** True when the public origin is HTTPS (Vercel or a configured https APP_ORIGIN). */
-export function servedOverHttps(env: Env = process.env) {
+function servedOverHttps(env: Env = process.env) {
   if (env.VERCEL === "1") return true;
   const configured = env.APP_ORIGIN ?? env.ORBIS_APP_URL ?? "";
   return configured.startsWith("https://");

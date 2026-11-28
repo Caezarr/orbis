@@ -94,7 +94,7 @@ function context() {
   return { ...ctx, db: ctx.db };
 }
 
-export type InboxFeaturesView = InboxFeatures & {
+type InboxFeaturesView = InboxFeatures & {
   /** Mailbox of the latest batch; decides which calendar/label system applies. */
   provider?: MailboxProvider;
   calendar: {

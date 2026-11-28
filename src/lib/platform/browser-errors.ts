@@ -13,10 +13,10 @@
  * page content, form values, cookies, storage or user identity.
  */
 
-export const CLIENT_ERRORS_ENDPOINT = "/api/client-errors";
+const CLIENT_ERRORS_ENDPOINT = "/api/client-errors";
 export const MAX_REPORTS_PER_PAGE = 5;
 
-export type BrowserErrorReport = {
+type BrowserErrorReport = {
   source: "error" | "unhandledrejection";
   type: string;
   message: string;

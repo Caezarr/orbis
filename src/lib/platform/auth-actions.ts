@@ -44,7 +44,7 @@ export type AuthActionDeps = {
   setCookie(name: string, value: string, maxAgeSeconds: number): void;
 };
 
-export type AuthActionResult = { status: number; body: Record<string, unknown> };
+type AuthActionResult = { status: number; body: Record<string, unknown> };
 
 export const MESSAGES = {
   invalid: "Indiquez une adresse e-mail valide.",
@@ -60,9 +60,9 @@ export const MESSAGES = {
 
 const email = z.string().trim().toLowerCase().min(3).max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
 const base = { returnTo: z.unknown().optional() };
-export const passwordSchema = z.object({ email, password: z.string().min(1).max(1024), acceptTerms: z.boolean().optional(), ...base });
-export const magicLinkSchema = z.object({ email, intent: z.enum(["sign-in", "sign-up"]).default("sign-in"), acceptTerms: z.boolean().optional(), ...base });
-export const oauthSchema = z.object({ provider: z.enum(["google", "microsoft"]), intent: z.enum(["sign-in", "sign-up"]).default("sign-in"), acceptTerms: z.boolean().optional(), ...base });
+const passwordSchema = z.object({ email, password: z.string().min(1).max(1024), acceptTerms: z.boolean().optional(), ...base });
+const magicLinkSchema = z.object({ email, intent: z.enum(["sign-in", "sign-up"]).default("sign-in"), acceptTerms: z.boolean().optional(), ...base });
+const oauthSchema = z.object({ provider: z.enum(["google", "microsoft"]), intent: z.enum(["sign-in", "sign-up"]).default("sign-in"), acceptTerms: z.boolean().optional(), ...base });
 
 const ok = (body: Record<string, unknown>): AuthActionResult => ({ status: 200, body: { ok: true, ...body } });
 const fail = (status: number, error: string): AuthActionResult => ({ status, body: { error } });

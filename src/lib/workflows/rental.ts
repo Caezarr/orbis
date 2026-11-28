@@ -1,5 +1,5 @@
 import { z } from "zod";
-export const rentalEventSchema = z
+const rentalEventSchema = z
   .object({
     eventId: z.string().min(1),
     kind: z.enum([
@@ -19,14 +19,14 @@ export const rentalEventSchema = z
     (e) => Date.parse(e.departureAt) > Date.parse(e.arrivalAt),
     "Departure must follow arrival",
   );
-export type PropertyPolicy = {
+type PropertyPolicy = {
   id: string;
   guideVersion: string;
   cleanerId?: string;
   emergencyContact?: string;
   allowDrafts: boolean;
 };
-export type RentalAction = {
+type RentalAction = {
   key: string;
   kind:
     | "prepare_arrival"

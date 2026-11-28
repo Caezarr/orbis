@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ReactNode,
 } from "react";
 import {
   ArrowUpRight,
@@ -52,7 +51,7 @@ const jobs = [
     Icon: Search,
   },
 ];
-export type WorkshopJob = { input: string; output: string; detail: string };
+type WorkshopJob = { input: string; output: string; detail: string };
 const workshopIcons = [Mail, FileText, Search];
 /** `jobs` is optional; without it the landing's default scenes are shown. */
 export function TaskWorkshop({

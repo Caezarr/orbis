@@ -25,7 +25,7 @@ export const CATEGORY_LABELS: Record<FactCategory, string> = {
   other: "Autres informations",
 };
 /** Categories that describe HOW to write, not WHAT is true: passed as instructions. */
-export const STYLE_CATEGORIES: ReadonlySet<FactCategory> = new Set([
+const STYLE_CATEGORIES: ReadonlySet<FactCategory> = new Set([
   "tone",
   "rule",
 ]);

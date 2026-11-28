@@ -30,7 +30,7 @@ import { parseData } from "./mailbox-normalize";
  */
 export const calendarProviders = ["googlecalendar", "outlookcalendar"] as const;
 export type CalendarProvider = (typeof calendarProviders)[number];
-export type CalendarOperation = "free_busy";
+type CalendarOperation = "free_busy";
 export const CALENDAR_TOOLS: Readonly<
   Record<CalendarProvider, Readonly<Record<CalendarOperation, string>>>
 > = Object.freeze({
@@ -48,7 +48,7 @@ export const CALENDAR_POLICY = {
   externalWrites: [] as CalendarOperation[],
   createEvents: false,
 } as const;
-export const CALENDAR_POLICY_HASH = hash({
+const CALENDAR_POLICY_HASH = hash({
   policy: CALENDAR_POLICY,
   tools: CALENDAR_TOOLS,
 });
@@ -73,7 +73,7 @@ for (const provider of calendarProviders)
     assertCalendarPolicy(provider, operation as CalendarOperation, slug);
 
 /** At most three weeks are read per call (Graph/Google also bound the window). */
-export const MAX_WINDOW_DAYS = 21;
+const MAX_WINDOW_DAYS = 21;
 const windowInput = z
   .object({ from: z.date(), to: z.date() })
   .strict()

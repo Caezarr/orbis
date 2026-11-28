@@ -164,7 +164,7 @@ async function resolveContext(client: PoolClient): Promise<WorkspaceContext> {
   };
 }
 
-export type WorkspaceRequestOptions = {
+type WorkspaceRequestOptions = {
   requireRole?: Membership["role"] | Membership["role"][];
 };
 function enforceRole(

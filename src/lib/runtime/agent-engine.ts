@@ -2,9 +2,8 @@ import { generateText, Output } from "ai";
 import { resolveApprovedMemory } from "@/lib/knowledge/memory";
 import { z } from "zod";
 import { findFlow } from "@/lib/product/catalog";
-import { id } from "@/lib/ids";
+import { hashPayload, id } from "@/lib/ids";
 import { nowIso } from "@/lib/time";
-import { hashPayload } from "@/lib/ssrf";
 import { getStore, mutateStore } from "@/lib/store/store";
 import { generationSettings, getModel, providerStatus } from "./provider";
 import {

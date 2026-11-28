@@ -66,7 +66,7 @@ export type LabelStore = {
     },
   ): Promise<void>;
 };
-export type LabelStats = {
+type LabelStats = {
   labelled: number;
   unchanged: number;
   uncertain: number;
@@ -75,7 +75,7 @@ export type LabelStats = {
   yielded?: boolean;
 };
 
-export const labelIdempotencyKey = (ids: {
+const labelIdempotencyKey = (ids: {
   tenantId: string;
   workspaceId: string;
   connectedAccountId: string;
@@ -272,7 +272,7 @@ export type CleanupStore = {
   markUncertain(id: string): Promise<void>;
   remaining(): Promise<{ total: number; real: number }>;
 };
-export type CleanupResult = {
+type CleanupResult = {
   removed: number;
   failed: number;
   /** Real (provider) labels left because the current mode is `test`. */

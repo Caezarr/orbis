@@ -1,129 +1,128 @@
-# Orbis
-
-### Your company. Your tools. Your AI team.
-
-Orbis turns the work around a company into missions that AI agents can understand, prepare, run and improve.
-
-Start with a website or a conversation. Orbis identifies the work worth delegating, suggests a ready-to-use mission, connects the right context and tools, then gives you a result to review.
-
-![Orbis — your company, with a little more capacity](public/brand/orbis-modules.png)
-
 <p align="center">
-  <a href="docs/strategy/PRODUCT-README.md">Product</a> ·
-  <a href="docs/architecture/CTO-README.md">Architecture</a> ·
-  <a href="docs/product/INTEGRATIONS-AND-KNOWLEDGE.md">Integrations</a> ·
-  <a href="docs/design/LANDING-MOTION.md">Design system</a>
+  <img src="public/brand/orbi/done-256.webp" width="128" alt="Orbi, the Orbis mascot" />
 </p>
 
-## What Orbis does
+# Orbis
+
+**An agent harness that lets a small company hand real work to an AI agent: every task is a versioned contract with gates, scoped evidence and human approval, and the model is never the one in control.**
+
+[![CI](https://github.com/Caezarr/orbis/actions/workflows/ci.yml/badge.svg)](https://github.com/Caezarr/orbis/actions/workflows/ci.yml)
+
+![Orbis: your company, with a little more capacity](public/brand/orbis-modules.png)
+
+## The problem
+
+Companies do not trust agents with real work, and they are right. In a typical agent setup the scope is a prompt, the evidence is whatever the model decided to read, memory changes silently, a retry can repeat an external action, and nobody can say which context produced a given output. That is acceptable for a demo. It is not acceptable when the output is an email to a customer quoting a price. A small business cannot review prompts or read traces, so the guarantees have to be built into the system, not into a policy document.
+
+## How Orbis solves it
+
+Each business task becomes a **capability contract**: role, objective, context, tools, what the agent must do and what it cannot do. Code, not the model, enforces it.
+
+- **Versioned contracts.** A mission pins a package version and a mission version. Each run records a hash of the exact context it saw (sources, approved memory, instructions, provider, model); a run whose context changed cannot be accepted.
+- **Eval gates before anything reaches a human.** Output is schema-checked, then passed through deterministic guards: prices, dates, contacts and commitments not found in a trusted source become `[[À CONFIRMER]]` questions, citations must appear verbatim in their source, a Reply-To mismatch downgrades the draft to review.
+- **Tenant and mission-scoped retrieval.** An agent sees only the sources its mission version allows, for its own tenant (Postgres row-level security, forced).
+- **Human-approved memory.** Feedback and facts learned from sent mail are proposals. Only an owner or admin can approve them, and only approved items reach a prompt.
+- **Idempotent, bounded actions.** External effects go through a closed tool allow-list with pinned tool versions and an idempotency ledger; spend is reserved against a budget before each model call; nothing can send.
 
 ```text
-Understand your company → Choose the work → Connect context → Test the result → Delegate with memory
+inbound email ──► deterministic skip ──► budget reservation ──► classify
+   ──► draft (schema-bound) ──► guardDraft + recipient check ──► optional claim check
+   ──► draft in the user's own mailbox (never sent) ──► feedback ──► proposed memory ──► human approval
 ```
 
-The product combines a guided company audit, a catalog of 100 business missions, scoped knowledge, tool access, agent memory, evaluation and a workspace for reviewing the work produced.
+The contract running in production today is `inbox-replies@1`: prepare replies to customer and quote requests as drafts in the company's own Gmail or Outlook, cite sources, and turn every unverifiable fact into an explicit question.
 
-## Product surface
+## Try it
 
-| Surface | Purpose |
-| --- | --- |
-| Company intake | Start from a website or describe the business in your own words |
-| Mission catalog | Browse 100 pre-designed missions across 10 departments |
-| Mission setup | Define outcomes, instructions, sources, tools and approval rules |
-| Knowledge scopes | Select the exact workspace, site, folder or source an agent may use |
-| Agent runtime | Generate structured work, attach sources and evaluate the result |
-| Memory | Turn approved feedback into reusable mission context |
-| Workspace | Review runs, corrections, evidence, unknowns and decisions |
-| Partner mode | Prepare repeatable setups for integrators and their clients |
-
-Examples include customer replies, quote preparation, research briefs, meeting preparation, content drafts, lead qualification and internal operations.
-
-## Design principles
-
-- **Simple at the surface.** A company starts with a conversation, not an automation canvas.
-- **Specific underneath.** Each mission has a defined input, output, context, steps and acceptance criteria.
-- **Scoped by default.** Agents only receive the knowledge and tools selected for the mission.
-- **Reviewable work.** Results expose sources, claims, unknowns and proposed next actions.
-- **Improvement with permission.** Feedback becomes memory when approved.
-- **Bring your tools.** Orbis is designed to work around the systems a company already uses.
-
-## Run locally
-
-Requirements: Node.js 20+ and pnpm.
+Requirements: Node.js 22, pnpm 10. No API key, no database and no network model call are needed for these steps.
 
 ```bash
-pnpm install
-pnpm dev --hostname 127.0.0.1
+git clone https://github.com/Caezarr/orbis.git && cd orbis
+pnpm install --frozen-lockfile
+pnpm test
 ```
 
-Open `http://127.0.0.1:3000` in your browser.
+Expected (models are mocked, no paid call):
 
-Useful routes: `/` landing, `/audit` company audit, `/catalog` mission catalog, `/pricing` pricing, `/today` workspace.
+```text
+ Test Files  92 passed (92)
+      Tests  1158 passed (1158)
+```
 
-### Full loop locally, without Composio or a real mailbox
-
-The local stack scripts `pnpm local:up` / `pnpm local:env` start Supabase (Postgres, Auth, Mailpit) in Docker and print the `.env.local` block. They come with `chore/ops-readiness`. The demo mailbox replaces Composio with a fake French small-business mailbox (a painter near Lille), so `/start` works end to end on your machine:
+Run only the red-team suites, which feed an "obeying" model hostile emails and web pages and assert that nothing the attacker wants gets through:
 
 ```bash
-pnpm local:up && pnpm local:env   # paste into .env.local, add ORBIS_DEMO_MAILBOX=true and ORBIS_OPERATIONS_MONTHLY_CAP_CENTS=2000
-pnpm demo:reset                    # seed / reset the demo mailbox
+pnpm exec vitest run src/lib/security/redteam
+```
+
+```text
+ Test Files  4 passed (4)
+      Tests  82 passed (82)
+```
+
+Start the app; the interface works without a provider key:
+
+```bash
+pnpm dev --hostname 127.0.0.1    # then open http://127.0.0.1:3000 and http://127.0.0.1:3000/start
+```
+
+### Full loop with a fake mailbox (Docker)
+
+To run onboarding to drafts end to end without a real mailbox or a paid model, the repo ships a local Supabase stack (Postgres, Auth, Mailpit), a fake in-process mailbox that replaces Composio, and a deterministic demo model. All three are refused in production.
+
+```bash
+pnpm local:up                  # Supabase in Docker, runtime role without BYPASSRLS, migrations
+pnpm -s local:env > .env.local # throwaway local keys; already sets ORBIS_DEMO_MAILBOX=true
+echo "ORBIS_AI_PROVIDER=demo" >> .env.local
+pnpm demo:reset                # seed the fake mailbox
 pnpm dev --hostname 127.0.0.1 --port 3000
 ```
 
-Open `/start`. Magic links arrive in Mailpit at `http://127.0.0.1:54324`. « Connecter Gmail » goes through a local consent page. Watch the inbox and the drafts Orbis writes at `/dev/demo-mailbox`. Drafting still needs a model key (below). `ORBIS_DEMO_MAILBOX` is refused in production. See [docs/product/demo-mailbox.md](docs/product/demo-mailbox.md).
+Open `/start`. Magic links land in Mailpit at `http://127.0.0.1:54324`; the fake inbox and the drafts Orbis created are at `/dev/demo-mailbox`. This is the path CI exercises with Playwright on every pull request.
 
-### Optional model configuration
+To draft with a real model instead, set `ORBIS_AI_PROVIDER=openai` (or `anthropic`), `ORBIS_AI_MODEL` and the matching `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`. A real Gmail or Outlook connection needs a Composio key. Every variable is documented in [.env.example](.env.example).
 
-The interface and product flows are explorable without a provider key. To run model-backed missions, create an ignored `.env.local` file:
+## How it works
 
-```dotenv
-ORBIS_AI_PROVIDER=openai
-ORBIS_AI_MODEL=your-supported-model-id
-OPENAI_API_KEY=your-private-api-key
-```
+- `src/lib/runtime/` holds provider selection, schema-bound generation (`Output.object(zod)`, no retries, abort timeout) and the contracts, including `INBOX_CONTRACT` in `inbox-replies.ts`.
+- `src/lib/inbox/pipeline.ts` runs the production mission per message: skip, reserve budget, classify, draft, guard, claim check, write the draft.
+- `src/lib/security/untrusted-text.ts` normalises email and web text (NFKC, invisible and bidi characters, defanged links) and prompts wrap it in per-call random-boundary data blocks.
+- `src/lib/knowledge/` and `src/lib/brain/` do scoped lexical retrieval and the approval workflow for memory and company facts.
+- `src/lib/integrations/` is the only code that touches third-party tools: closed allow-lists, pinned versions, the draft ledger and a generic action broker for future external writes.
+- Background work is Postgres-leased jobs (`FOR UPDATE SKIP LOCKED`), one running batch per workspace.
 
-Anthropic is also supported with `ORBIS_AI_PROVIDER=anthropic`, a supported model ID and `ANTHROPIC_API_KEY`. Never commit credentials. Provider usage and costs remain under the configured provider account.
+[ARCHITECTURE.md](ARCHITECTURE.md) covers components, the harness contract, every gate, trust boundaries, data and testing, and lists where the code differs from the target design.
 
-## Verify the project
+## Proof in the repo
+
+- **1158 Vitest tests in 92 files** (unit, integration, routes, billing state machine, workers), all with mocked models.
+- **82 red-team tests** in `src/lib/security/redteam/`: injected instructions, homoglyph domains, zero-width contacts, Reply-To divergence, email-chosen meeting times, off-schema classifications, send and forward tool requests, across inbox, brain, follow-ups, meetings and onboarding.
+- **Playwright end-to-end** (`e2e/`) from `/start` to drafts against the local stack, run twice in CI: once with no model configured, once with the demo model.
+- **Static gates:** strict TypeScript, ESLint with zero warnings, `knip` for unused files, exports and dependencies.
+- CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs all of the above on every pull request, without any secret or live service.
+
+## Status and limits
+
+- One contract is in production use: inbox reply drafts. Orbis prepares; a human sends.
+- Contracts do not have literal `role`, `must` or `cannot` fields yet. They are expressed through the contract brief, zod schemas and deterministic guards. The registry's `evaluations` and `approvalPoints` are labels, not executed checks.
+- External writes (sending, CRM, payments) are not wired. The action broker exists and is tested, but no production path calls it.
+- Retrieval is lexical (BM25-style), not vector-based. No queue or outbox beyond Postgres leases; observability is Sentry plus structured logs.
+- Parts of the design documentation are in French.
+
+## Development
 
 ```bash
-pnpm test
-pnpm exec tsc --noEmit
-pnpm exec next build --webpack
+pnpm typecheck   # next typegen + tsc --noEmit
+pnpm lint        # ESLint, zero warnings allowed
+pnpm knip        # unused files, exports, dependencies
+pnpm test        # Vitest, mocked models
+pnpm test:e2e    # Playwright, needs pnpm local:up
 ```
 
-The test suite uses mocked provider responses and does not make paid model calls.
+Stack: Next.js 16 and React 19, TypeScript strict, Postgres on Supabase with RLS, Vercel AI SDK (OpenAI or Anthropic), Composio for mailbox and calendar access, Stripe for billing.
 
-## Architecture
+Further reading: [ARCHITECTURE.md](ARCHITECTURE.md) · [target architecture and ADRs](docs/architecture/CTO-README.md) (mostly French) · [integrations and knowledge](docs/product/INTEGRATIONS-AND-KNOWLEDGE.md) · [security policy](SECURITY.md).
 
-The codebase is built from small, inspectable contracts rather than a new agent framework.
+## License
 
-```text
-Next.js app
-├── Product surfaces      audit · catalog · missions · knowledge · plans
-├── Runtime               bounded generation · review · repair · evaluation
-├── Domain contracts      missions · sources · memory · connections · pricing
-├── Local store            deterministic development state and fixtures
-└── Visual system          Orbis landing · liquid glass · shader illustrations
-```
-
-Read the technical documentation:
-
-- [Architecture overview](docs/architecture/CTO-README.md)
-- [Runtime](docs/architecture/CTO-02-runtime.md)
-- [Data contracts](docs/architecture/CTO-03-contracts.md)
-- [Security](docs/architecture/CTO-04-security.md)
-- [Evaluation](docs/architecture/CTO-06-evaluation.md)
-- [Integrations and knowledge](docs/product/INTEGRATIONS-AND-KNOWLEDGE.md)
-- [Product release](docs/product/PRODUCT-RELEASE.md)
-- [Landing motion system](docs/design/LANDING-MOTION.md)
-
-## Current product status
-
-Orbis is an active product build with a functional local workspace, guided onboarding, mission catalog, scoped product flows and model-backed runtime contracts.
-
-The next production milestones are authenticated multi-tenant storage, encrypted credentials, durable jobs, live OAuth connections, provider metering, observability and enterprise retention controls. The current local store is for development and evaluation; it is not the production data layer.
-
-## License and notices
-
-This repository is private product code. Third-party notices for the visual libraries and assets are available in [`public/third-party-notices.txt`](public/third-party-notices.txt).
+Proprietary. Copyright (c) 2026 Gabriel Rance. All rights reserved. The source is published for viewing only; no permission is granted to use, copy, modify or distribute it without prior written permission. See [LICENSE](LICENSE). Third-party notices are in [`public/third-party-notices.txt`](public/third-party-notices.txt).

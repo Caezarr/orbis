@@ -18,7 +18,7 @@ import { normalizePlanKey, planCatalog, PLAN_CONFIG_VERSION } from "./plans";
 type Ids = { workspaceId: string; tenantId: string };
 type Db = Pick<PoolClient, "query">;
 
-export async function loadSubscription(db: Db, ids: Ids): Promise<SubscriptionFacts | null> {
+async function loadSubscription(db: Db, ids: Ids): Promise<SubscriptionFacts | null> {
   const row = (
     await db.query<{
       plan: string;
@@ -42,7 +42,7 @@ export async function loadSubscription(db: Db, ids: Ids): Promise<SubscriptionFa
   };
 }
 
-export async function loadTrial(db: Db, ids: Ids): Promise<TrialFacts | null> {
+async function loadTrial(db: Db, ids: Ids): Promise<TrialFacts | null> {
   const row = (
     await db.query<{ started_at: Date; ends_at: Date; draft_limit: number }>(
       "SELECT started_at,ends_at,draft_limit FROM billing_trials WHERE workspace_id=$1 AND tenant_id=$2",
@@ -82,7 +82,7 @@ export async function loadEntitlement(db: Db, ids: Ids, now = new Date()): Promi
 }
 
 /** Open entitlement used when enforcement is explicitly disabled (internal pilot). */
-export function unenforcedEntitlement(): Entitlement {
+function unenforcedEntitlement(): Entitlement {
   return {
     state: "active",
     plan: "equipe",

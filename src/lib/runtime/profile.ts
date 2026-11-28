@@ -1,5 +1,5 @@
 import { id } from "@/lib/ids";
-import { looksLikeUrl, normalizeWebsite } from "@/lib/ssrf";
+import { looksLikeUrl, normalizeWebsite } from "@/lib/url";
 import type { CompanyProfile } from "@/lib/domain/types";
 
 /** User-supplied intake only: never substitute a canned company for a keyword. */

@@ -17,9 +17,9 @@ export const STATUS_LABELS: Record<PipelineStatus, string> = {
   gagne: "Gagné",
   perdu: "Perdu",
 };
-export const MAX_STAGES = 2;
+const MAX_STAGES = 2;
 
-export type ThreadObservation = {
+type ThreadObservation = {
   /** First owner message after the customer's first request (response time). */
   firstRepliedAt: string | null;
   lastOwnerAt: string | null;
@@ -63,7 +63,7 @@ export function observeThread(
 }
 
 /** Automatic status (manual gagné/perdu always wins until reopened). */
-export function autoStatus(item: { firstRepliedAt: string | null; relanceAt: string | null }): PipelineStatus {
+function autoStatus(item: { firstRepliedAt: string | null; relanceAt: string | null }): PipelineStatus {
   if (item.relanceAt) return "relance";
   if (item.firstRepliedAt) return "repondu";
   return "nouveau";
@@ -79,7 +79,7 @@ export function nextStatus(
   return rank[auto] >= rank[current] ? auto : current;
 }
 
-export type OwnerMessageKind = "quote" | "question" | "closing" | "ambiguous";
+type OwnerMessageKind = "quote" | "question" | "closing" | "ambiguous";
 const MONEY = /(?:[€$£]\s?\d|\d[\d\s.,]*\s?(?:€|\$|£|(?:eur|euros?|ht|ttc)\b))/i;
 const QUOTE_WORDS = /\b(devis|offre|proposition|estimation|chiffrage|tarifs?|bon de commande|quote|quotation|estimate|proposal)\b/i;
 const CLOSING = /\b(merci|bonne (journée|soirée|fin de journée|continuation)|à bientôt|c'est noté|c’est noté|bien reçu|parfait|entendu|avec plaisir|thanks|thank you|noted)\b/i;
@@ -140,7 +140,7 @@ export type FollowupContext = {
   enabled: boolean;
   existing: readonly FollowupState[];
 };
-export type FollowupDecision =
+type FollowupDecision =
   | { action: "propose"; stage: number; dueAt: string }
   | { action: "wait"; dueAt: string }
   | { action: "none"; reason: string };

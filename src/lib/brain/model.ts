@@ -76,7 +76,7 @@ Rules:
     prompt: `${block.text}\nExtract the company facts from <${block.tag}>.`,
   };
 }
-export function explainPrompt(input: ExplainInput) {
+function explainPrompt(input: ExplainInput) {
   const draft = dataBlock("orbis_draft", input.draft.slice(0, 2000));
   const sent = dataBlock("sent_reply", input.sent.slice(0, 3000));
   return {

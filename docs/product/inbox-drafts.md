@@ -1,6 +1,6 @@
 # Inbox reply drafts (V1 Phase 1 backend + Phase 2 scheduler)
 
-Status: backend built behind `ORBIS_INBOX_DRAFTS_ENABLED=false`. Not activated. Phase 2 (multi-tenant scheduler, continuous drafting, per-workspace caps, Today decisions) added on branch `feat/inbox-scheduler`. No live Composio, Gmail, Outlook or model call has been made. Updated 2026-10-02. Context: [17-v1-self-serve.md](../strategy/17-v1-self-serve.md) (branch `docs/v1-self-serve-plan`). Company sheet, ask-once questions and learning from edits (levels 3–5) build on this: see [company-brain.md](company-brain.md).
+Status: backend built behind `ORBIS_INBOX_DRAFTS_ENABLED=false`. Not activated. Phase 2 (multi-tenant scheduler, continuous drafting, per-workspace caps, Today decisions) added on branch `feat/inbox-scheduler`. No live Composio, Gmail, Outlook or model call has been made. Updated 2026-10-02. Context: 17-v1-self-serve.md (branch `docs/v1-self-serve-plan`). Company sheet, ask-once questions and learning from edits (levels 3–5) build on this: see [company-brain.md](company-brain.md).
 
 ## What it does
 

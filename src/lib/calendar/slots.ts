@@ -16,7 +16,7 @@ export type SupportedTimezone = (typeof supportedTimezones)[number];
 export const DEFAULT_TIMEZONE: SupportedTimezone = "Europe/Paris";
 
 /** Minutes since local midnight, [start, end). */
-export type Range = [number, number];
+type Range = [number, number];
 /** Index 0 = Sunday … 6 = Saturday (Date#getUTCDay convention). */
 export type WeeklyHours = Range[][];
 export type WorkingHours = { weekly: WeeklyHours; assumed: boolean };
@@ -63,7 +63,7 @@ export const DEFAULT_HOURS: WeeklyHours = [
   [[540, 720], [840, 1080]],
   [],
 ];
-export const DEFAULT_HOURS_LABEL = "du lundi au vendredi, 9h-12h et 14h-18h";
+const DEFAULT_HOURS_LABEL = "du lundi au vendredi, 9h-12h et 14h-18h";
 
 /* ------------------------------------------------------------------ */
 /* Timezone arithmetic without a library (Intl only).                  */
@@ -259,7 +259,7 @@ export function workingHours(statements: string[]): WorkingHours {
 /* ------------------------------------------------------------------ */
 /* Free slots.                                                         */
 /* ------------------------------------------------------------------ */
-export type SlotOptions = {
+type SlotOptions = {
   now: Date;
   timezone: SupportedTimezone;
   hours: WeeklyHours;
@@ -272,7 +272,7 @@ export type SlotOptions = {
   count: number;
   stepMinutes?: number;
 };
-export const SLOT_DEFAULTS = {
+const SLOT_DEFAULTS = {
   visitMinutes: 60,
   callMinutes: 30,
   bufferMinutes: 30,
@@ -410,7 +410,7 @@ const AVAILABILITY_ASK =
   /disponibilit|vos dispos|availability|available|beschikbaar|quel(le)?s? (jour|date|moment|creneau|créneau)/i;
 const SLOT_PLACEHOLDER = "[[À CONFIRMER : créneau]]";
 
-export type MeetingCheck = { body: string; issues: string[]; questions: string[] };
+type MeetingCheck = { body: string; issues: string[]; questions: string[] };
 /** Insert `block` before the closing paragraph (greeting/signature) when there is one. */
 function insertBeforeClosing(body: string, block: string) {
   const paragraphs = body.split(/\n{2,}/);
