@@ -121,6 +121,10 @@ const ITEM_SELECT = `SELECT i.id,i.kind,i.status,i.contact_name,i.contact_email,
    FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id) AS followups
   FROM pipeline_items i`;
 
+const ITEM_ORDER = "ORDER BY i.first_customer_at DESC NULLS LAST, i.created_at DESC, i.id";
+/** Rows the « Demandes » screen renders at once. The CSV export is not capped. */
+export const LIST_LIMIT = 200;
+
 export async function listRequests(filters: z.infer<typeof listSchema>) {
   const ctx = context();
   const args: unknown[] = p(ctx);
@@ -136,9 +140,12 @@ export async function listRequests(filters: z.infer<typeof listSchema>) {
     where.push(
       `EXISTS (SELECT 1 FROM followups f WHERE f.pipeline_item_id=i.id AND f.workspace_id=i.workspace_id AND f.tenant_id=i.tenant_id AND ${FOLLOWUP_READY_SQL})`,
     );
-  const rows = (
-    await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY i.first_customer_at DESC NULLS LAST, i.created_at DESC LIMIT 200`, args)
+  // One extra row tells the screen the list is cut, instead of silently
+  // showing the 200 most recent under a « Toutes (N) » chip that counts all.
+  const fetched = (
+    await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE ${where.join(" AND ")} ${ITEM_ORDER} LIMIT ${LIST_LIMIT + 1}`, args)
   ).rows;
+  const rows = fetched.slice(0, LIST_LIMIT);
   const counts = (
     await ctx.db.query<{ status: PipelineStatus; n: string }>(
       "SELECT status,count(*)::text AS n FROM pipeline_items WHERE workspace_id=$1 AND tenant_id=$2 GROUP BY status",
@@ -147,6 +154,9 @@ export async function listRequests(filters: z.infer<typeof listSchema>) {
   ).rows;
   return {
     items: rows.map(publicItem),
+    /** More rows match than are shown; the CSV export has all of them. */
+    truncated: fetched.length > LIST_LIMIT,
+    limit: LIST_LIMIT,
     counts: Object.fromEntries(PIPELINE_STATUSES.map((s) => [s, Number(counts.find((c) => c.status === s)?.n ?? 0)])),
     settings: await loadPipelineSettings(ctx.db, { workspaceId: ctx.workspaceId, tenantId: ctx.tenantId }),
     mode: inboxMode(),
@@ -226,8 +236,14 @@ const CSV_COLUMNS = [
   "brouillons",
   "relances_preparees",
 ] as const;
+/**
+ * Every request of the workspace, not the screen's first LIST_LIMIT: the
+ * button says « Exporter en CSV », so a cut file would silently lose the
+ * oldest requests. Bounded by retention (24 months, then purged).
+ */
 export async function exportRequestsCsv() {
-  const { items } = await listRequests({});
+  const ctx = context();
+  const items = (await ctx.db.query<ItemRow>(`${ITEM_SELECT} WHERE i.workspace_id=$1 AND i.tenant_id=$2 ${ITEM_ORDER}`, p(ctx))).rows.map(publicItem);
   const lines = [CSV_COLUMNS.join(",")];
   for (const i of items)
     lines.push(

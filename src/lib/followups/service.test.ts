@@ -10,7 +10,7 @@ vi.mock("@/lib/platform/context", () => ({
   }),
 }));
 import { FOLLOWUP_READY_SQL } from "./detect";
-import { listRequests, requestAction } from "./service";
+import { LIST_LIMIT, listRequests, requestAction } from "./service";
 import { purgePipeline } from "./store";
 
 const row = { id: "item", status: "nouveau", kind: "quote_request", contact_erased_at: new Date(), thread_id: "th", provider: "gmail", drafts: 0, followups: [] };
@@ -65,6 +65,22 @@ describe("ready follow-ups and closing actions", () => {
     await listRequests({ followup: "ready" });
     const list = calls().find((c) => c.sql.includes("EXISTS (SELECT 1 FROM followups f"));
     expect(list?.sql).toContain(FOLLOWUP_READY_SQL);
+  });
+});
+
+describe("listRequests cap", () => {
+  it("fetches one row past the cap and flags the list as cut instead of hiding it", async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes("FROM pipeline_items i") ? { rows: Array.from({ length: LIST_LIMIT + 1 }, (_, n) => ({ ...row, id: `item-${n}` })) } : { rows: [] },
+    );
+    const r = await listRequests({});
+    expect(calls().find((c) => c.sql.includes("FROM pipeline_items i"))?.sql).toContain(`LIMIT ${LIST_LIMIT + 1}`);
+    expect(r.items).toHaveLength(LIST_LIMIT);
+    expect(r).toMatchObject({ truncated: true, limit: LIST_LIMIT });
+  });
+  it("is not cut when everything fits", async () => {
+    const r = await listRequests({});
+    expect(r.truncated).toBe(false);
   });
 });
 
